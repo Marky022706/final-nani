@@ -1,17 +1,21 @@
 export type UserRole = 'super_admin' | 'admin' | 'member';
+export type AccountStatus = 'active' | 'inactive' | 'suspended';
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  password?: string;
   role: UserRole;
   avatarUrl?: string;
-  status: 'active' | 'inactive';
+  status: AccountStatus;
   createdAt: string;
-  memberId?: string; // For members: e.g. MBR-000001
+  memberId?: string; // For members: e.g. BPL-2026-0001
   phone?: string;
   address?: string;
   department?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface PhysicalCopy {
@@ -47,15 +51,22 @@ export interface Book {
 
 export interface Member {
   id: string;
-  memberId: string; // MBR-000001
+  userId?: string;
+  memberId: string; // BPL-2026-0001
   fullName: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  username?: string;
+  dateOfBirth?: string;
+  gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
   email: string;
   phone: string;
   address: string;
   membershipType: 'Student' | 'Faculty' | 'Community' | 'Researcher';
-  status: 'active' | 'inactive';
+  status: AccountStatus;
   photoUrl: string;
-  qrCodeData: string; // token / memberId
+  qrCodeData: string; // memberId e.g. BPL-2026-0001
   joinDate: string;
   totalBorrows: number;
 }

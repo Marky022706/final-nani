@@ -33,7 +33,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   members,
   attendance,
   transactions,
-  serviceRecords,
+  serviceRecords: _serviceRecords,
   onNavigate,
   onOpenAddBook,
   onOpenCreateMember,
@@ -94,7 +94,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
           <button onClick={onOpenCreateMember} className="btn btn-secondary btn-sm">
             <Plus size={15} />
-            <span>Register Member</span>
+            <span>Add Member</span>
           </button>
         </div>
       </div>

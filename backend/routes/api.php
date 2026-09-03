@@ -22,6 +22,9 @@ Route::get('/members', [MemberController::class, 'index']);
 Route::get('/members/{id}', [MemberController::class, 'show']);
 Route::get('/members/qr/{code}', [MemberController::class, 'getByQr']);
 Route::post('/members', [MemberController::class, 'store']);
+Route::put('/members/{id}', [MemberController::class, 'update']);
+Route::delete('/members/{id}', [MemberController::class, 'destroy']);
+Route::post('/members/{id}/reset-password', [MemberController::class, 'resetPassword']);
 
 // Circulation
 Route::get('/circulation/transactions', [CirculationController::class, 'getTransactions']);

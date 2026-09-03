@@ -87,6 +87,26 @@ export const api = {
     });
   },
 
+  async updateMember(id: string, member: Partial<Member>): Promise<Member> {
+    return request<Member>(`/members/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(member)
+    });
+  },
+
+  async deleteMember(id: string): Promise<{ success: boolean; message: string }> {
+    return request<{ success: boolean; message: string }>(`/members/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async resetMemberPassword(id: string, password: string): Promise<{ message: string }> {
+    return request<{ message: string }>(`/members/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    });
+  },
+
   // Circulation Loans
   async getTransactions(): Promise<CirculationTransaction[]> {
     return request<CirculationTransaction[]>('/circulation/transactions');

@@ -11,7 +11,6 @@ import {
   ArrowRight,
   ArrowLeft,
   BookOpen,
-  Calendar,
   Printer,
   RotateCcw,
   Check
@@ -44,12 +43,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   // Step 1 State: Member
   const [selectedMemberId, setSelectedMemberId] = useState<string>('');
   const [memberInput, setMemberInput] = useState<string>('');
-  const [memberScanActive, setMemberScanActive] = useState<boolean>(true);
+  const [memberScanActive] = useState<boolean>(true);
 
   // Step 2 State: Book & Copy
   const [selectedBarcode, setSelectedBarcode] = useState<string>('');
   const [bookInput, setBookInput] = useState<string>('');
-  const [bookScanActive, setBookScanActive] = useState<boolean>(true);
+  const [bookScanActive] = useState<boolean>(true);
 
   // Dates
   const todayStr = new Date().toISOString().split('T')[0];

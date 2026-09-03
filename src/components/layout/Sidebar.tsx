@@ -36,7 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'admin_mgmt', label: 'Admin Management', icon: Users },
         { id: 'books', label: 'Books', icon: BookOpen },
-        { id: 'members', label: 'Members', icon: UserCheck },
+        { id: 'members', label: 'Manage Members', icon: UserCheck },
         { id: 'attendance', label: 'Attendance', icon: Clock },
         { id: 'circulation', label: 'Circulation', icon: Repeat },
         { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'books', label: 'Books', icon: BookOpen },
-        { id: 'members', label: 'Members', icon: UserCheck },
+        { id: 'members', label: 'Manage Members', icon: UserCheck },
         { id: 'attendance', label: 'Attendance', icon: Clock },
         { id: 'circulation', label: 'Circulation', icon: Repeat },
         { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },

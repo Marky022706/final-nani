@@ -1,52 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import type { User, UserRole } from '../../types';
-import { QrCode, Bell, User as UserIcon, RefreshCw } from 'lucide-react';
+import { QrCode, Bell, User as UserIcon, RefreshCw, LogOut } from 'lucide-react';
 import { Breadcrumbs } from '../common/Breadcrumbs';
 
 interface HeaderProps {
   currentUser: User;
   currentDestination: string;
   onNavigate: (destination: string) => void;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange?: (role: UserRole) => void;
   onOpenScanner: () => void;
   unreadCount: number;
   onOpenNotifications: () => void;
   onResetData: () => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentUser,
   currentDestination,
   onNavigate,
-  onRoleChange,
   onOpenScanner,
   unreadCount,
   onOpenNotifications,
-  onResetData
+  onResetData,
+  onLogout
 }) => {
-  const [timeStr, setTimeStr] = useState<string>('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTimeStr(
-        now.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric'
-        }) +
-          ' • ' +
-          now.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-      );
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <header className="app-header no-print">
       <div className="header-left">
@@ -55,39 +33,9 @@ export const Header: React.FC<HeaderProps> = ({
           currentDestination={currentDestination}
           onNavigate={onNavigate}
         />
-        <div className="header-breadcrumbs-divider" />
-        <span style={{ fontSize: '12.5px', color: 'var(--text-muted)', fontWeight: 500 }}>
-          {timeStr}
-        </span>
       </div>
 
       <div className="header-right">
-        {/* Role Switcher for paired testing */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Role:
-          </span>
-          <div className="role-switcher-container">
-            <button
-              onClick={() => onRoleChange('super_admin')}
-              className={`role-tab ${currentUser.role === 'super_admin' ? 'active' : ''}`}
-            >
-              Super Admin
-            </button>
-            <button
-              onClick={() => onRoleChange('admin')}
-              className={`role-tab ${currentUser.role === 'admin' ? 'active' : ''}`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => onRoleChange('member')}
-              className={`role-tab ${currentUser.role === 'member' ? 'active' : ''}`}
-            >
-              Member
-            </button>
-          </div>
-        </div>
 
         {/* Attendance quick scanner button (for Admin and Super Admin) */}
         {currentUser.role !== 'member' && (
@@ -169,6 +117,23 @@ export const Header: React.FC<HeaderProps> = ({
               {currentUser.role.replace('_', ' ')}
             </div>
           </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="btn btn-ghost btn-sm"
+              title="Sign out of current account"
+              style={{
+                marginLeft: '4px',
+                padding: '6px 8px',
+                color: 'var(--text-muted)',
+                gap: '4px'
+              }}
+            >
+              <LogOut size={15} />
+              <span style={{ fontSize: '12px' }}>Sign Out</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

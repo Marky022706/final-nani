@@ -14,13 +14,20 @@ return new class extends Migration
         // 1. Members
         Schema::create('members', function (Blueprint $table) {
             $table->id();
-            $table->string('member_id')->unique(); // e.g. MBR-000001
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->string('member_id')->unique(); // e.g. BPL-2026-0001
+            $table->string('first_name')->nullable();
+            $table->string('middle_name')->nullable();
+            $table->string('last_name')->nullable();
             $table->string('full_name');
+            $table->string('username')->nullable();
+            $table->date('date_of_birth')->nullable();
+            $table->string('gender')->nullable(); // Male, Female, Other, Prefer not to say
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
             $table->string('membership_type')->default('Student'); // Student, Faculty, Community, Researcher
-            $table->string('status')->default('active'); // active, inactive
+            $table->string('status')->default('active'); // active, inactive, suspended
             $table->text('photo_url')->nullable();
             $table->string('qr_code_data')->nullable();
             $table->date('join_date')->nullable();

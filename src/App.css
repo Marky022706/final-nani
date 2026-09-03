@@ -7,7 +7,7 @@
   background-color: var(--bg-page);
 }
 
-/* Sidebar - Dark Emerald Theme with Roboto Typography */
+/* Sidebar - Dark Emerald Theme with Plus Jakarta Sans Typography */
 .app-sidebar,
 .app-sidebar button,
 .sidebar-header,
@@ -18,7 +18,7 @@
 .nav-item,
 .nav-item span,
 .sidebar-footer {
-  font-family: var(--font-roboto) !important;
+  font-family: var(--font-sans) !important;
 }
 
 .app-sidebar {

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { CirculationTransaction } from '../../types';
-import { X, Printer, CheckCircle2, BookOpen, Calendar, UserCheck, ShieldCheck } from 'lucide-react';
+import { X, Printer, CheckCircle2, BookOpen } from 'lucide-react';
 
 interface LoanSlipModalProps {
   isOpen: boolean;

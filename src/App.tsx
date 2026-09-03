@@ -3,6 +3,7 @@ import './App.css';
 import type {
   User,
   UserRole,
+  AccountStatus,
   Book,
   Member,
   PhysicalCopy,
@@ -22,6 +23,7 @@ import { api } from './services/api';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ToastContainer } from './components/common/ToastContainer';
+import { LoginPage } from './components/auth/LoginPage';
 
 // Dashboards
 import { SuperAdminDashboard } from './components/dashboard/SuperAdminDashboard';
@@ -74,6 +76,9 @@ export function App() {
   const [isAddBookOpen, setIsAddBookOpen] = useState<boolean>(false);
   const [isCreateMemberOpen, setIsCreateMemberOpen] = useState<boolean>(false);
   const [selectedCardMember, setSelectedCardMember] = useState<Member | null>(null);
+
+  // Authentication State
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
 
   // Non-blocking Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -199,45 +204,153 @@ export function App() {
     addToast('success', 'Physical Copy Added', `Accession Number ${copy.accessionNumber} generated.`);
   };
 
+  // Authentication Handlers
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    StorageService.setCurrentUser(user);
+    setIsLoggedIn(true);
+    setCurrentDestination('dashboard');
+    addToast('success', `Welcome, ${user.name}`, `Signed in as ${user.role.replace('_', ' ')}`);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    addToast('info', 'Signed Out', 'You have been safely signed out of your account.');
+  };
+
   // 2. Members Operations
-  const handleMemberCreated = (newMember: Member) => {
-    const updated = [newMember, ...members];
-    setMembers(updated);
-    StorageService.saveMembers(updated);
+  const handleMemberCreated = (newMember: Member, newUser?: User, _tempPass?: string) => {
+    const updatedMembers = [newMember, ...members];
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
+
+    if (newUser) {
+      const updatedUsers = [newUser, ...users];
+      setUsers(updatedUsers);
+      StorageService.saveUsers(updatedUsers);
+    }
 
     StorageService.addAuditLog(
       'MEMBER_REGISTERED',
       'Members',
-      `Registered member ${newMember.fullName} (${newMember.memberId})`,
+      `Admin created member account for ${newMember.fullName} (${newMember.memberId}) with role 'member'`,
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
 
-    addToast('success', 'Member Registered', `Digital QR Card created for ${newMember.fullName} (${newMember.memberId})`);
-    setSelectedCardMember(newMember);
+    addToast('success', 'Member Account Created', `Generated Member ID: ${newMember.memberId}`);
   };
 
-  const handleToggleMemberStatus = (memberId: string) => {
-    const updated = members.map((m) => {
-      if (m.id === memberId) {
-        const nextStatus = m.status === 'active' ? 'inactive' : 'active';
-        return { ...m, status: nextStatus as Member['status'] };
+  const handleMemberUpdated = (updatedMember: Member) => {
+    const updatedMembers = members.map((m) =>
+      m.id === updatedMember.id || m.memberId === updatedMember.memberId ? updatedMember : m
+    );
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
+
+    // Sync with users list
+    const updatedUsers = users.map((u) => {
+      if (u.memberId === updatedMember.memberId || u.email === updatedMember.email) {
+        return {
+          ...u,
+          name: updatedMember.fullName,
+          email: updatedMember.email,
+          phone: updatedMember.phone,
+          address: updatedMember.address,
+          status: updatedMember.status
+        };
+      }
+      return u;
+    });
+    setUsers(updatedUsers);
+    StorageService.saveUsers(updatedUsers);
+
+    StorageService.addAuditLog(
+      'MEMBER_UPDATED',
+      'Members',
+      `Updated member profile for ${updatedMember.fullName} (${updatedMember.memberId})`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+    addToast('success', 'Member Updated', `Profile updated for ${updatedMember.fullName}`);
+  };
+
+  const handleMemberDeleted = (memberId: string) => {
+    const targetMember = members.find((m) => m.memberId === memberId || m.id === memberId);
+    const updatedMembers = members.filter((m) => m.memberId !== memberId && m.id !== memberId);
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
+
+    const updatedUsers = users.filter((u) => u.memberId !== memberId && u.email !== targetMember?.email);
+    setUsers(updatedUsers);
+    StorageService.saveUsers(updatedUsers);
+
+    StorageService.addAuditLog(
+      'MEMBER_DELETED',
+      'Members',
+      `Deleted member account ${targetMember?.fullName} (${memberId})`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+    addToast('info', 'Member Deleted', `Account for ${targetMember?.fullName || memberId} was removed.`);
+  };
+
+  const handleToggleMemberStatus = (memberId: string, newStatus?: AccountStatus) => {
+    const targeted = members.find((m) => m.id === memberId || m.memberId === memberId);
+    const nextStatus: AccountStatus = newStatus || (targeted?.status === 'active' ? 'inactive' : 'active');
+
+    const updatedMembers = members.map((m) => {
+      if (m.id === memberId || m.memberId === memberId) {
+        return { ...m, status: nextStatus };
       }
       return m;
     });
-    setMembers(updated);
-    StorageService.saveMembers(updated);
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
 
-    const targeted = members.find((m) => m.id === memberId);
+    const updatedUsers = users.map((u) => {
+      if (u.memberId === targeted?.memberId || u.email === targeted?.email) {
+        return { ...u, status: nextStatus };
+      }
+      return u;
+    });
+    setUsers(updatedUsers);
+    StorageService.saveUsers(updatedUsers);
+
     StorageService.addAuditLog(
       'MEMBER_STATUS_CHANGED',
       'Members',
-      `Updated member status for ${targeted?.fullName} (${targeted?.memberId})`,
+      `Changed account status for ${targeted?.fullName} (${targeted?.memberId}) to ${nextStatus.toUpperCase()}`,
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
 
-    addToast('info', 'Member Status Updated');
+    addToast(
+      nextStatus === 'active' ? 'success' : 'warning',
+      'Member Status Changed',
+      `${targeted?.fullName} is now ${nextStatus.toUpperCase()}`
+    );
+  };
+
+  const handleResetPassword = (memberId: string, newPass: string) => {
+    const targeted = members.find((m) => m.memberId === memberId || m.id === memberId);
+    const updatedUsers = users.map((u) => {
+      if (u.memberId === memberId || u.email === targeted?.email) {
+        return { ...u, password: newPass, mustChangePassword: true };
+      }
+      return u;
+    });
+    setUsers(updatedUsers);
+    StorageService.saveUsers(updatedUsers);
+
+    StorageService.addAuditLog(
+      'PASSWORD_RESET',
+      'Members',
+      `Admin generated new temporary password for member ${targeted?.fullName} (${memberId})`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+    addToast('success', 'Password Reset', `New temporary password saved for ${targeted?.fullName}`);
   };
 
   // 3. Attendance Operations
@@ -961,6 +1074,16 @@ export function App() {
     return !n.read;
   }).length;
 
+  // Render Public Login Page when not authenticated
+  if (!isLoggedIn) {
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} users={users} />
+        <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+      </>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Sidebar - Pure destinations per spec */}
@@ -982,6 +1105,7 @@ export function App() {
           unreadCount={unreadNotifsCount}
           onOpenNotifications={() => setCurrentDestination('notifications')}
           onResetData={handleResetData}
+          onLogout={handleLogout}
         />
 
         <main className="content-viewport">
@@ -1047,7 +1171,10 @@ export function App() {
               members={members}
               userRole={currentUser.role}
               onMemberCreated={handleMemberCreated}
+              onMemberUpdated={handleMemberUpdated}
+              onMemberDeleted={handleMemberDeleted}
               onToggleStatus={handleToggleMemberStatus}
+              onResetPassword={handleResetPassword}
             />
           )}
 
