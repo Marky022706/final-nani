@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import './App.css';
 import type {
   User,
-  UserRole,
   AccountStatus,
   Book,
   Member,
@@ -14,7 +13,8 @@ import type {
   BookReservation,
   NotificationItem,
   AuditLog,
-  ToastMessage
+  ToastMessage,
+  LibrarianPrivileges
 } from './types';
 import { StorageService } from './utils/storage';
 import { api } from './services/api';
@@ -24,11 +24,13 @@ import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ToastContainer } from './components/common/ToastContainer';
 import { LoginPage } from './components/auth/LoginPage';
+import { LogoutModal } from './components/auth/LogoutModal';
+import { authService } from './services/authService';
+import { BreadcrumbProvider } from './context/BreadcrumbContext';
 
 // Dashboards
 import { SuperAdminDashboard } from './components/dashboard/SuperAdminDashboard';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
-import { MemberDashboard } from './components/dashboard/MemberDashboard';
 
 // Core Destination Views
 import { BookList } from './components/books/BookList';
@@ -36,6 +38,7 @@ import { AddBookModal } from './components/books/AddBookModal';
 import { MemberList } from './components/members/MemberList';
 import { CreateMemberModal } from './components/members/CreateMemberModal';
 import { LibraryCardModal } from './components/members/LibraryCardModal';
+import { ArchiveView } from './components/archive/ArchiveView';
 import { AttendanceView } from './components/attendance/AttendanceView';
 import { ScanQrModal } from './components/attendance/ScanQrModal';
 import { LibraryServicesView } from './components/services/LibraryServicesView';
@@ -54,22 +57,65 @@ import { MyBooksView } from './components/member-view/MyBooksView';
 import { MemberReservationsView } from './components/member-view/MemberReservationsView';
 import { MemberProfileView } from './components/member-view/MemberProfileView';
 
+// Neutral placeholder shown only before a real session is established; the
+// login gate below ensures it is never actually rendered to a user.
+const GUEST_USER: User = {
+  id: '',
+  name: '',
+  email: '',
+  role: 'member',
+  status: 'inactive',
+  createdAt: ''
+};
+
 export function App() {
   // State from Storage
-  const [currentUser, setCurrentUser] = useState<User>(() => StorageService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User>(GUEST_USER);
   const [users, setUsers] = useState<User[]>(() => StorageService.getUsers());
   const [members, setMembers] = useState<Member[]>(() => StorageService.getMembers());
   const [books, setBooks] = useState<Book[]>(() => StorageService.getBooks());
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => StorageService.getAttendance());
-  const [services] = useState<LibraryServiceItem[]>(() => StorageService.getServices());
+  const [services, setServices] = useState<LibraryServiceItem[]>(() => StorageService.getServices());
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>(() => StorageService.getServiceRecords());
   const [transactions, setTransactions] = useState<CirculationTransaction[]>(() => StorageService.getTransactions());
   const [reservations, setReservations] = useState<BookReservation[]>(() => StorageService.getReservations());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => StorageService.getNotifications());
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => StorageService.getAuditLogs());
 
-  // Navigation State
-  const [currentDestination, setCurrentDestination] = useState<string>('dashboard');
+  const VALID_DESTINATIONS = [
+    'dashboard',
+    'books',
+    'members',
+    'archive',
+    'attendance',
+    'services',
+    'circulation',
+    'notifications',
+    'history',
+    'reports',
+    'admin_mgmt',
+    'audit_logs',
+    'system_settings',
+    'my_books',
+    'reservations',
+    'profile'
+  ];
+
+  const getInitialDestination = (): string => {
+    const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+    return VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard';
+  };
+
+  // Navigation State with URL synchronization
+  const [currentDestination, setCurrentDestination] = useState<string>(() => getInitialDestination());
+
+  const handleNavigate = (dest: string) => {
+    setCurrentDestination(dest);
+    const targetPath = dest === 'dashboard' ? '/' : `/${dest}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ dest }, '', targetPath);
+    }
+  };
 
   // Quick modals
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
@@ -77,59 +123,15 @@ export function App() {
   const [isCreateMemberOpen, setIsCreateMemberOpen] = useState<boolean>(false);
   const [selectedCardMember, setSelectedCardMember] = useState<Member | null>(null);
 
-  // Authentication State
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
+  // Authentication State & Protection
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  // True while an existing token (if any) is being verified against the API on boot.
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
 
   // Non-blocking Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  // Fetch initial live data from Laravel API backend
-  useEffect(() => {
-    async function fetchBackendData() {
-      try {
-        const [backendBooks, backendMembers, backendTx, backendRes, backendAtt, backendLogs, backendNotifs] =
-          await Promise.allSettled([
-            api.getBooks(),
-            api.getMembers(),
-            api.getTransactions(),
-            api.getReservations(),
-            api.getAttendance(),
-            api.getAuditLogs(),
-            api.getNotifications()
-          ]);
-
-        if (backendBooks.status === 'fulfilled' && backendBooks.value.length > 0) {
-          setBooks(backendBooks.value);
-          StorageService.saveBooks(backendBooks.value);
-        }
-        if (backendMembers.status === 'fulfilled' && backendMembers.value.length > 0) {
-          setMembers(backendMembers.value);
-          StorageService.saveMembers(backendMembers.value);
-        }
-        if (backendTx.status === 'fulfilled' && backendTx.value.length > 0) {
-          setTransactions(backendTx.value);
-          StorageService.saveTransactions(backendTx.value);
-        }
-        if (backendRes.status === 'fulfilled' && backendRes.value.length > 0) {
-          setReservations(backendRes.value);
-          StorageService.saveReservations(backendRes.value);
-        }
-        if (backendAtt.status === 'fulfilled' && backendAtt.value.length > 0) {
-          setAttendance(backendAtt.value);
-          StorageService.saveAttendance(backendAtt.value);
-        }
-        if (backendLogs.status === 'fulfilled' && backendLogs.value.length > 0) {
-          setAuditLogs(backendLogs.value);
-        }
-        if (backendNotifs.status === 'fulfilled' && backendNotifs.value.length > 0) {
-          setNotifications(backendNotifs.value);
-        }
-      } catch (e) {
-        console.info('Using local cache until Laravel API connects:', e);
-      }
-    }
-    fetchBackendData();
-  }, []);
 
   const addToast = (type: ToastMessage['type'], title: string, message?: string) => {
     const newToast: ToastMessage = {
@@ -148,23 +150,199 @@ export function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Role Switcher Handler
-  const handleRoleChange = (newRole: UserRole) => {
-    const matchingUser = users.find((u) => u.role === newRole) || {
-      id: `usr-${newRole}`,
-      name: newRole === 'super_admin' ? 'Eleanor Vance' : newRole === 'admin' ? 'Roberto Gomez' : 'Juan Dela Cruz',
-      email: `${newRole}@balingasag.gov.ph`,
-      role: newRole,
-      status: 'active',
-      createdAt: '2025-01-01',
-      memberId: newRole === 'member' ? 'MBR-000001' : undefined
+  // Verify any locally-stored session token against the backend on load,
+  // rather than trusting client-side storage alone.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrapAuth() {
+      if (!authService.isAuthenticated()) {
+        setIsAuthChecking(false);
+        return;
+      }
+      try {
+        const user = await api.me();
+        if (cancelled) return;
+        const cachedUsers = StorageService.getUsers();
+        const matched = cachedUsers.find(
+          (u) => (user.id && u.id === user.id) || (user.email && u.email?.toLowerCase() === user.email.toLowerCase())
+        );
+        const userWithPrivs: User = {
+          ...user,
+          privileges: user.privileges || matched?.privileges || (
+            user.role === 'volunteer'
+              ? { circulationDesk: true, inventoryManagement: false, memberManagement: true, servicesManagement: true, reportsExport: false, auditView: false }
+              : { circulationDesk: true, inventoryManagement: true, memberManagement: true, servicesManagement: true, reportsExport: true, auditView: true }
+          )
+        };
+        setCurrentUser(userWithPrivs);
+        StorageService.setCurrentUser(userWithPrivs);
+        authService.login(userWithPrivs);
+        setIsLoggedIn(true);
+      } catch {
+        // Token missing/expired/revoked - fall back to the login screen.
+        if (!cancelled) setIsLoggedIn(false);
+      } finally {
+        if (!cancelled) setIsAuthChecking(false);
+      }
+    }
+
+    bootstrapAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Route protection & Back Navigation Prevention
+  useEffect(() => {
+    const handlePopState = () => {
+      const authenticated = authService.isAuthenticated();
+      setIsLoggedIn(authenticated);
+      if (!authenticated) {
+        setCurrentDestination('dashboard');
+        return;
+      }
+      const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+      setCurrentDestination(VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard');
     };
 
-    setCurrentUser(matchingUser);
-    StorageService.setCurrentUser(matchingUser);
-    setCurrentDestination('dashboard');
-    addToast('info', `Switched View to ${newRole.replace('_', ' ').toUpperCase()}`, 'Active destination reset to Dashboard');
-  };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Enforce role boundaries and granular staff privileges
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    if (currentUser.role === 'super_admin') {
+      const SUPER_ADMIN_DESTINATIONS = ['dashboard', 'admin_mgmt', 'audit_logs', 'system_settings'];
+      if (!SUPER_ADMIN_DESTINATIONS.includes(currentDestination)) {
+        setCurrentDestination('dashboard');
+        if (window.location.pathname !== '/') {
+          window.history.replaceState({ dest: 'dashboard' }, '', '/');
+        }
+      }
+      return;
+    }
+
+    if (currentUser.role === 'admin' || currentUser.role === 'volunteer') {
+      const privs = currentUser.privileges;
+      let isDenied = false;
+      let deniedMsg = '';
+
+      if (currentDestination === 'attendance' && privs && privs.servicesManagement === false) {
+        isDenied = true;
+        deniedMsg = 'Attendance & Municipal Services authorization is not active on your account.';
+      } else if (currentDestination === 'circulation' && privs && privs.circulationDesk === false) {
+        isDenied = true;
+        deniedMsg = 'Circulation Desk authorization is not active on your account.';
+      } else if (currentDestination === 'books' && currentUser.role === 'volunteer' && (!privs || privs.inventoryManagement === false)) {
+        isDenied = true;
+        deniedMsg = 'Inventory & Book Cataloging authorization is not active on your account.';
+      } else if (currentDestination === 'books' && currentUser.role === 'admin' && privs && privs.inventoryManagement === false) {
+        isDenied = true;
+        deniedMsg = 'Inventory & Book Cataloging authorization is not active on your account.';
+      } else if (currentDestination === 'archive' && (currentUser.role !== 'admin' || (privs && privs.inventoryManagement === false))) {
+        isDenied = true;
+        deniedMsg = 'Archival management access is restricted.';
+      } else if (currentDestination === 'members' && privs && privs.memberManagement === false) {
+        isDenied = true;
+        deniedMsg = 'Member Accounts authorization is not active on your account.';
+      } else if (currentDestination === 'reports' && (currentUser.role === 'volunteer' ? (!privs || privs.reportsExport === false) : (privs && privs.reportsExport === false))) {
+        isDenied = true;
+        deniedMsg = 'Reports & Statistical Export authorization is not active on your account.';
+      } else if (currentDestination === 'admin_mgmt' && currentUser.role === 'volunteer') {
+        isDenied = true;
+        deniedMsg = 'User & Access Management is restricted to Administrators.';
+      } else if (currentDestination === 'system_settings') {
+        isDenied = true;
+        deniedMsg = 'System Settings is restricted to Superadmin.';
+      }
+
+      if (isDenied) {
+        addToast('warning', 'Access Restricted', deniedMsg);
+        setCurrentDestination('dashboard');
+        if (window.location.pathname !== '/') {
+          window.history.replaceState({ dest: 'dashboard' }, '', '/');
+        }
+      }
+    }
+  }, [isLoggedIn, currentUser, currentDestination]);
+
+  // Fetch live data from the Laravel API backend once a session is established.
+  // (Every data endpoint requires auth:sanctum, so this must wait for login.)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    async function fetchBackendData() {
+      try {
+        const [
+          backendBooks,
+          backendMembers,
+          backendTx,
+          backendRes,
+          backendAtt,
+          backendLogs,
+          backendNotifs,
+          backendUsers,
+          backendServices,
+          backendServiceRecords
+        ] = await Promise.allSettled([
+          api.getBooks(),
+          api.getMembers(),
+          api.getTransactions(),
+          api.getReservations(),
+          api.getAttendance(),
+          api.getAuditLogs(),
+          api.getNotifications(),
+          api.getUsers(),
+          api.getServices(),
+          api.getServiceRecords()
+        ]);
+
+        if (backendBooks.status === 'fulfilled') {
+          setBooks(backendBooks.value);
+          StorageService.saveBooks(backendBooks.value);
+        }
+        if (backendMembers.status === 'fulfilled') {
+          setMembers(backendMembers.value);
+          StorageService.saveMembers(backendMembers.value);
+        }
+        if (backendTx.status === 'fulfilled') {
+          setTransactions(backendTx.value);
+          StorageService.saveTransactions(backendTx.value);
+        }
+        if (backendRes.status === 'fulfilled') {
+          setReservations(backendRes.value);
+          StorageService.saveReservations(backendRes.value);
+        }
+        if (backendAtt.status === 'fulfilled') {
+          setAttendance(backendAtt.value);
+          StorageService.saveAttendance(backendAtt.value);
+        }
+        if (backendLogs.status === 'fulfilled') {
+          setAuditLogs(backendLogs.value);
+        }
+        if (backendNotifs.status === 'fulfilled') {
+          setNotifications(backendNotifs.value);
+        }
+        if (backendUsers.status === 'fulfilled') {
+          setUsers(backendUsers.value);
+          StorageService.saveUsers(backendUsers.value);
+        }
+        if (backendServices.status === 'fulfilled') {
+          setServices(backendServices.value);
+        }
+        if (backendServiceRecords.status === 'fulfilled') {
+          setServiceRecords(backendServiceRecords.value);
+          StorageService.saveServiceRecords(backendServiceRecords.value);
+        }
+      } catch (e) {
+        console.info('Using local cache until Laravel API connects:', e);
+      }
+    }
+    fetchBackendData();
+  }, [isLoggedIn]);
 
   // 1. Books Operations
   const handleBookAdded = (newBook: Book) => {
@@ -179,6 +357,8 @@ export function App() {
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
+
+    api.createBook(newBook).catch((err) => console.info('Backend sync note:', err));
 
     addToast('success', 'Book Cataloged Successfully', `Generated Accession numbers for ${newBook.copies.length} copies`);
   };
@@ -204,41 +384,295 @@ export function App() {
     addToast('success', 'Physical Copy Added', `Accession Number ${copy.accessionNumber} generated.`);
   };
 
-  // Authentication Handlers
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    StorageService.setCurrentUser(user);
-    setIsLoggedIn(true);
-    setCurrentDestination('dashboard');
-    addToast('success', `Welcome, ${user.name}`, `Signed in as ${user.role.replace('_', ' ')}`);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    addToast('info', 'Signed Out', 'You have been safely signed out of your account.');
-  };
-
-  // 2. Members Operations
-  const handleMemberCreated = (newMember: Member, newUser?: User, _tempPass?: string) => {
-    const updatedMembers = [newMember, ...members];
-    setMembers(updatedMembers);
-    StorageService.saveMembers(updatedMembers);
-
-    if (newUser) {
-      const updatedUsers = [newUser, ...users];
-      setUsers(updatedUsers);
-      StorageService.saveUsers(updatedUsers);
-    }
+  const handleBookUpdated = (updatedBook: Book) => {
+    const updated = books.map((b) => (b.id === updatedBook.id ? updatedBook : b));
+    setBooks(updated);
+    StorageService.saveBooks(updated);
 
     StorageService.addAuditLog(
-      'MEMBER_REGISTERED',
-      'Members',
-      `Admin created member account for ${newMember.fullName} (${newMember.memberId}) with role 'member'`,
+      'BOOK_UPDATED',
+      'Books',
+      `Updated metadata for "${updatedBook.title}" (ISBN: ${updatedBook.isbn})`,
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
 
-    addToast('success', 'Member Account Created', `Generated Member ID: ${newMember.memberId}`);
+    api.updateBook(updatedBook.id, updatedBook).catch((err) => console.info('Backend sync note:', err));
+    addToast('success', 'Book Updated', `Changes to "${updatedBook.title}" saved successfully.`);
+  };
+
+  const handleDeleteBook = (bookId: string) => {
+    const targetBook = books.find((b) => b.id === bookId);
+    if (!targetBook) return;
+
+    // Strict business rule: Active books cannot be directly deleted
+    if (!targetBook.isArchived) {
+      addToast(
+        'error',
+        'Cannot Delete Active Book',
+        `"${targetBook.title}" is currently active. In accordance with library policy, please archive the book first before deleting.`
+      );
+      return;
+    }
+
+    // Safety check: ensure no copy of this book has an active loan
+    const copyBarcodes = targetBook.copies.map((c) => c.barcode);
+    const hasActiveLoans = transactions.some(
+      (tx) =>
+        (tx.bookId === bookId || copyBarcodes.includes(tx.barcode)) &&
+        (tx.status === 'Active' || tx.status === 'Overdue')
+    );
+    if (hasActiveLoans) {
+      addToast(
+        'error',
+        'Cannot Delete Book',
+        `"${targetBook.title}" has active circulation loans. Please return all borrowed copies before deleting.`
+      );
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to permanently delete "${targetBook.title}" and its catalog records? This cannot be undone.`)) {
+      return;
+    }
+
+    const updated = books.filter((b) => b.id !== bookId);
+    setBooks(updated);
+    StorageService.saveBooks(updated);
+
+    StorageService.addAuditLog(
+      'BOOK_DELETED',
+      'Books',
+      `Permanently removed "${targetBook.title}" (ISBN: ${targetBook.isbn}) from catalog`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+
+    api.deleteBook(bookId).catch((err) => console.info('Backend sync note:', err));
+    addToast('success', 'Book Deleted', `"${targetBook.title}" was removed from the catalog.`);
+  };
+
+  const handleBulkArchiveBooks = (bookIds: string[]) => {
+    const updated = books.map((b) => {
+      if (bookIds.includes(b.id)) {
+        return {
+          ...b,
+          isArchived: true,
+          copies: b.copies.map((c) => ({ ...c, status: 'Archived' as const }))
+        };
+      }
+      return b;
+    });
+    setBooks(updated);
+    StorageService.saveBooks(updated);
+
+    bookIds.forEach((id) => {
+      const book = books.find((b) => b.id === id);
+      if (book) {
+        api.updateBook(id, { isArchived: true }).catch((err) => console.info('Backend sync note:', err));
+        StorageService.addAuditLog('BOOK_ARCHIVED', 'Books', `Archived "${book.title}" (ISBN: ${book.isbn})`, currentUser.name);
+      }
+    });
+    setAuditLogs(StorageService.getAuditLogs());
+  };
+
+  const handleBulkRestoreBooks = (bookIds: string[]) => {
+    const updated = books.map((b) => {
+      if (bookIds.includes(b.id)) {
+        return {
+          ...b,
+          isArchived: false,
+          copies: b.copies.map((c) => ({ ...c, status: 'Available' as const }))
+        };
+      }
+      return b;
+    });
+    setBooks(updated);
+    StorageService.saveBooks(updated);
+
+    bookIds.forEach((id) => {
+      const book = books.find((b) => b.id === id);
+      if (book) {
+        api.updateBook(id, { isArchived: false }).catch((err) => console.info('Backend sync note:', err));
+        StorageService.addAuditLog('BOOK_RESTORED', 'Books', `Restored "${book.title}" (ISBN: ${book.isbn})`, currentUser.name);
+      }
+    });
+    setAuditLogs(StorageService.getAuditLogs());
+  };
+
+  const handleBulkDeleteBooks = (bookIds: string[]) => {
+    const booksToDelete = books.filter((b) => bookIds.includes(b.id));
+
+    // Safeguard: Active books cannot be deleted
+    const hasActive = booksToDelete.some((b) => !b.isArchived);
+    if (hasActive) {
+      addToast('error', 'Cannot Delete Active Books', 'Only archived books can be deleted. Please archive active books first.');
+      throw new Error('Active books cannot be deleted');
+    }
+
+    const hasActiveLoan = booksToDelete.some((b) => {
+      const barcodes = b.copies.map((c) => c.barcode);
+      return transactions.some(
+        (tx) => (tx.bookId === b.id || barcodes.includes(tx.barcode)) && (tx.status === 'Active' || tx.status === 'Overdue')
+      );
+    });
+
+    if (hasActiveLoan) {
+      addToast('error', 'Cannot Delete Book', 'One or more selected books have active circulation loans.');
+      throw new Error('Active loans prevent deletion');
+    }
+
+    const updated = books.filter((b) => !bookIds.includes(b.id));
+    setBooks(updated);
+    StorageService.saveBooks(updated);
+
+    booksToDelete.forEach((book) => {
+      api.deleteBook(book.id).catch((err) => console.info('Backend sync note:', err));
+      StorageService.addAuditLog('BOOK_DELETED', 'Books', `Permanently removed "${book.title}" (ISBN: ${book.isbn})`, currentUser.name);
+    });
+    setAuditLogs(StorageService.getAuditLogs());
+  };
+
+  const handleToggleArchiveBook = (bookId: string) => {
+    const targetBook = books.find((b) => b.id === bookId);
+    if (!targetBook) return;
+
+    const nextArchived = !targetBook.isArchived;
+
+    // If archiving, ensure no active loans
+    if (nextArchived) {
+      const copyBarcodes = targetBook.copies.map((c) => c.barcode);
+      const hasActiveLoans = transactions.some(
+        (tx) =>
+          (tx.bookId === bookId || copyBarcodes.includes(tx.barcode)) &&
+          (tx.status === 'Active' || tx.status === 'Overdue')
+      );
+      if (hasActiveLoans) {
+        addToast(
+          'error',
+          'Cannot Archive Book',
+          `"${targetBook.title}" currently has borrowed copies. Return all loans first.`
+        );
+        return;
+      }
+    }
+
+    const updatedBook: Book = {
+      ...targetBook,
+      isArchived: nextArchived,
+      copies: targetBook.copies.map((c) => ({
+        ...c,
+        status: nextArchived ? 'Archived' : 'Available'
+      }))
+    };
+
+    const updated = books.map((b) => (b.id === bookId ? updatedBook : b));
+    setBooks(updated);
+    StorageService.saveBooks(updated);
+
+    StorageService.addAuditLog(
+      nextArchived ? 'BOOK_ARCHIVED' : 'BOOK_RESTORED',
+      'Books',
+      `${nextArchived ? 'Archived' : 'Restored'} "${targetBook.title}" (ISBN: ${targetBook.isbn})`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+
+    api.updateBook(bookId, updatedBook).catch((err) => console.info('Backend sync note:', err));
+    addToast(
+      'success',
+      nextArchived ? 'Book Archived' : 'Book Restored',
+      `"${targetBook.title}" is now ${nextArchived ? 'archived and hidden from regular circulation' : 'active in catalog'}.`
+    );
+  };
+
+
+  // Authentication Handlers
+  const handleLogin = (user: User) => {
+    const cachedUsers = StorageService.getUsers();
+    const matched = cachedUsers.find(
+      (u) => (user.id && u.id === user.id) || (user.email && u.email?.toLowerCase() === user.email.toLowerCase())
+    );
+    const userWithPrivs: User = {
+      ...user,
+      privileges: user.privileges || matched?.privileges || (
+        user.role === 'volunteer'
+          ? { circulationDesk: true, inventoryManagement: false, memberManagement: true, servicesManagement: true, reportsExport: false, auditView: false }
+          : { circulationDesk: true, inventoryManagement: true, memberManagement: true, servicesManagement: true, reportsExport: true, auditView: true }
+      )
+    };
+    setCurrentUser(userWithPrivs);
+    StorageService.setCurrentUser(userWithPrivs);
+    authService.login(userWithPrivs, true);
+    setIsLoggedIn(true);
+    handleNavigate(getInitialDestination());
+    addToast('success', `Welcome, ${userWithPrivs.name}`, `Signed in as ${userWithPrivs.role.replace('_', ' ')}`);
+  };
+
+  const handleRequestLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleCancelLogout = () => {
+    setIsLogoutModalOpen(false);
+  };
+
+  const handleConfirmLogout = () => {
+    authService.logout().catch(() => {
+      // Best effort server-side token revocation - local session is cleared regardless.
+    });
+    setIsLogoutModalOpen(false);
+    setIsLoggedIn(false);
+    setCurrentUser(GUEST_USER);
+    handleNavigate('dashboard');
+    addToast('success', 'Logged Out', 'You have been logged out successfully.');
+  };
+
+  // 2. Members Operations
+  const handleMemberCreated = async (newMember: Member, newUser?: User, _tempPass?: string) => {
+    try {
+      const backendMember = await api.createMember(newMember);
+      const memberToSave = (backendMember && backendMember.memberId) ? backendMember : newMember;
+
+      const updatedMembers = [memberToSave, ...members.filter(m => m.memberId !== memberToSave.memberId)];
+      setMembers(updatedMembers);
+      StorageService.saveMembers(updatedMembers);
+
+      if (newUser) {
+        const updatedUsers = [newUser, ...users.filter(u => u.memberId !== memberToSave.memberId)];
+        setUsers(updatedUsers);
+        StorageService.saveUsers(updatedUsers);
+      }
+
+      StorageService.addAuditLog(
+        'MEMBER_REGISTERED',
+        'Members',
+        `Admin created member account for ${memberToSave.fullName} (${memberToSave.memberId}) with role 'member'`,
+        currentUser.name
+      );
+      setAuditLogs(StorageService.getAuditLogs());
+
+      addToast(
+        'success',
+        'Member Saved to Database',
+        `Member ID: ${memberToSave.memberId} • ${memberToSave.fullName}`
+      );
+    } catch (err: any) {
+      console.error('Error saving member to Laragon MySQL:', err);
+      // Fallback local save so user work is not lost
+      const updatedMembers = [newMember, ...members];
+      setMembers(updatedMembers);
+      StorageService.saveMembers(updatedMembers);
+      if (newUser) {
+        const updatedUsers = [newUser, ...users];
+        setUsers(updatedUsers);
+        StorageService.saveUsers(updatedUsers);
+      }
+      addToast(
+        'error',
+        'Database Sync Failed',
+        err?.message || 'Could not save member to Laragon MySQL. Saved locally in browser.'
+      );
+    }
   };
 
   const handleMemberUpdated = (updatedMember: Member) => {
@@ -265,6 +699,10 @@ export function App() {
     setUsers(updatedUsers);
     StorageService.saveUsers(updatedUsers);
 
+    api.updateMember(updatedMember.memberId, updatedMember).catch((err) =>
+      addToast('warning', 'Member Update Not Synced', err instanceof Error ? err.message : 'Please retry.')
+    );
+
     StorageService.addAuditLog(
       'MEMBER_UPDATED',
       'Members',
@@ -284,6 +722,10 @@ export function App() {
     const updatedUsers = users.filter((u) => u.memberId !== memberId && u.email !== targetMember?.email);
     setUsers(updatedUsers);
     StorageService.saveUsers(updatedUsers);
+
+    api.deleteMember(memberId).catch((err) =>
+      addToast('warning', 'Member Deletion Not Synced', err instanceof Error ? err.message : 'Please retry.')
+    );
 
     StorageService.addAuditLog(
       'MEMBER_DELETED',
@@ -317,6 +759,12 @@ export function App() {
     setUsers(updatedUsers);
     StorageService.saveUsers(updatedUsers);
 
+    if (targeted) {
+      api.updateMember(targeted.memberId, { status: nextStatus }).catch((err) =>
+        addToast('warning', 'Status Change Not Synced', err instanceof Error ? err.message : 'Please retry.')
+      );
+    }
+
     StorageService.addAuditLog(
       'MEMBER_STATUS_CHANGED',
       'Members',
@@ -332,25 +780,34 @@ export function App() {
     );
   };
 
-  const handleResetPassword = (memberId: string, newPass: string) => {
-    const targeted = members.find((m) => m.memberId === memberId || m.id === memberId);
-    const updatedUsers = users.map((u) => {
-      if (u.memberId === memberId || u.email === targeted?.email) {
-        return { ...u, password: newPass, mustChangePassword: true };
-      }
-      return u;
-    });
-    setUsers(updatedUsers);
-    StorageService.saveUsers(updatedUsers);
+  const handleToggleArchiveMember = (memberId: string) => {
+    const targeted = members.find((m) => m.id === memberId || m.memberId === memberId);
+    if (!targeted) return;
+    const nextArchived = !targeted.isArchived;
+
+    const updatedMembers = members.map((m) =>
+      m.id === memberId || m.memberId === memberId ? { ...m, isArchived: nextArchived } : m
+    );
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
+
+    api.updateMember(targeted.memberId, { isArchived: nextArchived }).catch((err) =>
+      addToast('warning', nextArchived ? 'Archive Not Synced' : 'Restore Not Synced', err instanceof Error ? err.message : 'Please retry.')
+    );
 
     StorageService.addAuditLog(
-      'PASSWORD_RESET',
+      nextArchived ? 'MEMBER_ARCHIVED' : 'MEMBER_RESTORED',
       'Members',
-      `Admin generated new temporary password for member ${targeted?.fullName} (${memberId})`,
+      `${nextArchived ? 'Archived' : 'Restored'} member account ${targeted.fullName} (${targeted.memberId})`,
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
-    addToast('success', 'Password Reset', `New temporary password saved for ${targeted?.fullName}`);
+
+    addToast(
+      'success',
+      nextArchived ? 'Member Archived' : 'Member Restored',
+      `${targeted.fullName} is now ${nextArchived ? 'archived' : 'active'}.`
+    );
   };
 
   // 3. Attendance Operations
@@ -364,6 +821,25 @@ export function App() {
 
     setAttendance(updated);
     StorageService.saveAttendance(updated);
+
+    if (actionType === 'time_in') {
+      api
+        .checkInAttendance(record.memberId)
+        .then((serverRecord) => {
+          // Reconcile the optimistic local id with the backend's real record id
+          // so a same-session check-out can find it.
+          setAttendance((prev) => {
+            const reconciled = prev.map((a) => (a.id === record.id ? { ...a, id: serverRecord.id } : a));
+            StorageService.saveAttendance(reconciled);
+            return reconciled;
+          });
+        })
+        .catch((err) => addToast('warning', 'Time-In Not Synced', err instanceof Error ? err.message : 'Please retry.'));
+    } else {
+      api
+        .checkOutAttendance(record.id)
+        .catch((err) => addToast('warning', 'Time-Out Not Synced', err instanceof Error ? err.message : 'Please retry.'));
+    }
 
     StorageService.addAuditLog(
       actionType === 'time_in' ? 'ATTENDANCE_TIME_IN' : 'ATTENDANCE_TIME_OUT',
@@ -384,6 +860,10 @@ export function App() {
     const updated = attendance.map((a) => (a.id === updatedRecord.id ? updatedRecord : a));
     setAttendance(updated);
     StorageService.saveAttendance(updated);
+
+    api
+      .updateAttendance(updatedRecord.id, updatedRecord, reason)
+      .catch((err) => addToast('warning', 'Correction Not Synced', err instanceof Error ? err.message : 'Please retry.'));
 
     StorageService.addAuditLog(
       'ATTENDANCE_RECORD_EDITED',
@@ -409,6 +889,10 @@ export function App() {
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
+
+    api.recordServiceUsage(record.serviceId, record.memberId, record.notes).catch((err) =>
+      addToast('warning', 'Service Log Not Synced', err instanceof Error ? err.message : 'Will retry on next sync.')
+    );
 
     addToast('success', 'Service Logged', `${record.serviceName} for ${record.memberName}`);
   };
@@ -1015,34 +1499,82 @@ export function App() {
   };
 
   // 6. Admin Governance
-  const handleAddAdmin = (newAdmin: User) => {
-    const updated = [...users, newAdmin];
-    setUsers(updated);
-    StorageService.saveUsers(updated);
-    addToast('success', 'Administrator Created', `Account created for ${newAdmin.name}`);
+  const handleAddAdmin = async (newAdmin: User) => {
+    try {
+      const { user, temporary_password } = await api.createUser({
+        name: newAdmin.name,
+        email: newAdmin.email,
+        username: newAdmin.username,
+        role: newAdmin.role === 'super_admin' ? 'super_admin' : 'admin',
+        department: newAdmin.department,
+        phone: newAdmin.phone
+      });
+      const updated = [user, ...users];
+      setUsers(updated);
+      StorageService.saveUsers(updated);
+      addToast('success', 'Administrator Created', `Account created for ${user.name} • Temporary Password: ${temporary_password}`);
+    } catch (err) {
+      addToast('error', 'Failed to Create Administrator', err instanceof Error ? err.message : 'Please try again.');
+    }
   };
 
-  const handleToggleAdminStatus = (userId: string) => {
-    const updated = users.map((u) => {
-      if (u.id === userId) {
-        return { ...u, status: (u.status === 'active' ? 'inactive' : 'active') as User['status'] };
-      }
-      return u;
-    });
-    setUsers(updated);
-    StorageService.saveUsers(updated);
-    addToast('info', 'Admin Status Updated');
+  const handleToggleAdminStatus = async (userId: string) => {
+    try {
+      const updatedUser = await api.toggleUserStatus(userId);
+      const updated = users.map((u) => (u.id === userId ? updatedUser : u));
+      setUsers(updated);
+      StorageService.saveUsers(updated);
+      addToast('info', 'Admin Status Updated', `${updatedUser.name} is now ${updatedUser.status.toUpperCase()}`);
+    } catch (err) {
+      addToast('error', 'Failed to Update Status', err instanceof Error ? err.message : 'Please try again.');
+    }
   };
 
-  const handleResetAdminPassword = (userId: string) => {
+  const handleResetAdminPassword = async (userId: string) => {
     const targeted = users.find((u) => u.id === userId);
-    addToast('success', 'Password Reset Initiated', `Temporary credential sent to ${targeted?.email}`);
+    try {
+      const { temporary_password } = await api.resetUserPassword(userId);
+      addToast('success', 'Password Reset', `New temporary password for ${targeted?.email}: ${temporary_password}`);
+    } catch (err) {
+      addToast('error', 'Failed to Reset Password', err instanceof Error ? err.message : 'Please try again.');
+    }
+  };
+
+  const handleUpdatePrivileges = async (userId: string, privileges: LibrarianPrivileges) => {
+    StorageService.updateLibrarianPrivileges(userId, privileges, currentUser.name || 'Super Admin');
+    const targetUser = users.find((u) => u.id === userId);
+
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId || (targetUser && u.email && u.email.toLowerCase() === targetUser.email.toLowerCase())) {
+          return { ...u, privileges };
+        }
+        return u;
+      })
+    );
+
+    if (currentUser.id === userId || (targetUser && currentUser.email && currentUser.email.toLowerCase() === targetUser.email.toLowerCase())) {
+      const updatedCurrent: User = { ...currentUser, privileges };
+      setCurrentUser(updatedCurrent);
+      StorageService.setCurrentUser(updatedCurrent);
+    }
+
+    try {
+      await api.updatePrivileges(userId, privileges);
+    } catch (e) {
+      console.info('Backend privileges sync note:', e);
+    }
+
+    addToast('success', 'Staff Privileges Updated', `Permissions updated for ${targetUser?.name || 'Staff'}.`);
   };
 
   const handleMarkAllNotifsRead = () => {
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
     StorageService.saveNotifications(updated);
+    api.markAllNotificationsRead(currentUser.role === 'member' ? currentUser.memberId : undefined).catch(() => {
+      // Best effort - local state already reflects the read status.
+    });
     addToast('info', 'All notifications marked as read');
   };
 
@@ -1050,14 +1582,11 @@ export function App() {
     const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
     setNotifications(updated);
     StorageService.saveNotifications(updated);
+    api.markNotificationRead(id).catch(() => {
+      // Best effort - local state already reflects the read status.
+    });
   };
 
-  const handleResetData = () => {
-    if (window.confirm('Reset all demo data back to default initial seed?')) {
-      StorageService.resetToDefaults();
-      window.location.reload();
-    }
-  };
 
   const handleTriggerExport = (format: 'pdf' | 'csv') => {
     if (format === 'pdf') {
@@ -1074,39 +1603,97 @@ export function App() {
     return !n.read;
   }).length;
 
+  // Verifying a stored session token against the backend before deciding
+  // whether to show the dashboard or the login screen.
+  if (isAuthChecking) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          width: '100vw',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#166534',
+          color: '#ffffff',
+          fontSize: '14px',
+          fontWeight: 600
+        }}
+      >
+        Loading Balingasag Municipal Library…
+      </div>
+    );
+  }
+
   // Render Public Login Page when not authenticated
   if (!isLoggedIn) {
     return (
       <>
-        <LoginPage onLogin={handleLogin} users={users} />
+        <LoginPage onLogin={handleLogin} />
         <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
       </>
     );
   }
 
   return (
-    <div className="app-container">
-      {/* Sidebar - Pure destinations per spec */}
-      <Sidebar
-        currentRole={currentUser.role}
-        currentDestination={currentDestination}
-        onNavigate={(dest) => setCurrentDestination(dest)}
-        unreadNotifsCount={unreadNotifsCount}
-      />
-
-      {/* Main Viewport */}
-      <div className="app-main">
-        <Header
-          currentUser={currentUser}
+    <BreadcrumbProvider>
+      <div className="app-container">
+        {/* Sidebar - Pure destinations per spec */}
+        <Sidebar
+          currentRole={currentUser.role}
           currentDestination={currentDestination}
-          onNavigate={(dest) => setCurrentDestination(dest)}
-          onRoleChange={handleRoleChange}
-          onOpenScanner={() => setIsScannerOpen(true)}
-          unreadCount={unreadNotifsCount}
-          onOpenNotifications={() => setCurrentDestination('notifications')}
-          onResetData={handleResetData}
-          onLogout={handleLogout}
+          onNavigate={handleNavigate}
+          unreadNotifsCount={unreadNotifsCount}
+          currentUser={currentUser}
         />
+
+        {/* Main Viewport */}
+        <div className="app-main">
+          {systemSettings.isMaintenanceMode && (
+            <div
+              style={{
+                backgroundColor: '#fffbeb',
+                borderBottom: '1px solid #fde68a',
+                color: '#92400e',
+                padding: '9px 24px',
+                fontSize: '13px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                zIndex: 30
+              }}
+            >
+              <span>⚠️ System Maintenance Mode is ACTIVE — Patron self-service is paused.</span>
+              {currentUser.role === 'super_admin' && (
+                <button
+                  type="button"
+                  onClick={() => handleNavigate('system_settings')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#b45309',
+                    textDecoration: 'underline',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    fontWeight: 700
+                  }}
+                >
+                  Manage in System Settings →
+                </button>
+              )}
+            </div>
+          )}
+
+          <Header
+            currentUser={currentUser}
+            currentDestination={currentDestination}
+            onNavigate={handleNavigate}
+            onOpenScanner={() => setIsScannerOpen(true)}
+            unreadCount={unreadNotifsCount}
+            onOpenNotifications={() => handleNavigate('notifications')}
+            onLogout={handleRequestLogout}
+          />
 
         <main className="content-viewport">
           {/* 1. DASHBOARD DESTINATION */}
@@ -1120,41 +1707,31 @@ export function App() {
                   transactions={transactions}
                   users={users}
                   auditLogs={auditLogs}
-                  onNavigate={(dest) => setCurrentDestination(dest)}
+                  onNavigate={handleNavigate}
                 />
               )}
 
-              {currentUser.role === 'admin' && (
+              {(currentUser.role === 'admin' || currentUser.role === 'volunteer') && (
                 <AdminDashboard
                   books={books}
                   members={members}
                   attendance={attendance}
                   transactions={transactions}
                   serviceRecords={serviceRecords}
-                  onNavigate={(dest) => setCurrentDestination(dest)}
+                  userRole={currentUser.role}
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
                   onOpenAddBook={() => setIsAddBookOpen(true)}
                   onOpenCreateMember={() => setIsCreateMemberOpen(true)}
                   onOpenScanner={() => setIsScannerOpen(true)}
                 />
               )}
 
-              {currentUser.role === 'member' && (
-                <MemberDashboard
-                  currentUser={currentUser}
-                  members={members}
-                  transactions={transactions}
-                  reservations={reservations}
-                  attendance={attendance}
-                  notifications={notifications}
-                  onNavigate={(dest) => setCurrentDestination(dest)}
-                  onOpenCardModal={(m) => setSelectedCardMember(m)}
-                />
-              )}
             </>
           )}
 
           {/* 2. BOOKS / BOOK CATALOG */}
-          {currentDestination === 'books' && (
+          {currentDestination === 'books' && currentUser.role !== 'super_admin' && (
             <BookList
               books={books}
               userRole={currentUser.role}
@@ -1162,11 +1739,18 @@ export function App() {
               onAddCopy={handleAddPhysicalCopy}
               onReserveBook={handleReserveBook}
               onRequestBorrow={handleRequestBorrow}
+              onEditBook={handleBookUpdated}
+              onDeleteBook={handleDeleteBook}
+              onToggleArchive={handleToggleArchiveBook}
+              onArchiveBooks={handleBulkArchiveBooks}
+              onRestoreBooks={handleBulkRestoreBooks}
+              onDeleteBooks={handleBulkDeleteBooks}
+              onShowToast={addToast}
             />
           )}
 
           {/* 3. MEMBERS */}
-          {currentDestination === 'members' && (
+          {currentDestination === 'members' && currentUser.role !== 'super_admin' && (
             <MemberList
               members={members}
               userRole={currentUser.role}
@@ -1174,12 +1758,24 @@ export function App() {
               onMemberUpdated={handleMemberUpdated}
               onMemberDeleted={handleMemberDeleted}
               onToggleStatus={handleToggleMemberStatus}
-              onResetPassword={handleResetPassword}
+              onToggleArchive={handleToggleArchiveMember}
+            />
+          )}
+
+          {/* 3b. ARCHIVE (Books & Members - Librarian Admin only) */}
+          {currentDestination === 'archive' && currentUser.role === 'admin' && (
+            <ArchiveView
+              books={books}
+              members={members}
+              onRestoreBook={handleToggleArchiveBook}
+              onDeleteBook={handleDeleteBook}
+              onRestoreMember={handleToggleArchiveMember}
+              onDeleteMember={handleMemberDeleted}
             />
           )}
 
           {/* 4. ATTENDANCE */}
-          {currentDestination === 'attendance' && (
+          {currentDestination === 'attendance' && currentUser.role !== 'super_admin' && (
             <AttendanceView
               attendance={attendance}
               members={members}
@@ -1203,7 +1799,7 @@ export function App() {
           )}
 
           {/* 6. CIRCULATION */}
-          {currentDestination === 'circulation' && (
+          {currentDestination === 'circulation' && currentUser.role !== 'super_admin' && (
             <CirculationView
               transactions={transactions}
               reservations={reservations}
@@ -1223,7 +1819,7 @@ export function App() {
           )}
 
           {/* 7. NOTIFICATIONS */}
-          {currentDestination === 'notifications' && (
+          {currentDestination === 'notifications' && currentUser.role !== 'super_admin' && (
             <NotificationsView
               notifications={notifications}
               userRole={currentUser.role}
@@ -1234,7 +1830,7 @@ export function App() {
           )}
 
           {/* 8. HISTORY */}
-          {currentDestination === 'history' && (
+          {currentDestination === 'history' && currentUser.role !== 'super_admin' && (
             <HistoryView
               transactions={transactions}
               attendance={attendance}
@@ -1244,8 +1840,8 @@ export function App() {
             />
           )}
 
-          {/* 9. REPORTS */}
-          {currentDestination === 'reports' && (
+          {/* 9. REPORTS (Librarian Admin only) */}
+          {currentDestination === 'reports' && currentUser.role === 'admin' && (
             <ReportsView
               books={books}
               members={members}
@@ -1256,13 +1852,15 @@ export function App() {
             />
           )}
 
-          {/* 10. SUPER ADMIN: ADMIN MANAGEMENT */}
-          {currentDestination === 'admin_mgmt' && currentUser.role === 'super_admin' && (
+          {/* 10. SUPER ADMIN & ADMIN: USER & ACCESS MANAGEMENT */}
+          {currentDestination === 'admin_mgmt' && (currentUser.role === 'super_admin' || currentUser.role === 'admin') && (
             <AdminManagementView
               users={users}
+              currentUser={currentUser}
               onAddAdmin={handleAddAdmin}
               onToggleAdminStatus={handleToggleAdminStatus}
               onResetAdminPassword={handleResetAdminPassword}
+              onUpdatePrivileges={handleUpdatePrivileges}
             />
           )}
 
@@ -1274,7 +1872,14 @@ export function App() {
           {/* 12. SUPER ADMIN: SYSTEM SETTINGS */}
           {currentDestination === 'system_settings' && currentUser.role === 'super_admin' && (
             <SystemSettingsView
-              onSaveSettingsNotice={() => addToast('success', 'Configuration Saved', 'Policies and LLM API endpoint updated')}
+              onSaveSettingsNotice={() => {
+                const updated = StorageService.getSystemSettings();
+                setSystemSettings(updated);
+                addToast('success', 'System Configuration Saved', 'Business logic variables and infrastructure settings updated');
+              }}
+              onMaintenanceModeChanged={(active) => {
+                setSystemSettings((prev) => ({ ...prev, isMaintenanceMode: active }));
+              }}
             />
           )}
 
@@ -1285,7 +1890,7 @@ export function App() {
               currentMemberId={currentUser.memberId || 'MBR-000001'}
               onRenewBook={handleRenewBook}
               onCancelBorrowRequest={handleCancelBorrowRequest}
-              onNavigate={(dest) => setCurrentDestination(dest)}
+              onNavigate={handleNavigate}
             />
           )}
 
@@ -1295,7 +1900,7 @@ export function App() {
               reservations={reservations}
               currentMemberId={currentUser.memberId || 'MBR-000001'}
               onCancelReservation={handleCancelReservation}
-              onNavigate={(dest) => setCurrentDestination(dest)}
+              onNavigate={handleNavigate}
             />
           )}
 
@@ -1338,10 +1943,19 @@ export function App() {
         onClose={() => setSelectedCardMember(null)}
       />
 
+      {/* Logout Confirmation Modal */}
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        onClose={handleCancelLogout}
+        onConfirm={handleConfirmLogout}
+        userName={currentUser.name}
+      />
+
       {/* Toasts */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
     </div>
-  );
+  </BreadcrumbProvider>
+);
 }
 
 export default App;

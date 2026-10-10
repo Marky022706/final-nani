@@ -5,18 +5,50 @@ import type {
   BookReservation,
   AttendanceRecord,
   AuditLog,
-  NotificationItem
+  NotificationItem,
+  User,
+  LibraryServiceItem,
+  ServiceRecord,
+  LibrarianPrivileges
 } from '../types';
 
 const API_BASE = '/api';
+const TOKEN_KEY = 'bpl_auth_token';
+
+/**
+ * Auth Token Storage
+ * The backend issues a Sanctum personal access token on login; every
+ * subsequent request authenticates with it via the Authorization header.
+ */
+function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // ignore in non-browser environments
+  }
+}
 
 /**
  * Universal JSON Fetch Helper
  */
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
 
@@ -24,6 +56,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options,
     headers
   });
+
+  if (response.status === 401) {
+    // Token missing/expired/revoked - clear it so the app returns to the login screen.
+    setToken(null);
+  }
 
   if (!response.ok) {
     let errorDetail = `HTTP ${response.status}: ${response.statusText}`;
@@ -81,10 +118,11 @@ export const api = {
   },
 
   async createMember(member: Partial<Member>): Promise<Member> {
-    return request<Member>('/members', {
+    const res = await request<any>('/members', {
       method: 'POST',
       body: JSON.stringify(member)
     });
+    return (res && res.member) ? res.member : res;
   },
 
   async updateMember(id: string, member: Partial<Member>): Promise<Member> {
@@ -223,6 +261,19 @@ export const api = {
     });
   },
 
+  async updateAttendance(id: string, record: Partial<AttendanceRecord>, reason: string): Promise<AttendanceRecord> {
+    return request<AttendanceRecord>(`/attendance/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        time_in: record.timeIn,
+        time_out: record.timeOut,
+        status: record.status,
+        notes: record.notes,
+        reason
+      })
+    });
+  },
+
   // Audit Logs & Notifications
   async getAuditLogs(): Promise<AuditLog[]> {
     return request<AuditLog[]>('/audit-logs');
@@ -230,5 +281,96 @@ export const api = {
 
   async getNotifications(): Promise<NotificationItem[]> {
     return request<NotificationItem[]>('/notifications');
+  },
+
+  async markNotificationRead(id: string): Promise<NotificationItem> {
+    return request<NotificationItem>(`/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  async markAllNotificationsRead(memberId?: string): Promise<{ message: string }> {
+    return request<{ message: string }>('/notifications/read-all', {
+      method: 'POST',
+      body: JSON.stringify({ member_id: memberId })
+    });
+  },
+
+  // Authentication
+  hasToken(): boolean {
+    return Boolean(getToken());
+  },
+
+  async login(identifier: string, password: string): Promise<{ user: User; token: string }> {
+    const result = await request<{ user: User; token: string }>('/login', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password })
+    });
+    setToken(result.token);
+    return result;
+  },
+
+  async logout(): Promise<void> {
+    try {
+      await request('/logout', { method: 'POST' });
+    } finally {
+      setToken(null);
+    }
+  },
+
+  async me(): Promise<User> {
+    return request<User>('/me');
+  },
+
+  // Administrative Accounts (super_admin / admin governance)
+  async getUsers(): Promise<User[]> {
+    return request<User[]>('/users');
+  },
+
+  async createUser(
+    user: Partial<User> & { role: 'super_admin' | 'admin' }
+  ): Promise<{ user: User; temporary_password: string }> {
+    return request<{ user: User; temporary_password: string }>('/users', {
+      method: 'POST',
+      body: JSON.stringify(user)
+    });
+  },
+
+  async updateUser(id: string, user: Partial<User>): Promise<User> {
+    return request<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(user)
+    });
+  },
+
+  async updatePrivileges(id: string, privileges: LibrarianPrivileges): Promise<User> {
+    return request<User>(`/users/${id}/privileges`, {
+      method: 'POST',
+      body: JSON.stringify({ privileges })
+    });
+  },
+
+  async toggleUserStatus(id: string): Promise<User> {
+    return request<User>(`/users/${id}/toggle-status`, { method: 'POST' });
+  },
+
+  async resetUserPassword(id: string): Promise<{ message: string; temporary_password: string }> {
+    return request<{ message: string; temporary_password: string }>(`/users/${id}/reset-password`, {
+      method: 'POST'
+    });
+  },
+
+  // Library Services
+  async getServices(): Promise<LibraryServiceItem[]> {
+    return request<LibraryServiceItem[]>('/services');
+  },
+
+  async getServiceRecords(): Promise<ServiceRecord[]> {
+    return request<ServiceRecord[]>('/service-records');
+  },
+
+  async recordServiceUsage(serviceId: string, memberId: string, notes?: string): Promise<ServiceRecord> {
+    return request<ServiceRecord>('/service-records', {
+      method: 'POST',
+      body: JSON.stringify({ service_id: serviceId, member_id: memberId, notes })
+    });
   }
 };

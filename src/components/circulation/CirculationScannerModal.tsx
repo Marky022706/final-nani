@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Member, Book } from '../../types';
-import { X, QrCode, Barcode, Camera } from 'lucide-react';
+import { X, QrCode, Barcode } from 'lucide-react';
+import { CameraScanner } from '../common/CameraScanner';
 
 interface CirculationScannerModalProps {
   isOpen: boolean;
@@ -15,8 +16,8 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
   isOpen,
   onClose,
   mode,
-  members,
-  books,
+  members: _members,
+  books: _books,
   onCodeDetected
 }) => {
   const [manualInput, setManualInput] = useState('');
@@ -39,16 +40,6 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
     handleSimulateScan(manualInput.trim().toUpperCase(), manualInput.trim().toUpperCase());
     setManualInput('');
   };
-
-  // Collect physical copies for quick book selection
-  const allCopies = books.flatMap((b) =>
-    b.copies.map((c) => ({
-      ...c,
-      bookTitle: b.title,
-      author: b.author,
-      isbn: b.isbn
-    }))
-  );
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -90,85 +81,38 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
         </div>
 
         <div className="modal-body" style={{ padding: '20px' }}>
-          {/* Simulated Scanner Viewport */}
-          <div
-            style={{
-              backgroundColor: '#0f172a',
-              borderRadius: 'var(--radius-lg)',
-              padding: '28px 20px',
-              textAlign: 'center',
-              color: '#ffffff',
-              marginBottom: '16px',
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
+          {/* Real Camera Scanner */}
+          <CameraScanner
+            scannerId="circulation-quick-cam-scanner"
+            mode={mode === 'member_qr' ? 'qr' : 'barcode'}
+            isActive={isOpen}
+            label={mode === 'member_qr' ? 'Align patron QR code in viewfinder' : 'Align book barcode in viewfinder'}
+            onScan={(detectedCode) => {
+              handleSimulateScan(detectedCode, detectedCode);
             }}
-          >
-            {/* Viewfinder Target Box */}
+          />
+
+          {detectedFeedback && (
             <div
               style={{
-                width: '200px',
-                height: mode === 'member_qr' ? '180px' : '110px',
-                margin: '0 auto',
-                border: '2px dashed #10b981',
-                borderRadius: '12px',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(16, 185, 129, 0.05)'
+                marginBottom: '14px',
+                padding: '8px 12px',
+                backgroundColor: 'var(--brand-forest)',
+                color: '#ffffff',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                textAlign: 'center'
               }}
             >
-              {/* Laser Line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: 0,
-                  right: 0,
-                  height: '2px',
-                  backgroundColor: '#ef4444',
-                  boxShadow: '0 0 8px #ef4444'
-                }}
-              />
-
-              {mode === 'member_qr' ? (
-                <QrCode size={56} style={{ opacity: 0.7, color: '#10b981' }} />
-              ) : (
-                <Barcode size={56} style={{ opacity: 0.7, color: '#10b981' }} />
-              )}
-              <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px', zIndex: 2 }}>
-                {mode === 'member_qr' ? 'Align Patron QR Code' : 'Align Book Barcode'}
-              </span>
+              {detectedFeedback}
             </div>
-
-            <div style={{ marginTop: '12px', fontSize: '11.5px', color: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              <Camera size={14} />
-              <span>Camera feed active • Auto-detecting code</span>
-            </div>
-
-            {detectedFeedback && (
-              <div
-                style={{
-                  marginTop: '10px',
-                  padding: '8px 12px',
-                  backgroundColor: '#065f46',
-                  color: '#ffffff',
-                  borderRadius: '6px',
-                  fontSize: '12.5px',
-                  fontWeight: 600
-                }}
-              >
-                {detectedFeedback}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Manual Input Form */}
-          <form onSubmit={handleManualSubmit} style={{ marginBottom: '16px' }}>
+          <form onSubmit={handleManualSubmit} style={{ marginBottom: '8px' }}>
             <label className="form-label" style={{ fontSize: '12px' }}>
-              {mode === 'member_qr' ? 'Or enter Member ID / Name' : 'Or enter Barcode / Accession'}
+              {mode === 'member_qr' ? 'Or enter Member ID / Name' : 'Or enter Barcode / Accession Number'}
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
@@ -184,79 +128,6 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
               </button>
             </div>
           </form>
-
-          {/* Quick Select demo chips */}
-          <div>
-            <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
-              {mode === 'member_qr' ? 'Quick Pick Patron for Demo:' : 'Quick Pick Book Copy on Shelf:'}
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                maxHeight: '160px',
-                overflowY: 'auto'
-              }}
-            >
-              {mode === 'member_qr'
-                ? members.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => handleSimulateScan(m.memberId, m.fullName)}
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        justifyContent: 'space-between',
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        fontSize: '12px'
-                      }}
-                    >
-                      <div>
-                        <strong style={{ color: 'var(--text-primary)' }}>{m.fullName}</strong>
-                        <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>({m.memberId})</span>
-                      </div>
-                      <span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
-                        {m.status}
-                      </span>
-                    </button>
-                  ))
-                : allCopies.map((c) => (
-                    <button
-                      key={c.barcode}
-                      type="button"
-                      onClick={() => handleSimulateScan(c.barcode, c.bookTitle)}
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        justifyContent: 'space-between',
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        fontSize: '12px'
-                      }}
-                    >
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' }}>
-                        <strong style={{ color: 'var(--text-primary)' }}>{c.bookTitle}</strong>
-                        <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                          <code>{c.barcode}</code> ({c.accessionNumber})
-                        </span>
-                      </div>
-                      <span
-                        className={`badge ${
-                          c.status === 'Available'
-                            ? 'badge-success'
-                            : c.status === 'Borrowed'
-                            ? 'badge-info'
-                            : 'badge-warning'
-                        }`}
-                        style={{ fontSize: '10px' }}
-                      >
-                        {c.status}
-                      </span>
-                    </button>
-                  ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

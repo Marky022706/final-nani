@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'admin' | 'member';
+export type UserRole = 'super_admin' | 'admin' | 'volunteer' | 'member';
 export type AccountStatus = 'active' | 'inactive' | 'suspended';
 
 export interface User {
@@ -16,16 +16,41 @@ export interface User {
   address?: string;
   department?: string;
   mustChangePassword?: boolean;
+  privileges?: LibrarianPrivileges;
+  lastLogin?: string;
+  lastLoginIp?: string;
+}
+
+export interface LibrarianPrivileges {
+  circulationDesk: boolean; // Daily check-ins, check-outs, issue loans
+  inventoryManagement: boolean; // Add, edit, catalog, archive books
+  memberManagement: boolean; // Register, verify, update members
+  servicesManagement: boolean; // Record library services & attendance
+  reportsExport: boolean; // Export circulation & inventory analytics
+  auditView: boolean; // View audit logs
+}
+
+export interface MemberTierPolicy {
+  id: string;
+  tierName: string; // e.g. Student, Faculty, Community, Senior / PWD, Researcher
+  maxLoanLimit: number; // Max books concurrently borrowed
+  loanPeriodDays: number; // Max days allowed per loan
+  maxReservations: number;
+  dailyFineRate: number; // PHP per day overdue
+  gracePeriodDays: number; // Days after due date before fine starts
+  fineExempt: boolean;
+  description?: string;
 }
 
 export interface PhysicalCopy {
   copyId: string;
   accessionNumber: string; // e.g. BPL-000101
   barcode: string;          // e.g. BPL-000101
-  shelfLocation: string;   // e.g. Shelf A-3, 2nd Floor
+  shelfLocation?: string;   // e.g. Shelf A-3, 2nd Floor
   classification: string;  // e.g. 005.133
   condition: 'Good' | 'Fair' | 'New' | 'Damaged';
   status: 'Available' | 'Borrowed' | 'Reserved' | 'Lost' | 'Under Repair' | 'Archived';
+  format?: 'Paperback' | 'Hardcover' | 'eBook' | 'Periodical' | 'Reference' | 'Spiral-bound' | string;
   dateAdded: string;
 }
 
@@ -46,6 +71,10 @@ export interface Book {
   keywords?: string[];
   classification: string;
   coverImage?: string;
+  accessionNumber?: string; // Primary accession number
+  format?: 'Paperback' | 'Hardcover' | 'eBook' | 'Periodical' | 'Reference' | 'Spiral-bound' | string;
+  availability?: 'Available' | 'Borrowed' | 'Reserved' | 'Out of Stock' | 'Archived' | string;
+  isArchived?: boolean;
   copies: PhysicalCopy[];
 }
 
@@ -57,9 +86,11 @@ export interface Member {
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  suffix?: string;
   username?: string;
   dateOfBirth?: string;
   gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+  sex?: 'Male' | 'Female' | 'Other';
   email: string;
   phone: string;
   address: string;
@@ -69,6 +100,7 @@ export interface Member {
   qrCodeData: string; // memberId e.g. BPL-2026-0001
   joinDate: string;
   totalBorrows: number;
+  isArchived?: boolean;
 }
 
 export interface AttendanceRecord {
@@ -166,4 +198,59 @@ export interface ToastMessage {
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message?: string;
+}
+
+export interface StaffAccessAuditLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  role: UserRole;
+  event: 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'PRIVILEGE_CHANGED' | 'PASSWORD_RESET' | 'STATUS_CHANGED' | 'LOGOUT';
+  details: string;
+  ipAddress: string;
+}
+
+export interface DatabaseBackupRecord {
+  id: string;
+  filename: string;
+  timestamp: string;
+  sizeBytes: number;
+  recordCounts: {
+    books: number;
+    members: number;
+    transactions: number;
+    attendance: number;
+    users: number;
+    auditLogs: number;
+  };
+  status: 'Success' | 'Failed';
+  notes?: string;
+}
+
+export interface SystemSettings {
+  // Global Business Logic Variables
+  dailyFineRate: number; // ₱ / day
+  gracePeriodDays: number;
+  maxFineCap: number; // ₱ cap per book
+  standardLoanPeriodDays: number;
+  maxRenewals: number;
+  renewalPeriodDays: number;
+  tierPolicies: MemberTierPolicy[];
+
+  // Infrastructure & Maintenance Mode
+  isMaintenanceMode: boolean;
+  maintenanceMessage: string;
+  maintenanceStartedAt?: string;
+  estimatedUptime?: string;
+
+  // AI Cataloging Integration
+  llmEndpoint: string;
+  llmModel: string;
+
+  // Operational Metadata
+  libraryName: string;
+  operatingHours: string;
+  contactEmail: string;
+  contactPhone: string;
 }

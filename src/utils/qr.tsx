@@ -185,8 +185,9 @@ export const printQrCode = (value: string, label: string) => {
       </head>
       <body>
         <div class="card">
-          <h2>Balingasag Public Library</h2>
-          <p>Official Patron Optical Token</p>
+          <img src="/logo.png" alt="Logo" style="width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 8px; display: block;" />
+          <h2>Balingasag Municipal Library</h2>
+          <p>Official Patron Optical Token • Est. 1991</p>
           <div style="margin: 16px auto;">
             <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
               <rect width="100%" height="100%" fill="#ffffff" />

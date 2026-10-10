@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Member, User, AccountStatus } from '../../types';
 import { QrCodeSvg } from '../../utils/qr';
 import {
   X,
   UserPlus,
-  KeyRound,
-  Sparkles,
+  ClipboardCheck,
   User as UserIcon,
-  Eye,
-  EyeOff,
   Check,
   ArrowRight,
   ArrowLeft,
-  Mail
+  Mail,
+  Upload,
+  Camera,
+  ShieldCheck
 } from 'lucide-react';
 
 interface CreateMemberModalProps {
@@ -28,169 +28,191 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
   onMemberCreated,
   existingCount
 }) => {
-  // Step State: 1 = Personal Info, 2 = Contact & Membership, 3 = Account Credentials
+  // Step State: 1 = Profile & Identity, 2 = Contact & Membership, 3 = Account & QR Issuance
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
-  // Step 1: Member Personal Information
+  // Auto-generate next Member ID: BPL-YYYY-XXXX
+  const currentYear = new Date().getFullYear();
+  const nextSeq = String(existingCount + 1).padStart(4, '0');
+  const defaultMemberId = `BPL-${currentYear}-${nextSeq}`;
+
+  // Required Member Profile Information
+  const [memberId, setMemberId] = useState(defaultMemberId);
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [gender, setGender] = useState<Member['gender']>('Female');
-  const [photoUrl, setPhotoUrl] = useState(
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-  );
-
-  // Step 2: Contact & Membership
+  const [suffix, setSuffix] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('2004-01-01');
+  const [sex, setSex] = useState<'Female' | 'Male' | 'Other'>('Female');
+  const [address, setAddress] = useState('Poblacion, Balingasag, Misamis Oriental');
+  const [contactNumber, setContactNumber] = useState('+63 9');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('+63 9');
-  const [address, setAddress] = useState('Balingasag, Misamis Oriental');
-  const [membershipType, setMembershipType] = useState<Member['membershipType']>('Student');
+  const [profilePhoto, setProfilePhoto] = useState('');
   const [membershipStatus, setMembershipStatus] = useState<AccountStatus>('active');
+  const [dateRegistered, setDateRegistered] = useState(new Date().toISOString().split('T')[0]);
+  const [membershipType, setMembershipType] = useState<Member['membershipType']>('Student');
 
-  // Step 3: Account Credentials
+  // Account Credentials (no member sign-in UI exists anymore - kept only as
+  // the internal default assigned when the linked user record is created)
+  const DEFAULT_MEMBER_PASSWORD = 'P@ssword123';
   const [username, setUsername] = useState('');
-  const [temporaryPassword, setTemporaryPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
-  // Error & validation message
+  // Validation message
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-generate next Member ID: BPL-2026-XXXX
-  const currentYear = new Date().getFullYear();
-  const nextSeq = String(existingCount + 1).padStart(4, '0');
-  const generatedMemberId = `BPL-${currentYear}-${nextSeq}`;
-
-  // Helper: auto-generate temporary password
-  function generateRandomPassword() {
-    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
-    let res = '';
-    for (let i = 0; i < 10; i++) {
-      res += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return res;
-  }
+  const defaultAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1);
+      setMemberId(defaultMemberId);
       setFirstName('');
       setMiddleName('');
       setLastName('');
+      setSuffix('');
       setDateOfBirth('2004-01-01');
-      setGender('Female');
-      setAddress('Balingasag, Misamis Oriental');
-      setPhone('+63 9');
+      setSex('Female');
+      setAddress('Poblacion, Balingasag, Misamis Oriental');
+      setContactNumber('+63 9');
       setEmail('');
-      setPhotoUrl('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80');
-      setMembershipType('Student');
+      setProfilePhoto('');
       setMembershipStatus('active');
+      setDateRegistered(new Date().toISOString().split('T')[0]);
+      setMembershipType('Student');
       setUsername('');
-      const autoPass = generateRandomPassword();
-      setTemporaryPassword(autoPass);
-      setConfirmPassword(autoPass);
-      setShowPassword(false);
       setErrorMsg(null);
     }
   }, [isOpen, existingCount]);
 
-  const handleGeneratePassword = () => {
-    const newPass = generateRandomPassword();
-    setTemporaryPassword(newPass);
-    setConfirmPassword(newPass);
-    setShowPassword(true);
-  };
-
   // Sync username suggestion if empty
   const handleNameBlur = () => {
     if (!username && (firstName || lastName)) {
-      const suggested = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}`;
-      if (suggested !== '.') {
+      const cleanFirst = firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanLast = lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const suggested = cleanFirst && cleanLast ? `${cleanFirst}.${cleanLast}` : cleanFirst || cleanLast;
+      if (suggested) {
         setUsername(suggested);
       }
     }
   };
 
+  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setErrorMsg('Photo file size should be less than 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setProfilePhoto(event.target.result as string);
+          setErrorMsg(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   if (!isOpen) return null;
 
-  // Step 1 Validation
+  // Step 1 Validation: Personal Identity
   const handleNextFromStep1 = () => {
     setErrorMsg(null);
+    if (!memberId.trim()) {
+      setErrorMsg('Member ID is required.');
+      return;
+    }
     if (!firstName.trim()) {
-      setErrorMsg('Please enter the member first name.');
+      setErrorMsg('Please enter the member First Name.');
       return;
     }
     if (!lastName.trim()) {
-      setErrorMsg('Please enter the member last name.');
+      setErrorMsg('Please enter the member Last Name.');
+      return;
+    }
+    if (!dateOfBirth) {
+      setErrorMsg('Please select Date of Birth.');
       return;
     }
     setCurrentStep(2);
   };
 
-  // Step 2 Validation
+  // Step 2 Validation: Contact & Membership
   const handleNextFromStep2 = () => {
     setErrorMsg(null);
     if (!email.trim()) {
-      setErrorMsg('Please enter a valid email address for account credentials.');
+      setErrorMsg('Please enter a valid Email Address for member credentials.');
       return;
     }
     if (!email.includes('@') || !email.includes('.')) {
-      setErrorMsg('Please provide a valid email format (e.g. name@example.com).');
+      setErrorMsg('Please enter a valid email format (e.g. name@example.com).');
       return;
     }
+    if (!contactNumber.trim() || contactNumber.trim() === '+63 9') {
+      setErrorMsg('Please provide a valid Contact Number.');
+      return;
+    }
+    if (!address.trim()) {
+      setErrorMsg('Please enter the complete residential address.');
+      return;
+    }
+
     // Auto-fill username if not set
     if (!username.trim()) {
-      const suggested = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}`;
-      setUsername(suggested !== '.' ? suggested : email.split('@')[0]);
+      const cleanFirst = firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanLast = lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const suggested = cleanFirst && cleanLast ? `${cleanFirst}.${cleanLast}` : email.split('@')[0];
+      setUsername(suggested);
     }
     setCurrentStep(3);
   };
 
-  // Step 3 Final Submit
+  // Step 3 Final Submit: Create Member -> Validate -> Save -> Generate Account -> Success Notification
   const handleFinalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (temporaryPassword && temporaryPassword !== confirmPassword) {
-      setErrorMsg('Temporary password and confirmation do not match.');
-      return;
+    const nameParts = [firstName.trim(), middleName.trim(), lastName.trim()].filter(Boolean);
+    let computedFullName = nameParts.join(' ');
+    if (suffix.trim()) {
+      computedFullName += ` ${suffix.trim()}`;
     }
 
-    const computedFullName = middleName.trim()
-      ? `${firstName.trim()} ${middleName.trim()} ${lastName.trim()}`
-      : `${firstName.trim()} ${lastName.trim()}`;
-
-    const newMemberId = generatedMemberId;
+    const finalMemberId = memberId.trim() || defaultMemberId;
     const finalUsername = username.trim() || email.trim();
-    const finalPassword = temporaryPassword || generateRandomPassword();
+    const finalPassword = DEFAULT_MEMBER_PASSWORD;
     const userId = `usr-mbr-${Date.now()}`;
+    const effectivePhoto = profilePhoto || defaultAvatar;
 
+    // 1. Member Profile Object
     const newMember: Member = {
       id: `mbr-${Date.now()}`,
       userId,
-      memberId: newMemberId,
+      memberId: finalMemberId,
       fullName: computedFullName,
       firstName: firstName.trim(),
       middleName: middleName.trim() || undefined,
       lastName: lastName.trim(),
+      suffix: suffix.trim() || undefined,
       username: finalUsername,
       dateOfBirth: dateOfBirth || undefined,
-      gender,
+      gender: sex,
+      sex,
       email: email.trim(),
-      phone: phone.trim(),
+      phone: contactNumber.trim(),
       address: address.trim(),
       membershipType,
       status: membershipStatus,
-      photoUrl:
-        photoUrl.trim() ||
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      qrCodeData: newMemberId,
-      joinDate: new Date().toISOString().split('T')[0],
+      photoUrl: effectivePhoto,
+      qrCodeData: finalMemberId,
+      joinDate: dateRegistered || new Date().toISOString().split('T')[0],
       totalBorrows: 0
     };
 
+    // 2. Linked User Account Object
     const newUser: User = {
       id: userId,
       name: computedFullName,
@@ -199,20 +221,22 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
       password: finalPassword,
       role: 'member', // Strictly assigned to 'member'
       status: membershipStatus,
-      createdAt: new Date().toISOString().split('T')[0],
-      memberId: newMemberId,
-      phone: phone.trim(),
+      createdAt: dateRegistered || new Date().toISOString().split('T')[0],
+      memberId: finalMemberId,
+      phone: contactNumber.trim(),
       address: address.trim(),
+      avatarUrl: effectivePhoto,
       mustChangePassword: true
     };
 
+    // 3. Dispatch to App handler (Save profile, persist to MySQL, assign account & show success notification)
     onMemberCreated(newMember, newUser, finalPassword);
   };
 
   const stepsList = [
-    { number: 1, title: 'Personal Info', desc: 'Identity & Details', icon: UserIcon },
-    { number: 2, title: 'Contact & Type', desc: 'Address & Category', icon: Mail },
-    { number: 3, title: 'Credentials & QR', desc: 'Login & Verification', icon: KeyRound }
+    { number: 1, title: 'Profile & Identity', desc: 'Personal details', icon: UserIcon },
+    { number: 2, title: 'Contact & Status', desc: 'Address & Category', icon: Mail },
+    { number: 3, title: 'Review & Confirm', desc: 'Summary & QR', icon: ClipboardCheck }
   ];
 
   return (
@@ -232,9 +256,9 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
               <UserPlus size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Create Member Account</h3>
+              <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Add / Create Library Member</h3>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Step {currentStep} of 3 • Admin patron registration & scannable optical card issuance
+                Step {currentStep} of 3 • Municipal patron registration & account assignment
               </div>
             </div>
           </div>
@@ -372,27 +396,110 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
               </div>
             )}
 
-            {/* STEP 1: PERSONAL INFORMATION */}
+            {/* STEP 1: PERSONAL INFORMATION & PHOTO */}
             {currentStep === 1 && (
               <div className="step-fade-in">
+                {/* Profile Photo & Member ID Row */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '16px',
-                    borderBottom: '1px solid var(--border-main)',
-                    paddingBottom: '8px'
+                    gap: '20px',
+                    padding: '14px',
+                    backgroundColor: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-main)',
+                    borderRadius: 'var(--radius-md)',
+                    marginBottom: '18px'
                   }}
                 >
-                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Step 1: Personal Details
+                  {/* Photo Avatar */}
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        width: '68px',
+                        height: '68px',
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        border: '2px solid var(--brand-forest)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        backgroundColor: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <img
+                        src={profilePhoto || defaultAvatar}
+                        alt="Profile Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        position: 'absolute',
+                        bottom: '-4px',
+                        right: '-4px',
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--brand-forest)',
+                        color: '#ffffff',
+                        border: '2px solid #ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                      title="Upload Profile Photo"
+                    >
+                      <Camera size={13} />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoFileChange}
+                      style={{ display: 'none' }}
+                    />
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Required fields marked with *</span>
+
+                  {/* Photo Details & Member ID */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Member Profile Photo
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '11px', padding: '3px 10px', gap: '4px' }}
+                      >
+                        <Upload size={12} />
+                        <span>Upload Photo</span>
+                      </button>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '11.5px', marginBottom: '3px' }}>
+                        Member ID *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="form-input"
+                        value={memberId}
+                        onChange={(e) => setMemberId(e.target.value)}
+                        placeholder="e.g. BPL-2026-0001"
+                        style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, height: '34px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Name Fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr', gap: '12px', marginBottom: '14px' }}>
+                {/* Name Fields: First Name, Middle Name, Last Name, Suffix */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr 0.8fr', gap: '10px', marginBottom: '14px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">First Name *</label>
                     <input
@@ -428,89 +535,56 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                       placeholder="e.g. Santos"
                     />
                   </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Suffix</label>
+                    <select
+                      className="form-select"
+                      value={suffix}
+                      onChange={(e) => setSuffix(e.target.value)}
+                    >
+                      <option value="">None</option>
+                      <option value="Jr.">Jr.</option>
+                      <option value="Sr.">Sr.</option>
+                      <option value="II">II</option>
+                      <option value="III">III</option>
+                      <option value="IV">IV</option>
+                      <option value="V">V</option>
+                    </select>
+                  </div>
                 </div>
 
-                {/* DOB and Gender */}
+                {/* Date of Birth & Sex */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Date of Birth</label>
+                    <label className="form-label">Date of Birth *</label>
                     <input
                       type="date"
+                      required
                       className="form-input"
                       value={dateOfBirth}
                       onChange={(e) => setDateOfBirth(e.target.value)}
                     />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Gender</label>
+                    <label className="form-label">Sex *</label>
                     <select
                       className="form-select"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value as Member['gender'])}
+                      value={sex}
+                      onChange={(e) => setSex(e.target.value as 'Female' | 'Male' | 'Other')}
                     >
                       <option value="Female">Female</option>
                       <option value="Male">Male</option>
                       <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
                     </select>
-                  </div>
-                </div>
-
-                {/* Profile Photo */}
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Profile Photo URL (Optional)</label>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={photoUrl}
-                      onChange={(e) => setPhotoUrl(e.target.value)}
-                      placeholder="https://..."
-                    />
-                    <img
-                      src={photoUrl}
-                      alt="Preview"
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        border: '2px solid var(--border-main)',
-                        flexShrink: 0
-                      }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Used on the official physical and digital optical Member Card.
                   </div>
                 </div>
               </div>
             )}
 
-            {/* STEP 2: CONTACT & MEMBERSHIP */}
+            {/* STEP 2: CONTACT, ADDRESS & MEMBERSHIP STATUS */}
             {currentStep === 2 && (
               <div className="step-fade-in">
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '16px',
-                    borderBottom: '1px solid var(--border-main)',
-                    paddingBottom: '8px'
-                  }}
-                >
-                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Step 2: Contact & Membership Classification
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Contact info & account status</span>
-                </div>
-
-                {/* Email and Contact */}
+                {/* Email Address & Contact Number */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', marginBottom: '14px' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Email Address *</label>
@@ -525,31 +599,46 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                     />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Contact Number</label>
+                    <label className="form-label">Contact Number *</label>
                     <input
                       type="text"
+                      required
                       className="form-input"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+63 9..."
+                      value={contactNumber}
+                      onChange={(e) => setContactNumber(e.target.value)}
+                      placeholder="+63 912 345 6789"
                     />
                   </div>
                 </div>
 
                 {/* Address */}
                 <div className="form-group" style={{ marginBottom: '14px' }}>
-                  <label className="form-label">Complete Address</label>
+                  <label className="form-label">Complete Address *</label>
                   <input
                     type="text"
+                    required
                     className="form-input"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Barangay / Municipality"
+                    placeholder="Barangay, Municipality, Province"
                   />
                 </div>
 
-                {/* Membership Type & Status */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                {/* Membership Status, Type & Date Registered */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Membership Status *</label>
+                    <select
+                      className="form-select"
+                      value={membershipStatus}
+                      onChange={(e) => setMembershipStatus(e.target.value as AccountStatus)}
+                    >
+                      <option value="active">Active (Standard)</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                  </div>
+
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Membership Type</label>
                     <select
@@ -565,25 +654,23 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                   </div>
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Membership Status</label>
-                    <select
-                      className="form-select"
-                      value={membershipStatus}
-                      onChange={(e) => setMembershipStatus(e.target.value as AccountStatus)}
-                    >
-                      <option value="active">Active (Can log in & borrow)</option>
-                      <option value="inactive">Inactive (Account locked)</option>
-                      <option value="suspended">Suspended (Disciplinary lock)</option>
-                    </select>
+                    <label className="form-label">Date Registered *</label>
+                    <input
+                      type="date"
+                      required
+                      className="form-input"
+                      value={dateRegistered}
+                      onChange={(e) => setDateRegistered(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* STEP 3: ACCOUNT CREDENTIALS & REVIEW */}
+            {/* STEP 3: REVIEW & CONFIRM */}
             {currentStep === 3 && (
               <div className="step-fade-in">
-                {/* Auto-Generated Member ID Banner with QR */}
+                {/* Auto-Generated Member Card Summary Banner */}
                 <div
                   style={{
                     display: 'flex',
@@ -592,35 +679,45 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                     backgroundColor: '#f0fdf4',
                     border: '1px solid #bbf7d0',
                     borderRadius: 'var(--radius-md)',
-                    padding: '12px 16px',
-                    marginBottom: '18px'
+                    padding: '14px 18px',
+                    marginBottom: '16px'
                   }}
                 >
-                  <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div
                       style={{
-                        fontSize: '11px',
-                        color: '#166534',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em'
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        border: '2px solid #166534',
+                        backgroundColor: '#ffffff'
                       }}
                     >
-                      Automatic Unique Member ID
+                      <img
+                        src={profilePhoto || defaultAvatar}
+                        alt="Member avatar"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#14532d', fontFamily: 'var(--font-mono)' }}>
-                      {generatedMemberId}
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#16a34a' }}>
-                      Associated with patron's account and optical card
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>
+                        Assigned Member ID
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#14532d', fontFamily: 'var(--font-mono)' }}>
+                        {memberId}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#16a34a' }}>
+                        {[firstName, middleName, lastName, suffix].filter(Boolean).join(' ')} • {membershipType}
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <QrCodeSvg value={generatedMemberId} size={48} />
+                    <QrCodeSvg value={memberId} size={54} />
                   </div>
                 </div>
 
-                {/* Account Credentials Box */}
+                {/* Registration Summary */}
                 <div
                   style={{
                     backgroundColor: 'var(--bg-subtle)',
@@ -632,195 +729,150 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                 >
                   <div
                     style={{
-                      fontSize: '13px',
+                      fontSize: '12.5px',
                       fontWeight: 700,
                       color: 'var(--text-primary)',
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
-                      marginBottom: '12px',
+                      marginBottom: '14px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between'
+                      gap: '6px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <KeyRound size={15} color="var(--brand-forest)" />
-                      <span>Account Login Credentials</span>
+                    <ClipboardCheck size={15} color="var(--brand-forest)" />
+                    <span>Registration Summary</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', fontSize: '13px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Full Name</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {[firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || '—'}
+                      </div>
                     </div>
-                    <span className="badge badge-success" style={{ textTransform: 'none' }}>
-                      Role: Member (System Assigned)
-                    </span>
-                  </div>
-
-                  {/* Username */}
-                  <div className="form-group" style={{ marginBottom: '12px' }}>
-                    <label className="form-label">Username (or Email)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="e.g. maria.santos"
-                    />
-                  </div>
-
-                  {/* Temporary Password with Generate Button */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '6px'
-                      }}
-                    >
-                      <label className="form-label" style={{ marginBottom: 0 }}>
-                        Temporary Password *
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleGeneratePassword}
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '2px 8px', height: '26px', fontSize: '11.5px', gap: '4px' }}
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Date of Birth / Sex</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{dateOfBirth || '—'} • {sex}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Email</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{email || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Contact Number</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{contactNumber || '—'}</div>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Address</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{address || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Membership Type</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{membershipType}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Status</div>
+                      <span
+                        className={`badge ${
+                          membershipStatus === 'active'
+                            ? 'badge-success'
+                            : membershipStatus === 'inactive'
+                            ? 'badge-warning'
+                            : 'badge-danger'
+                        }`}
                       >
-                        <Sparkles size={13} color="var(--brand-forest)" />
-                        <span>Generate Temporary Password</span>
-                      </button>
+                        {membershipStatus.toUpperCase()}
+                      </span>
                     </div>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        className="form-input"
-                        value={temporaryPassword}
-                        onChange={(e) => setTemporaryPassword(e.target.value)}
-                        placeholder="Temporary password"
-                        style={{ paddingRight: '36px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--text-muted)',
-                          cursor: 'pointer',
-                          padding: 0
-                        }}
-                      >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Date Registered</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{dateRegistered || '—'}</div>
                     </div>
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Confirm Password *</label>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      className="form-input"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repeat temporary password"
-                    />
                   </div>
                 </div>
 
-                {/* Review Summary Checklist */}
                 <div
                   style={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid var(--border-main)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
                     fontSize: '12px',
-                    color: 'var(--text-secondary)'
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'rgba(6, 78, 59, 0.05)',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(6, 78, 59, 0.15)'
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                    Summary Review:
-                  </div>
-                  <div>
-                    • Patron Name: <strong>{firstName} {middleName} {lastName}</strong>
-                  </div>
-                  <div>
-                    • Email: <strong>{email}</strong> | Contact: <strong>{phone || 'None'}</strong>
-                  </div>
-                  <div>
-                    • Type: <strong>{membershipType}</strong> | Status: <strong>{membershipStatus.toUpperCase()}</strong>
-                  </div>
+                  <ShieldCheck size={16} color="var(--brand-forest)" style={{ flexShrink: 0 }} />
+                  <span>
+                    Submitting will validate the details above, save the member profile to the library system, and generate the optical ID card.
+                  </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Modal Footer with Step Navigation */}
-          <div
-            className="modal-footer"
-            style={{
-              borderTop: '1px solid var(--border-main)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            {/* Left Action: Cancel or Back */}
-            {currentStep === 1 ? (
-              <button type="button" onClick={onClose} className="btn btn-secondary">
-                Cancel
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setCurrentStep((prev) => (prev - 1) as 1 | 2 | 3)}
-                className="btn btn-secondary"
-                style={{ gap: '6px' }}
-              >
-                <ArrowLeft size={15} />
-                <span>Back</span>
-              </button>
-            )}
+          {/* Modal Footer Controls */}
+          <div className="modal-footer" style={{ justifyContent: 'space-between', padding: '14px 24px' }}>
+            <div>
+              {currentStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setCurrentStep((prev) => (prev - 1) as 1 | 2 | 3);
+                  }}
+                  className="btn btn-secondary"
+                  style={{ gap: '6px' }}
+                >
+                  <ArrowLeft size={16} />
+                  <span>Back</span>
+                </button>
+              ) : (
+                <button type="button" onClick={onClose} className="btn btn-secondary">
+                  Cancel
+                </button>
+              )}
+            </div>
 
-            {/* Right Action: Next or Create */}
-            {currentStep === 1 && (
-              <button
-                type="button"
-                onClick={handleNextFromStep1}
-                className="btn btn-primary"
-                style={{ gap: '6px' }}
-              >
-                <span>Continue to Contact</span>
-                <ArrowRight size={15} />
-              </button>
-            )}
+            <div>
+              {currentStep === 1 && (
+                <button
+                  type="button"
+                  onClick={handleNextFromStep1}
+                  className="btn btn-primary"
+                  style={{ gap: '8px', padding: '8px 20px' }}
+                >
+                  <span>Continue to Contact & Status</span>
+                  <ArrowRight size={16} />
+                </button>
+              )}
 
-            {currentStep === 2 && (
-              <button
-                type="button"
-                onClick={handleNextFromStep2}
-                className="btn btn-primary"
-                style={{ gap: '6px' }}
-              >
-                <span>Continue to Credentials</span>
-                <ArrowRight size={15} />
-              </button>
-            )}
+              {currentStep === 2 && (
+                <button
+                  type="button"
+                  onClick={handleNextFromStep2}
+                  className="btn btn-primary"
+                  style={{ gap: '8px', padding: '8px 20px' }}
+                >
+                  <span>Continue to Account Credentials</span>
+                  <ArrowRight size={16} />
+                </button>
+              )}
 
-            {currentStep === 3 && (
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ gap: '6px', boxShadow: '0 4px 6px -1px rgba(6, 78, 59, 0.25)' }}
-              >
-                <UserPlus size={15} />
-                <span>Create Account & Generate QR</span>
-              </button>
-            )}
+              {currentStep === 3 && (
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ gap: '8px', padding: '8px 22px' }}
+                >
+                  <Check size={16} />
+                  <span>Create Member & Save Profile</span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>

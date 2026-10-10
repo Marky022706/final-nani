@@ -4,7 +4,9 @@ import type {
   Member,
   AttendanceRecord,
   CirculationTransaction,
-  ServiceRecord
+  ServiceRecord,
+  UserRole,
+  User
 } from '../../types';
 import {
   BookOpen,
@@ -22,6 +24,8 @@ interface AdminDashboardProps {
   attendance: AttendanceRecord[];
   transactions: CirculationTransaction[];
   serviceRecords: ServiceRecord[];
+  userRole?: UserRole;
+  currentUser?: User;
   onNavigate: (dest: string) => void;
   onOpenAddBook: () => void;
   onOpenCreateMember: () => void;
@@ -34,6 +38,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   attendance,
   transactions,
   serviceRecords: _serviceRecords,
+  userRole,
+  currentUser,
   onNavigate,
   onOpenAddBook,
   onOpenCreateMember,
@@ -56,6 +62,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const activeMembers = members.filter((m) => m.status === 'active');
   const pendingApprovals = transactions.filter((t) => t.status === 'Pending Approval').length;
 
+  const privs = currentUser?.privileges;
+  const canAttendance = !privs || privs.servicesManagement !== false;
+  const canCirculation = !privs || privs.circulationDesk !== false;
+  const canInventory = !privs || privs.inventoryManagement !== false;
+  const canMembers = !privs || privs.memberManagement !== false;
+
   return (
     <div>
       {/* Header */}
@@ -67,7 +79,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
         <div className="page-actions">
-          {pendingApprovals > 0 && (
+          {canCirculation && pendingApprovals > 0 && (
             <button
               onClick={() => onNavigate('circulation')}
               className="btn btn-sm"
@@ -84,20 +96,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span>{pendingApprovals} Approvals Pending</span>
             </button>
           )}
-          <button onClick={onOpenScanner} className="btn btn-secondary btn-sm">
-            <QrCode size={15} />
-            <span>Attendance Scanner</span>
-          </button>
-          <button onClick={onOpenAddBook} className="btn btn-primary btn-sm">
-            <Plus size={15} />
-            <span>Add Book (ISBN)</span>
-          </button>
-          <button onClick={onOpenCreateMember} className="btn btn-secondary btn-sm">
-            <Plus size={15} />
-            <span>Add Member</span>
-          </button>
+          {canAttendance && (
+            <button onClick={onOpenScanner} className="btn btn-secondary btn-sm">
+              <QrCode size={15} />
+              <span>Attendance Scanner</span>
+            </button>
+          )}
+          {canInventory && (
+            <button onClick={onOpenAddBook} className="btn btn-primary btn-sm">
+              <Plus size={15} />
+              <span>Add Book (ISBN)</span>
+            </button>
+          )}
+          {canMembers && (
+            <button onClick={onOpenCreateMember} className="btn btn-secondary btn-sm">
+              <Plus size={15} />
+              <span>Add Member</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Volunteer Mode Active Notification */}
+      {userRole === 'volunteer' && (
+        <div
+          style={{
+            padding: '14px 20px',
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: 'var(--radius-lg)',
+            color: '#166534',
+            fontSize: '13.5px',
+            fontWeight: 600,
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}
+        >
+          <CheckCircle2 size={20} color="#16a34a" />
+          <div>
+            <div style={{ color: '#0f172a', fontWeight: 700 }}>Volunteer Relief Operations Active</div>
+            <div style={{ fontSize: '12px', color: '#475569', marginTop: '2px', fontWeight: 400 }}>
+              You are authorized to manage daily library desk operations, scan patron attendance, and process book check-outs while Head Librarian Ms. Arquita is unavailable.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Primary KPI Grid */}
       <div className="stats-grid">

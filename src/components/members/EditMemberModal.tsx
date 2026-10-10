@@ -18,6 +18,7 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [suffix, setSuffix] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState<Member['gender']>('Female');
   const [address, setAddress] = useState('');
@@ -34,6 +35,7 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
       setFirstName(member.firstName || nameParts[0] || '');
       setMiddleName(member.middleName || (nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : ''));
       setLastName(member.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''));
+      setSuffix(member.suffix || '');
       setDateOfBirth(member.dateOfBirth || '');
       setGender(member.gender || 'Female');
       setAddress(member.address || '');
@@ -54,9 +56,11 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
       return;
     }
 
-    const computedFullName = middleName.trim()
-      ? `${firstName.trim()} ${middleName.trim()} ${lastName.trim()}`
-      : `${firstName.trim()} ${lastName.trim()}`;
+    const nameParts = [firstName.trim(), middleName.trim(), lastName.trim()].filter(Boolean);
+    let computedFullName = nameParts.join(' ');
+    if (suffix.trim()) {
+      computedFullName += ` ${suffix.trim()}`;
+    }
 
     const updated: Member = {
       ...member,
@@ -64,8 +68,10 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
       firstName: firstName.trim(),
       middleName: middleName.trim() || undefined,
       lastName: lastName.trim(),
+      suffix: suffix.trim() || undefined,
       dateOfBirth: dateOfBirth || undefined,
       gender,
+      sex: gender === 'Male' ? 'Male' : gender === 'Female' ? 'Female' : 'Other',
       address: address.trim(),
       phone: phone.trim(),
       email: email.trim(),
@@ -129,7 +135,7 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
             </div>
 
             {/* Name Fields */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr', gap: '12px', marginBottom: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr 0.8fr', gap: '10px', marginBottom: '14px' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">First Name *</label>
                 <input
@@ -158,6 +164,22 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                 />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Suffix</label>
+                <select
+                  className="form-select"
+                  value={suffix}
+                  onChange={(e) => setSuffix(e.target.value)}
+                >
+                  <option value="">None</option>
+                  <option value="Jr.">Jr.</option>
+                  <option value="Sr.">Sr.</option>
+                  <option value="II">II</option>
+                  <option value="III">III</option>
+                  <option value="IV">IV</option>
+                  <option value="V">V</option>
+                </select>
               </div>
             </div>
 

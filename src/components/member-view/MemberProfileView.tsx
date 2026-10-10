@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Member, User } from '../../types';
 import { QrCodeSvg } from '../../utils/qr';
-import { Mail, Phone, MapPin, Printer, Library, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, MapPin, Printer, ShieldCheck } from 'lucide-react';
 
 interface MemberProfileViewProps {
   currentUser: User;
@@ -100,12 +100,22 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Library size={15} color="#ffffff" />
-                  </div>
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      padding: '1px',
+                      objectFit: 'contain',
+                      flexShrink: 0
+                    }}
+                  />
                   <div>
                     <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Balingasag Public Library
+                      Balingasag Municipal Library
                     </div>
                   </div>
                 </div>

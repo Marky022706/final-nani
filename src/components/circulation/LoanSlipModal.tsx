@@ -64,11 +64,16 @@ export const LoanSlipModal: React.FC<LoanSlipModalProps> = ({
             }}
           >
             <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-main)', paddingBottom: '12px', marginBottom: '14px' }}>
+              <img
+                src="/logo.png"
+                alt="Balingasag Municipal Library"
+                style={{ width: 44, height: 44, margin: '0 auto 6px', display: 'block', borderRadius: '50%' }}
+              />
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700 }}>
                 Municipality of Balingasag
               </div>
               <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                Balingasag Public Library
+                Balingasag Municipal Library
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 Circulation Desk • Official Loan Slip

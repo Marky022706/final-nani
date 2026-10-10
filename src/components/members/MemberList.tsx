@@ -5,17 +5,17 @@ import { CreateMemberModal } from './CreateMemberModal';
 import { MemberCreatedModal } from './MemberCreatedModal';
 import { EditMemberModal } from './EditMemberModal';
 import { ViewQrModal } from './ViewQrModal';
-import { AdminResetPasswordModal } from './AdminResetPasswordModal';
+import { useBreadcrumbs } from '../../context/BreadcrumbContext';
 import {
   Search,
   UserPlus,
   QrCode,
   Edit,
   Trash2,
-  KeyRound,
   Eye,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from 'lucide-react';
 
 interface MemberListProps {
@@ -25,7 +25,7 @@ interface MemberListProps {
   onMemberUpdated: (member: Member) => void;
   onMemberDeleted: (memberId: string) => void;
   onToggleStatus: (memberId: string, newStatus?: AccountStatus) => void;
-  onResetPassword: (memberId: string, newPass: string) => void;
+  onToggleArchive: (memberId: string) => void;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
@@ -35,7 +35,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   onMemberUpdated,
   onMemberDeleted,
   onToggleStatus,
-  onResetPassword
+  onToggleArchive
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -47,7 +47,6 @@ export const MemberList: React.FC<MemberListProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [isResetPassModalOpen, setIsResetPassModalOpen] = useState(false);
 
   // Success Confirmation Modal
   const [createdMemberSummary, setCreatedMemberSummary] = useState<{
@@ -58,8 +57,32 @@ export const MemberList: React.FC<MemberListProps> = ({
   // Delete Confirmation
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
 
+  // Dynamic Breadcrumb synchronization
+  const { setSubTrail, clearSubTrail } = useBreadcrumbs();
+
+  React.useEffect(() => {
+    if (selectedMember && isCardModalOpen) {
+      setSubTrail([{ label: selectedMember.fullName, current: true }]);
+    } else if (isCreateModalOpen) {
+      setSubTrail([{ label: 'Register Member', current: true }]);
+    } else if (statusFilter !== 'All') {
+      setSubTrail([{ label: `${statusFilter.toUpperCase()} Accounts`, current: true }]);
+    } else if (typeFilter !== 'All') {
+      setSubTrail([{ label: `${typeFilter} Members`, current: true }]);
+    } else {
+      setSubTrail([]);
+    }
+
+    return () => {
+      clearSubTrail();
+    };
+  }, [selectedMember, isCardModalOpen, isCreateModalOpen, statusFilter, typeFilter, setSubTrail, clearSubTrail]);
+
   // Filter logic: Search by Member ID, Name, Email, Contact Number
+  // Archived members live on the dedicated Archive page, not here.
   const filteredMembers = members.filter((member) => {
+    if (member.isArchived) return false;
+
     const q = searchTerm.toLowerCase().trim();
     const matchesSearch =
       !q ||
@@ -93,11 +116,6 @@ export const MemberList: React.FC<MemberListProps> = ({
   const handleOpenQr = (member: Member) => {
     setSelectedMember(member);
     setIsQrModalOpen(true);
-  };
-
-  const handleOpenResetPass = (member: Member) => {
-    setSelectedMember(member);
-    setIsResetPassModalOpen(true);
   };
 
   const handleConfirmDelete = () => {
@@ -324,18 +342,6 @@ export const MemberList: React.FC<MemberListProps> = ({
                         <QrCode size={15} />
                       </button>
 
-                      {/* Reset Password */}
-                      {userRole !== 'member' && (
-                        <button
-                          onClick={() => handleOpenResetPass(member)}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '5px 7px' }}
-                          title="Reset Member Password"
-                        >
-                          <KeyRound size={15} />
-                        </button>
-                      )}
-
                       {/* Activate / Deactivate Toggle */}
                       {userRole !== 'member' && (
                         <button
@@ -356,6 +362,18 @@ export const MemberList: React.FC<MemberListProps> = ({
                           }
                         >
                           {member.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </button>
+                      )}
+
+                      {/* Archive */}
+                      {userRole !== 'member' && (
+                        <button
+                          onClick={() => onToggleArchive(member.memberId)}
+                          className="btn btn-ghost btn-sm"
+                          style={{ padding: '5px 7px' }}
+                          title="Archive Member (view & restore from the Archive page)"
+                        >
+                          <Archive size={15} />
                         </button>
                       )}
 
@@ -399,7 +417,6 @@ export const MemberList: React.FC<MemberListProps> = ({
         isOpen={!!createdMemberSummary}
         onClose={() => setCreatedMemberSummary(null)}
         member={createdMemberSummary?.member || null}
-        temporaryPassword={createdMemberSummary?.tempPass}
         onViewMember={(m) => {
           setCreatedMemberSummary(null);
           handleOpenView(m);
@@ -427,14 +444,6 @@ export const MemberList: React.FC<MemberListProps> = ({
         isOpen={isQrModalOpen}
         onClose={() => setIsQrModalOpen(false)}
         member={selectedMember}
-      />
-
-      {/* Reset Password Modal */}
-      <AdminResetPasswordModal
-        isOpen={isResetPassModalOpen}
-        onClose={() => setIsResetPassModalOpen(false)}
-        member={selectedMember}
-        onConfirmReset={onResetPassword}
       />
 
       {/* Delete Confirmation Dialog */}

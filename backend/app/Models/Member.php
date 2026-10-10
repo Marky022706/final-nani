@@ -15,6 +15,7 @@ class Member extends Model
         'first_name',
         'middle_name',
         'last_name',
+        'suffix',
         'full_name',
         'username',
         'date_of_birth',
@@ -28,6 +29,11 @@ class Member extends Model
         'qr_code_data',
         'join_date',
         'total_borrows',
+        'is_archived',
+    ];
+
+    protected $casts = [
+        'is_archived' => 'boolean',
     ];
 
     protected $appends = [
@@ -36,15 +42,18 @@ class Member extends Model
         'firstName',
         'middleName',
         'lastName',
+        'suffix',
         'fullName',
         'username',
         'dateOfBirth',
         'gender',
+        'sex',
         'membershipType',
         'photoUrl',
         'qrCodeData',
         'joinDate',
         'totalBorrows',
+        'isArchived',
     ];
 
     public function getUserIdAttribute() { return $this->attributes['user_id'] ?? null; }
@@ -52,15 +61,18 @@ class Member extends Model
     public function getFirstNameAttribute() { return $this->attributes['first_name'] ?? null; }
     public function getMiddleNameAttribute() { return $this->attributes['middle_name'] ?? null; }
     public function getLastNameAttribute() { return $this->attributes['last_name'] ?? null; }
+    public function getSuffixAttribute() { return $this->attributes['suffix'] ?? null; }
     public function getFullNameAttribute() { return $this->attributes['full_name'] ?? null; }
     public function getUsernameAttribute() { return $this->attributes['username'] ?? null; }
     public function getDateOfBirthAttribute() { return $this->attributes['date_of_birth'] ?? null; }
     public function getGenderAttribute() { return $this->attributes['gender'] ?? null; }
+    public function getSexAttribute() { return $this->attributes['gender'] ?? null; }
     public function getMembershipTypeAttribute() { return $this->attributes['membership_type'] ?? null; }
     public function getPhotoUrlAttribute() { return $this->attributes['photo_url'] ?? null; }
     public function getQrCodeDataAttribute() { return $this->attributes['qr_code_data'] ?? null; }
     public function getJoinDateAttribute() { return $this->attributes['join_date'] ?? null; }
     public function getTotalBorrowsAttribute() { return $this->attributes['total_borrows'] ?? 0; }
+    public function getIsArchivedAttribute() { return (bool) ($this->attributes['is_archived'] ?? false); }
 
     public function user()
     {

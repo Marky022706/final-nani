@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import type { User } from '../../types';
-import { Library, Lock, Mail, Eye, EyeOff, AlertCircle, HelpCircle, X, ArrowRight, ShieldCheck, Check } from 'lucide-react';
+import { api } from '../../services/api';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, HelpCircle, X, ArrowRight, ShieldCheck, Check, Wrench } from 'lucide-react';
+import { FloatingQrBackground } from './FloatingQrBackground';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
-  users: User[];
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -16,66 +17,41 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Credentials are verified server-side against the Laravel API; a
+  // Sanctum token is issued and stored for all subsequent requests.
+  const performLogin = async (loginIdentifier: string, loginPassword: string) => {
     setErrorMessage(null);
+    setIsLoading(true);
+    try {
+      const { user } = await api.login(loginIdentifier, loginPassword);
+      onLogin(user);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const trimmedIdentifier = identifier.trim().toLowerCase();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedIdentifier = identifier.trim();
     if (!trimmedIdentifier || !password) {
       setErrorMessage('Please enter both your email / username and password.');
       return;
     }
-
-    setIsLoading(true);
-
-    setTimeout(() => {
-      // Find matching user by email, username, or memberId
-      const foundUser = users.find(
-        (u) =>
-          u.email.toLowerCase() === trimmedIdentifier ||
-          (u.username && u.username.toLowerCase() === trimmedIdentifier) ||
-          (u.memberId && u.memberId.toLowerCase() === trimmedIdentifier)
-      );
-
-      if (!foundUser) {
-        setIsLoading(false);
-        setErrorMessage('Invalid credentials. Please verify your email / username and password.');
-        return;
-      }
-
-      // Check account status
-      if (foundUser.status === 'inactive') {
-        setIsLoading(false);
-        setErrorMessage('Your library account is currently inactive. Please contact the library administrator.');
-        return;
-      }
-
-      if (foundUser.status === 'suspended') {
-        setIsLoading(false);
-        setErrorMessage('Your library account is currently suspended. Please contact the library administrator.');
-        return;
-      }
-
-      // Simple password check (supports user's password or demo default)
-      if (foundUser.password && foundUser.password !== password && password !== 'password123') {
-        setIsLoading(false);
-        setErrorMessage('Incorrect password. Please try again.');
-        return;
-      }
-
-      setIsLoading(false);
-      onLogin(foundUser);
-    }, 400);
+    await performLogin(trimmedIdentifier, password);
   };
 
-  const handleQuickFill = (userEmail: string, pass = 'password123') => {
-    const user = users.find((u) => u.email === userEmail);
-    if (user) {
-      setIdentifier(user.email);
-      setPassword(pass);
-      setErrorMessage(null);
-    }
+  // Dev-only convenience: signs in with the real seeded backend accounts
+  // (no client-side auth bypass) so the super_admin / admin dashboards are
+  // one click away while developing. Stripped from production builds since
+  // `import.meta.env.DEV` is false there and dead-code-eliminated.
+  const handleDevQuickLogin = (devIdentifier: string, devPassword: string) => {
+    setIdentifier(devIdentifier);
+    setPassword(devPassword);
+    performLogin(devIdentifier, devPassword);
   };
+
 
   return (
     <div
@@ -85,8 +61,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#032b22',
-        backgroundImage: 'radial-gradient(circle at 20% 20%, #064e3b 0%, #02241c 100%)',
+        backgroundColor: '#166534',
+        backgroundImage:
+          'linear-gradient(160deg, rgba(20,83,45,0.90) 0%, rgba(22,101,52,0.85) 55%, rgba(13,46,28,0.93) 100%), url(/library-showcase-banner.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         padding: '24px',
         position: 'relative',
         overflow: 'hidden'
@@ -106,6 +86,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
         }}
       />
 
+      {/* Floating QR codes drifting behind the login card, bouncing off the screen edges */}
+      <FloatingQrBackground count={16} />
+
       <div
         style={{
           width: '100%',
@@ -122,19 +105,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: '12px',
-              backgroundColor: 'var(--brand-forest)',
-              color: '#ffffff',
+              width: 76,
+              height: 76,
+              borderRadius: '50%',
+              backgroundColor: '#ffffff',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 10px 15px -3px rgba(6, 78, 59, 0.3)',
-              marginBottom: '16px'
+              boxShadow: '0 10px 25px -3px rgba(22, 101, 52, 0.25)',
+              marginBottom: '16px',
+              padding: '3px',
+              border: '2px solid rgba(22, 101, 52, 0.15)'
             }}
           >
-            <Library size={28} strokeWidth={2.2} />
+            <img
+              src="/logo.png"
+              alt="Balingasag Municipal Library Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }}
+            />
           </div>
           <h1
             style={{
@@ -145,10 +133,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
               marginBottom: '6px'
             }}
           >
-            Balingasag Public Library
+            Balingasag Municipal Library
           </h1>
           <p style={{ fontSize: '13px', color: '#64748b' }}>
-            Library Management System Portal
+            Library Management System Portal • Est. 1991
           </p>
         </div>
 
@@ -379,56 +367,77 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, users }) => {
           </div>
         </div>
 
-        {/* Demo Fast Logins for Testing */}
+      </div>
+
+      {/* Developer Quick Access - dev builds only, signs in with real seeded accounts.
+          Fixed to the bottom-left of the viewport so it stays put regardless of the card. */}
+      {import.meta.env.DEV && (
         <div
           style={{
-            marginTop: '16px',
-            padding: '12px',
-            backgroundColor: '#f8fafc',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            fontSize: '11.5px'
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            zIndex: 20,
+            width: '220px',
+            padding: '14px 16px',
+            borderRadius: '10px',
+            border: '1px dashed #94a3b8',
+            backgroundColor: 'rgba(248, 250, 252, 0.97)',
+            boxShadow: '0 10px 28px rgba(0, 0, 0, 0.3)'
           }}
         >
-          <div style={{ fontWeight: 600, color: '#475569', marginBottom: '8px', textAlign: 'center' }}>
-            Quick Demo Credentials:
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#64748b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}
+          >
+            <Wrench size={13} />
+            <span>Developer Quick Access</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => handleDevQuickLogin('superadmin@balingasag.gov.ph', 'admin123')}
+                disabled={isLoading}
+                className="btn btn-secondary btn-sm"
+                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px' }}
+              >
+                Superadmin
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDevQuickLogin('admin.arquita@balingasag.gov.ph', 'admin123')}
+                disabled={isLoading}
+                className="btn btn-secondary btn-sm"
+                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px' }}
+              >
+                Admin (Ms. Arquita)
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => handleQuickFill('superadmin@balingasag.gov.ph')}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '11px', padding: '4px 6px', justifyContent: 'center' }}
+              onClick={() => handleDevQuickLogin('volunteer@balingasag.gov.ph', 'admin123')}
+              disabled={isLoading}
+              className="btn btn-secondary btn-sm"
+              style={{ width: '100%', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px', backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' }}
             >
-              Super Admin
+              ★ Volunteer (Desk Relief)
             </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin.roberto@balingasag.gov.ph')}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '11px', padding: '4px 6px', justifyContent: 'center' }}
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('juan.delacruz@gmail.com')}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '11px', padding: '4px 6px', justifyContent: 'center' }}
-            >
-              Active Member
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('david.inactive@gmail.com')}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '11px', padding: '4px 6px', justifyContent: 'center', color: '#dc2626' }}
-            >
-              Inactive Member
-            </button>
+          </div>
+          <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '8px', textAlign: 'center' }}>
+            Dev build only — signs in with seeded municipal staff accounts.
           </div>
         </div>
-      </div>
+      )}
 
       {/* Forgot Password Modal */}
       {isForgotPasswordOpen && (

@@ -7,7 +7,6 @@ interface MemberCreatedModalProps {
   isOpen: boolean;
   onClose: () => void;
   member: Member | null;
-  temporaryPassword?: string;
   onViewMember: (member: Member) => void;
   onPrintCard: (member: Member) => void;
   onCreateAnother: () => void;
@@ -17,33 +16,21 @@ export const MemberCreatedModal: React.FC<MemberCreatedModalProps> = ({
   isOpen,
   onClose,
   member,
-  temporaryPassword,
   onViewMember,
   onPrintCard,
   onCreateAnother
 }) => {
-  const [copiedPass, setCopiedPass] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
 
   if (!isOpen || !member) return null;
 
-  const handleCopyPassword = () => {
-    if (temporaryPassword) {
-      navigator.clipboard.writeText(temporaryPassword);
-      setCopiedPass(true);
-      setTimeout(() => setCopiedPass(false), 2000);
-    }
-  };
-
   const handleCopyAll = () => {
-    const text = `Balingasag Public Library - Member Credentials
+    const text = `Balingasag Public Library - Member Details
 Member Name: ${member.fullName}
 Member ID: ${member.memberId}
 Email: ${member.email}
-Username: ${member.username || member.email}
-Temporary Password: ${temporaryPassword || 'N/A'}
-Status: ${member.status.toUpperCase()}
-Note: Please change your password after initial login.`;
+Membership Type: ${member.membershipType}
+Status: ${member.status.toUpperCase()}`;
 
     navigator.clipboard.writeText(text);
     setCopiedAll(true);
@@ -86,7 +73,7 @@ Note: Please change your password after initial login.`;
                 Member Account Created Successfully
               </h3>
               <div style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
-                Credentials and optical identification token generated
+                Member profile saved and optical identification token generated
               </div>
             </div>
           </div>
@@ -142,7 +129,7 @@ Note: Please change your password after initial login.`;
               </div>
             </div>
 
-            {/* Credential summary table */}
+            {/* Member details table */}
             <div
               style={{
                 backgroundColor: '#ffffff',
@@ -153,44 +140,13 @@ Note: Please change your password after initial login.`;
               }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Username:</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{member.username || member.email}</span>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Membership Type:</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{member.membershipType}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Assigned Role:</span>
-                <span style={{ fontWeight: 600, color: 'var(--brand-forest)' }}>Member (Patron)</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px' }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Join Date:</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{member.joinDate}</span>
               </div>
-              {temporaryPassword && (
-                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Temp Password:</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <code
-                      style={{
-                        backgroundColor: '#fffbeb',
-                        border: '1px solid #fde68a',
-                        color: '#92400e',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        letterSpacing: '0.04em'
-                      }}
-                    >
-                      {temporaryPassword}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={handleCopyPassword}
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: '2px 6px', height: '26px', fontSize: '11px' }}
-                      title="Copy Temporary Password"
-                    >
-                      {copiedPass ? <Check size={13} color="var(--success)" /> : <Copy size={13} />}
-                      <span>{copiedPass ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Copy full credentials snippet button */}

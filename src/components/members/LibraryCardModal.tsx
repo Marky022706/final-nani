@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Member } from '../../types';
 import { QrCodeSvg } from '../../utils/qr';
-import { X, Printer, Library } from 'lucide-react';
+import { X, Printer } from 'lucide-react';
 
 interface LibraryCardModalProps {
   member: Member | null;
@@ -48,25 +48,25 @@ export const LibraryCardModal: React.FC<LibraryCardModalProps> = ({
               {/* Card Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
                     style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      width: 30,
+                      height: 30,
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      padding: '1px',
+                      objectFit: 'contain',
+                      flexShrink: 0
                     }}
-                  >
-                    <Library size={16} color="#ffffff" />
-                  </div>
+                  />
                   <div>
                     <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      Balingasag Public Library
+                      Balingasag Municipal Library
                     </div>
                     <div style={{ fontSize: '9px', color: '#94a3b8' }}>
-                      Municipality of Balingasag, Misamis Oriental
+                      Municipality of Balingasag, Misamis Oriental • Est. 1991
                     </div>
                   </div>
                 </div>

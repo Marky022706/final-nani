@@ -25,4 +25,26 @@ class SystemController extends Controller
         }
         return response()->json($query->take(50)->get());
     }
+
+    public function markNotificationRead($id)
+    {
+        $notification = Notification::findOrFail($id);
+        $notification->update(['read' => true]);
+        return response()->json($notification);
+    }
+
+    public function markAllNotificationsRead(Request $request)
+    {
+        $memberId = $request->input('member_id');
+        $query = Notification::where('read', false);
+        if ($memberId) {
+            $query->where(function ($q) use ($memberId) {
+                $q->where('target_member_id', $memberId)
+                  ->orWhere('target_role', 'all');
+            });
+        }
+        $query->update(['read' => true]);
+
+        return response()->json(['message' => 'All notifications marked as read.']);
+    }
 }

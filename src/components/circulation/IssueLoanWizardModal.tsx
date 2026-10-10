@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  Camera,
   ArrowRight,
   ArrowLeft,
   BookOpen,
@@ -15,6 +14,9 @@ import {
   RotateCcw,
   Check
 } from 'lucide-react';
+import { CameraScanner } from '../common/CameraScanner';
+import { playSuccessBeep, playErrorTone } from '../../utils/sound';
+import { StorageService } from '../../utils/storage';
 
 interface IssueLoanWizardModalProps {
   isOpen: boolean;
@@ -42,13 +44,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
 
   // Step 1 State: Member
   const [selectedMemberId, setSelectedMemberId] = useState<string>('');
-  const [memberInput, setMemberInput] = useState<string>('');
-  const [memberScanActive] = useState<boolean>(true);
 
   // Step 2 State: Book & Copy
   const [selectedBarcode, setSelectedBarcode] = useState<string>('');
-  const [bookInput, setBookInput] = useState<string>('');
-  const [bookScanActive] = useState<boolean>(true);
 
   // Dates
   const todayStr = new Date().toISOString().split('T')[0];
@@ -61,19 +59,82 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   const [issuedTransaction, setIssuedTransaction] = useState<CirculationTransaction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Transient "Successful!" confirmation modal shown right after a scan is
+  // accepted, before the wizard auto-advances to the next step.
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+
   // Reset wizard when opened
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1);
       setSelectedMemberId(members[0]?.memberId || '');
       setSelectedBarcode('');
-      setMemberInput('');
-      setBookInput('');
       setIssuedTransaction(null);
       setErrorMessage(null);
+      setSuccessNotice(null);
       setDueDate(defaultDueStr);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Dynamically synchronize loan duration with Superadmin tier policy
+  useEffect(() => {
+    if (selectedMember) {
+      const tier = systemSettings.tierPolicies.find(
+        (p) => p.tierName.toLowerCase() === (selectedMember.membershipType || '').toLowerCase()
+      ) || systemSettings.tierPolicies[0];
+      const days = tier?.loanPeriodDays || systemSettings.standardLoanPeriodDays || 7;
+      const targetDue = new Date();
+      targetDue.setDate(targetDue.getDate() + days);
+      setDueDate(targetDue.toISOString().split('T')[0]);
+    }
+  }, [selectedMemberId]);
+
+  // Clean scanned code helper (handles JSON payloads, URLs, whitespace)
+  const cleanScannedCode = (raw: string): string => {
+    let text = (raw || '').trim();
+    if (text.startsWith('{') && text.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(text);
+        text = parsed.memberId || parsed.id || parsed.barcode || parsed.code || text;
+      } catch {
+        // use raw
+      }
+    }
+    if (text.includes('/') && !text.includes(' ')) {
+      const parts = text.split('/');
+      const last = parts[parts.length - 1];
+      if (last) text = last;
+    }
+    return text.trim();
+  };
+
+  // Shared lookups (used by both live camera scans and manual entry, so both
+  // paths resolve a code to a record identically).
+  const findMemberByCode = (raw: string): Member | null => {
+    const term = cleanScannedCode(raw);
+    if (!term) return null;
+    return (
+      members.find(
+        (m) =>
+          m.memberId.toUpperCase() === term.toUpperCase() ||
+          (m.qrCodeData && m.qrCodeData.toUpperCase() === term.toUpperCase()) ||
+          m.fullName.toUpperCase().includes(term.toUpperCase())
+      ) || null
+    );
+  };
+
+  const findCopyByCode = (raw: string): { book: Book; copy: PhysicalCopy } | null => {
+    const term = cleanScannedCode(raw);
+    if (!term) return null;
+    for (const b of books) {
+      const copy = b.copies.find(
+        (c) => c.barcode.toUpperCase() === term.toUpperCase() || c.accessionNumber.toUpperCase() === term.toUpperCase()
+      );
+      if (copy) return { book: b, copy };
+    }
+    return null;
+  };
 
   if (!isOpen) return null;
 
@@ -86,29 +147,22 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     (t) => t.memberId === selectedMemberId && t.status === 'Overdue'
   );
 
+  const systemSettings = StorageService.getSystemSettings();
+  const selectedMemberTier = systemSettings.tierPolicies.find(
+    (p) => p.tierName.toLowerCase() === (selectedMember?.membershipType || '').toLowerCase()
+  ) || systemSettings.tierPolicies[0];
+  const maxAllowedLoans = selectedMemberTier?.maxLoanLimit ?? 3;
+
   const isAccountActive = selectedMember?.status === 'active';
-  const isWithinLimit = memberActiveLoans.length < 3;
+  const isWithinLimit = memberActiveLoans.length < maxAllowedLoans;
   const hasNoOverdue = memberOverdueLoans.length === 0;
   const hasNoBlockedFines = true;
   const isMemberEligible = !!selectedMember && isAccountActive && isWithinLimit && hasNoOverdue && hasNoBlockedFines;
 
   // Derive Book & Copy for Step 2
-  let selectedBook: Book | null = null;
-  let selectedCopy: PhysicalCopy | null = null;
-  if (selectedBarcode.trim()) {
-    for (const b of books) {
-      const copy = b.copies.find(
-        (c) =>
-          c.barcode.toUpperCase() === selectedBarcode.trim().toUpperCase() ||
-          c.accessionNumber.toUpperCase() === selectedBarcode.trim().toUpperCase()
-      );
-      if (copy) {
-        selectedBook = b;
-        selectedCopy = copy;
-        break;
-      }
-    }
-  }
+  const foundCopy = selectedBarcode.trim() ? findCopyByCode(selectedBarcode) : null;
+  const selectedBook = foundCopy?.book ?? null;
+  const selectedCopy = foundCopy?.copy ?? null;
 
   const isCopyAvailable = selectedCopy?.status === 'Available';
   const currentCopyBorrower = selectedCopy && !isCopyAvailable
@@ -117,36 +171,79 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       )
     : null;
 
-  // Collect available copies for Step 2 quick-pick
-  const availableCopies = books.flatMap((b) =>
-    b.copies
-      .filter((c) => c.status === 'Available')
-      .map((c) => ({
-        ...c,
-        bookTitle: b.title,
-        author: b.author
-      }))
-  );
-
-  // Handlers for Step 1
-  const handleSelectMember = (memberId: string) => {
-    setSelectedMemberId(memberId);
-    setErrorMessage(null);
+  // Commit the loan using explicitly-provided records (safe to call from a
+  // delayed auto-advance without depending on state having already updated).
+  const commitBorrow = (member: Member, book: Book, copy: PhysicalCopy) => {
+    const res = onConfirmBorrow(member.memberId, copy.barcode, dueDate);
+    if (res.success && res.transaction) {
+      setIssuedTransaction(res.transaction);
+      setCurrentStep(3);
+    } else if (res.success) {
+      // Fallback transaction object
+      const fallbackTx: CirculationTransaction = {
+        id: `BRW-2026-${Date.now().toString().slice(-5)}`,
+        bookId: book.id,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        accessionNumber: copy.accessionNumber,
+        barcode: copy.barcode,
+        memberId: member.memberId,
+        memberName: member.fullName,
+        borrowDate: todayStr,
+        dueDate: dueDate,
+        status: 'Active',
+        renewalCount: 0,
+        processedBy: 'Admin'
+      };
+      setIssuedTransaction(fallbackTx);
+      setCurrentStep(3);
+    } else {
+      playErrorTone();
+      setErrorMessage(res.message);
+    }
   };
 
-  const handleMemberSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!memberInput.trim()) return;
-    const term = memberInput.trim().toUpperCase();
-    const found = members.find(
-      (m) => m.memberId.toUpperCase() === term || m.fullName.toUpperCase().includes(term)
-    );
-    if (found) {
-      setSelectedMemberId(found.memberId);
-      setErrorMessage(null);
-    } else {
-      setErrorMessage(`No member found matching "${memberInput}".`);
+  // Handler for Step 1: live camera scan of the member's card/QR - resolves independently of
+  // component state so it can decide immediately (no stale-state risk),
+  // beeps, and auto-advances to the book scan when the member is eligible.
+  const handleMemberCameraScan = (detectedCode: string) => {
+    const term = cleanScannedCode(detectedCode);
+    if (!term) return;
+
+    const found = findMemberByCode(term);
+    if (!found) {
+      playErrorTone();
+      setSelectedMemberId(term);
+      setErrorMessage(`Scanned code "${term}" does not match any registered member.`);
+      return;
     }
+
+    const activeLoans = transactions.filter(
+      (t) => t.memberId === found.memberId && (t.status === 'Active' || t.status === 'Overdue')
+    );
+    const overdueLoans = transactions.filter((t) => t.memberId === found.memberId && t.status === 'Overdue');
+    const eligible = found.status === 'active' && activeLoans.length < 3 && overdueLoans.length === 0;
+
+    setSelectedMemberId(found.memberId);
+
+    if (!eligible) {
+      playErrorTone();
+      setErrorMessage(`${found.fullName} is not currently eligible to borrow. Please review account status.`);
+      return;
+    }
+
+    playSuccessBeep();
+    setErrorMessage(null);
+
+    // Let the eligibility card render and stay on screen long enough to be
+    // read first, then show the "Successful!" confirmation, then advance.
+    setTimeout(() => {
+      setSuccessNotice(`${found.fullName} verified — eligible to borrow.`);
+      setTimeout(() => {
+        setSuccessNotice(null);
+        setCurrentStep(2);
+      }, 700);
+    }, 1100);
   };
 
   const handleProceedToStep2 = () => {
@@ -160,16 +257,65 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
 
   // Handlers for Step 2
   const handleSelectBarcode = (barcode: string) => {
-    setSelectedBarcode(barcode);
+    const term = cleanScannedCode(barcode);
+    setSelectedBarcode(term);
     setErrorMessage(null);
   };
 
   const handleBookSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bookInput.trim()) return;
-    const term = bookInput.trim().toUpperCase();
-    setSelectedBarcode(term);
+    const term = cleanScannedCode(selectedBarcode);
+    if (!term) return;
+    if (findCopyByCode(term)) {
+      playSuccessBeep();
+      setErrorMessage(null);
+    } else {
+      playErrorTone();
+      setErrorMessage(`No physical book found matching barcode "${term}".`);
+    }
+  };
+
+  // Live camera scan of the book barcode - resolves fresh (not from
+  // possibly-stale state), beeps, and auto-completes the loan when the
+  // copy is available.
+  const handleBookCameraScan = (detectedCode: string) => {
+    const term = cleanScannedCode(detectedCode);
+    if (!term) return;
+
+    const result = findCopyByCode(term);
+    if (!result || result.copy.status !== 'Available') {
+      playErrorTone();
+      setSelectedBarcode(term);
+      setErrorMessage(
+        !result
+          ? `No physical book found matching barcode "${term}".`
+          : `Copy ${result.copy.barcode} is currently ${result.copy.status} and cannot be issued.`
+      );
+      return;
+    }
+
+    if (!selectedMember || !isMemberEligible) {
+      playErrorTone();
+      setErrorMessage('Member is not eligible to borrow.');
+      return;
+    }
+
+    playSuccessBeep();
+    setSelectedBarcode(result.copy.barcode);
     setErrorMessage(null);
+
+    const member = selectedMember;
+    const { book, copy } = result;
+
+    // Let the book details card render and stay on screen long enough to be
+    // read first, then show the "Successful!" confirmation, then commit the loan.
+    setTimeout(() => {
+      setSuccessNotice(`${book.title} verified — issuing loan.`);
+      setTimeout(() => {
+        setSuccessNotice(null);
+        commitBorrow(member, book, copy);
+      }, 700);
+    }, 1100);
   };
 
   const handleConfirmBorrow = () => {
@@ -177,37 +323,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       setErrorMessage('Member is not eligible to borrow.');
       return;
     }
-    if (!selectedCopy || !isCopyAvailable) {
+    if (!selectedCopy || !isCopyAvailable || !selectedBook) {
       setErrorMessage('Book copy is not available on shelf.');
       return;
     }
-
-    const res = onConfirmBorrow(selectedMember.memberId, selectedCopy.barcode, dueDate);
-    if (res.success && res.transaction) {
-      setIssuedTransaction(res.transaction);
-      setCurrentStep(3);
-    } else if (res.success) {
-      // Fallback transaction object
-      const fallbackTx: CirculationTransaction = {
-        id: `BRW-2026-${Date.now().toString().slice(-5)}`,
-        bookId: selectedBook?.id || 'book-1',
-        bookTitle: selectedBook?.title || 'Borrowed Book',
-        bookAuthor: selectedBook?.author || '',
-        accessionNumber: selectedCopy.accessionNumber,
-        barcode: selectedCopy.barcode,
-        memberId: selectedMember.memberId,
-        memberName: selectedMember.fullName,
-        borrowDate: todayStr,
-        dueDate: dueDate,
-        status: 'Active',
-        renewalCount: 0,
-        processedBy: 'Admin'
-      };
-      setIssuedTransaction(fallbackTx);
-      setCurrentStep(3);
-    } else {
-      setErrorMessage(res.message);
-    }
+    commitBorrow(selectedMember, selectedBook, selectedCopy);
   };
 
   const handleResetWizard = () => {
@@ -222,8 +342,63 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '680px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        style={{
+          maxWidth: '680px',
+          width: '95%',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative'
+        }}
       >
+        {/* "Successful!" confirmation - shown briefly after the step's details card
+            has already been visible, right before the wizard auto-advances. */}
+        {successNotice && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.55)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 50,
+              borderRadius: 'var(--radius-xl)',
+              animation: 'fadeIn 0.15s ease'
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: 'var(--radius-lg)',
+                padding: '28px 40px',
+                textAlign: 'center',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                animation: 'modalScaleUp 0.25s ease',
+                maxWidth: '320px'
+              }}
+            >
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--success-bg)',
+                  color: 'var(--success)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 12px'
+                }}
+              >
+                <CheckCircle2 size={30} />
+              </div>
+              <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)' }}>Successful!</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>{successNotice}</div>
+            </div>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '18px 24px' }}>
           <div>
@@ -418,108 +593,14 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 </span>
               </div>
 
-              {/* Simulated Camera Viewfinder */}
-              {memberScanActive && (
-                <div
-                  style={{
-                    backgroundColor: '#0f172a',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '24px',
-                    textAlign: 'center',
-                    color: '#ffffff',
-                    marginBottom: '18px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '160px',
-                      height: '140px',
-                      margin: '0 auto',
-                      border: '2px dashed #10b981',
-                      borderRadius: '12px',
-                      position: 'relative',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'rgba(16, 185, 129, 0.05)'
-                    }}
-                  >
-                    {/* Laser scanning line */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: 0,
-                        right: 0,
-                        height: '2px',
-                        backgroundColor: '#ef4444',
-                        boxShadow: '0 0 8px #ef4444'
-                      }}
-                    />
-                    <QrCode size={48} style={{ opacity: 0.8, color: '#10b981' }} />
-                    <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
-                      Align Patron QR
-                    </span>
-                  </div>
-
-                  <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Camera size={13} />
-                    <span>Camera scanner active • Point patron QR code at the camera</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Member Search / Selector */}
-              <form onSubmit={handleMemberSearchSubmit} style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ fontSize: '12.5px', fontWeight: 600 }}>
-                  Or Select / Search Member Account
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <select
-                    className="form-select"
-                    value={selectedMemberId}
-                    onChange={(e) => handleSelectMember(e.target.value)}
-                    style={{ flex: 1 }}
-                  >
-                    <option value="">-- Choose Member --</option>
-                    {members.map((m) => (
-                      <option key={m.id} value={m.memberId}>
-                        {m.fullName} ({m.memberId}) • {m.membershipType}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </form>
-
-              {/* Quick Pick Patron Chips */}
-              <div style={{ marginBottom: '18px' }}>
-                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                  Quick Simulated Scan:
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {members.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => handleSelectMember(m.memberId)}
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        fontSize: '11.5px',
-                        padding: '4px 10px',
-                        backgroundColor: selectedMemberId === m.memberId ? 'var(--accent-blue-light)' : undefined,
-                        borderColor: selectedMemberId === m.memberId ? 'var(--accent-blue-border)' : undefined
-                      }}
-                    >
-                      <span>{m.fullName}</span>
-                      <code>{m.memberId}</code>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Real Camera QR Scanner - a successful, eligible match auto-advances to Step 2 */}
+              <CameraScanner
+                scannerId="loan-wizard-step1-camera"
+                mode="qr"
+                isActive={isOpen && currentStep === 1}
+                label="Camera active • Align patron library card QR code in viewfinder"
+                onScan={handleMemberCameraScan}
+              />
 
               {/* Member Details & Real-Time Eligibility Card */}
               {selectedMember && (
@@ -617,65 +698,19 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 </div>
               </div>
 
-              {/* Simulated Camera Viewfinder for Barcode */}
-              {bookScanActive && (
-                <div
-                  style={{
-                    backgroundColor: '#0f172a',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '24px',
-                    textAlign: 'center',
-                    color: '#ffffff',
-                    marginBottom: '18px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)'
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '200px',
-                      height: '100px',
-                      margin: '0 auto',
-                      border: '2px dashed #10b981',
-                      borderRadius: '12px',
-                      position: 'relative',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'rgba(16, 185, 129, 0.05)'
-                    }}
-                  >
-                    {/* Laser line */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: 0,
-                        right: 0,
-                        height: '2px',
-                        backgroundColor: '#ef4444',
-                        boxShadow: '0 0 8px #ef4444'
-                      }}
-                    />
-                    <Barcode size={48} style={{ opacity: 0.8, color: '#10b981' }} />
-                    <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                      Align Book Barcode
-                    </span>
-                  </div>
-
-                  <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Camera size={13} />
-                    <span>Barcode reader active • Scan physical book copy</span>
-                  </div>
-                </div>
-              )}
+              {/* Real Camera Barcode Scanner - a successful, available match auto-issues the loan */}
+              <CameraScanner
+                scannerId="loan-wizard-step2-camera"
+                mode="barcode"
+                isActive={isOpen && currentStep === 2}
+                label="Barcode scanner active • Align book barcode in viewfinder"
+                onScan={handleBookCameraScan}
+              />
 
               {/* Manual Barcode Input */}
               <form onSubmit={handleBookSearchSubmit} style={{ marginBottom: '16px' }}>
                 <label className="form-label" style={{ fontSize: '12.5px', fontWeight: 600 }}>
-                  Enter or Scan Book Barcode
+                  Or Enter Book Barcode Manually
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
@@ -689,32 +724,6 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                   />
                 </div>
               </form>
-
-              {/* Quick Pick Shelf Copies */}
-              <div style={{ marginBottom: '18px' }}>
-                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                  Quick Simulated Scan from Shelf:
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '100px', overflowY: 'auto' }}>
-                  {availableCopies.map((c) => (
-                    <button
-                      key={c.barcode}
-                      type="button"
-                      onClick={() => handleSelectBarcode(c.barcode)}
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        fontSize: '11.5px',
-                        padding: '4px 10px',
-                        backgroundColor: selectedBarcode === c.barcode ? 'var(--accent-blue-light)' : undefined,
-                        borderColor: selectedBarcode === c.barcode ? 'var(--accent-blue-border)' : undefined
-                      }}
-                    >
-                      <span>{c.bookTitle.slice(0, 18)}...</span>
-                      <code>{c.barcode}</code>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Book Details & Availability Card */}
               {selectedCopy && selectedBook ? (
@@ -855,11 +864,16 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 }}
               >
                 <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-main)', paddingBottom: '10px', marginBottom: '12px' }}>
+                  <img
+                    src="/logo.png"
+                    alt="Balingasag Municipal Library"
+                    style={{ width: 44, height: 44, margin: '0 auto 6px', display: 'block', borderRadius: '50%' }}
+                  />
                   <div style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700 }}>
                     Municipality of Balingasag
                   </div>
                   <div style={{ fontSize: '14.5px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Balingasag Public Library
+                    Balingasag Municipal Library
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                     Official Circulation Loan Slip

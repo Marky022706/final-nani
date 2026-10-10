@@ -47,4 +47,33 @@ class AttendanceController extends Controller
 
         return response()->json($record);
     }
+
+    /**
+     * Admin correction of a recorded attendance entry (time-in/out, notes),
+     * with an audit trail of who edited it and why.
+     */
+    public function update(Request $request, $id)
+    {
+        $record = AttendanceRecord::findOrFail($id);
+
+        $validated = $request->validate([
+            'time_in' => 'nullable|string',
+            'time_out' => 'nullable|string',
+            'status' => 'nullable|in:Inside,Completed',
+            'notes' => 'nullable|string',
+            'reason' => 'required|string',
+        ]);
+
+        $record->update([
+            'time_in' => $validated['time_in'] ?? $record->time_in,
+            'time_out' => $validated['time_out'] ?? $record->time_out,
+            'status' => $validated['status'] ?? $record->status,
+            'notes' => $validated['notes'] ?? $record->notes,
+            'edited_by' => optional($request->user())->name ?? 'Staff',
+            'edit_reason' => $validated['reason'],
+            'edited_at' => now(),
+        ]);
+
+        return response()->json($record);
+    }
 }

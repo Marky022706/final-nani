@@ -13,7 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // This is a JSON-only API (no server-rendered login page), so unauthenticated
+        // requests must never attempt to redirect to a "login" route - always respond
+        // with a plain 401 JSON error instead.
+        $middleware->redirectGuestsTo(null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

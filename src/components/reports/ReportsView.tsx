@@ -10,6 +10,7 @@ import {
   Printer,
   FileSpreadsheet
 } from 'lucide-react';
+import { useBreadcrumbs } from '../../context/BreadcrumbContext';
 
 interface ReportsViewProps {
   books: Book[];
@@ -29,6 +30,28 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   onTriggerExport
 }) => {
   const [selectedReportType, setSelectedReportType] = useState<'overview' | 'books' | 'attendance' | 'circulation' | 'services'>('overview');
+
+  // Dynamic Breadcrumb synchronization
+  const { setSubTrail, clearSubTrail } = useBreadcrumbs();
+
+  React.useEffect(() => {
+    const reportLabels: Record<string, string> = {
+      overview: 'System Overview',
+      books: 'Book Inventory Metrics',
+      attendance: 'Patron Attendance Analytics',
+      circulation: 'Circulation & Borrowing Metrics',
+      services: 'Library Services Analytics'
+    };
+    if (selectedReportType && reportLabels[selectedReportType]) {
+      setSubTrail([{ label: reportLabels[selectedReportType], current: true }]);
+    } else {
+      setSubTrail([]);
+    }
+
+    return () => {
+      clearSubTrail();
+    };
+  }, [selectedReportType, setSubTrail, clearSubTrail]);
 
   const totalCopies = books.reduce((sum, b) => sum + b.copies.length, 0);
   const activeMembers = members.filter((m) => m.status === 'active').length;

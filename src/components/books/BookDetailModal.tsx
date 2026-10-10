@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Book, PhysicalCopy, UserRole } from '../../types';
 import { BarcodeSvg } from '../../utils/barcode';
-import { X, Printer, Plus, Bookmark, Layers, BookOpen } from 'lucide-react';
+import { X, Printer, Plus, Bookmark, Layers, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -11,6 +11,9 @@ interface BookDetailModalProps {
   onAddCopy?: (bookId: string, copy: PhysicalCopy) => void;
   onReserveBook?: (book: Book) => void;
   onRequestBorrow?: (book: Book, copy?: PhysicalCopy) => void;
+  onEditBook?: (book: Book) => void;
+  onDeleteBook?: (bookId: string) => void;
+  onToggleArchive?: (bookId: string) => void;
 }
 
 export const BookDetailModal: React.FC<BookDetailModalProps> = ({
@@ -20,7 +23,10 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   userRole,
   onAddCopy,
   onReserveBook,
-  onRequestBorrow
+  onRequestBorrow,
+  onEditBook,
+  onDeleteBook,
+  onToggleArchive
 }) => {
   const [selectedBarcode, setSelectedBarcode] = useState<string | null>(null);
 
@@ -43,7 +49,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
       copyId: `cp-${Date.now()}`,
       accessionNumber: accession,
       barcode: accession,
-      shelfLocation: book.copies[0]?.shelfLocation || 'General Stack',
       classification: book.classification,
       condition: 'New',
       status: 'Available',
@@ -114,21 +119,33 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Publisher:</span>{' '}
-                  <strong>{book.publisher} ({book.publicationYear})</strong>
+                  <strong>{book.publisher}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Publication Year:</span>{' '}
+                  <strong>{book.publicationYear}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Accession No:</span>{' '}
+                  <code style={{ fontSize: '12px', fontWeight: 600, color: 'var(--brand-forest)' }}>
+                    {book.accessionNumber || book.copies[0]?.accessionNumber || 'Pending'}
+                  </code>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Format:</span>{' '}
+                  <span className="badge badge-neutral" style={{ fontWeight: 600 }}>
+                    {book.format || 'Paperback'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Availability:</span>{' '}
+                  <span className={`badge ${isAvailable ? 'badge-success' : 'badge-warning'}`}>
+                    {book.availability || (isAvailable ? 'Available' : 'Borrowed')} ({availableCopies}/{book.copies.length})
+                  </span>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Classification:</span>{' '}
-                  <span className="badge badge-neutral">{book.classification}</span>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Language / Pages:</span>{' '}
-                  {book.language} • {book.pages} pp.
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Copies Status:</span>{' '}
-                  <span className={`badge ${isAvailable ? 'badge-success' : 'badge-warning'}`}>
-                    {availableCopies} of {book.copies.length} Available
-                  </span>
+                  <span className="badge badge-neutral">{book.classification || 'General'}</span>
                 </div>
               </div>
 
@@ -160,7 +177,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 <thead>
                   <tr>
                     <th>Accession #</th>
-                    <th>Shelf Location</th>
                     <th>Condition</th>
                     <th>Status</th>
                     <th>Barcode</th>
@@ -173,7 +189,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                       <td>
                         <code style={{ fontWeight: 600 }}>{copy.accessionNumber}</code>
                       </td>
-                      <td style={{ fontSize: '12.5px' }}>{copy.shelfLocation}</td>
                       <td>
                         <span className="badge badge-neutral">{copy.condition}</span>
                       </td>
@@ -262,6 +277,51 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 >
                   <BookOpen size={15} />
                   <span>{isAvailable ? 'Request to Borrow' : 'Copies Unavailable'}</span>
+                </button>
+              </>
+            )}
+            {userRole !== 'member' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onEditBook) onEditBook(book);
+                    onClose();
+                  }}
+                  className="btn btn-secondary"
+                  style={{ gap: '6px' }}
+                  title="Edit book details"
+                >
+                  <Pencil size={15} />
+                  <span>Edit Book</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onToggleArchive) onToggleArchive(book.id);
+                    onClose();
+                  }}
+                  className="btn btn-ghost"
+                  style={{ gap: '6px', color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)' }}
+                  title={book.isArchived ? 'Restore book to active catalog' : 'Archive book from circulation'}
+                >
+                  {book.isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                  <span>{book.isArchived ? 'Restore' : 'Archive'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onDeleteBook) onDeleteBook(book.id);
+                    onClose();
+                  }}
+                  className="btn btn-ghost"
+                  style={{ gap: '6px', color: 'var(--danger)' }}
+                  title="Permanently remove book"
+                >
+                  <Trash2 size={15} />
+                  <span>Delete</span>
                 </button>
               </>
             )}

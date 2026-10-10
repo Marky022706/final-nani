@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { User, UserRole } from '../../types';
-import { QrCode, Bell, User as UserIcon, RefreshCw, LogOut } from 'lucide-react';
-import { Breadcrumbs } from '../common/Breadcrumbs';
+import { QrCode, Bell, Search } from 'lucide-react';
+import { Breadcrumbs } from './Breadcrumbs';
+import { UserProfileDropdown } from './UserProfileDropdown';
 
 interface HeaderProps {
   currentUser: User;
@@ -11,7 +12,7 @@ interface HeaderProps {
   onOpenScanner: () => void;
   unreadCount: number;
   onOpenNotifications: () => void;
-  onResetData: () => void;
+  onResetData?: () => void;
   onLogout?: () => void;
 }
 
@@ -22,9 +23,16 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenScanner,
   unreadCount,
   onOpenNotifications,
-  onResetData,
   onLogout
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      onNavigate('books');
+    }
+  };
+
   return (
     <header className="app-header no-print">
       <div className="header-left">
@@ -35,17 +43,31 @@ export const Header: React.FC<HeaderProps> = ({
         />
       </div>
 
+      {/* Global Quick Search per spec */}
+      <div className="header-search-container">
+        <Search size={15} className="header-search-icon" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Search catalog, members, records... (Enter)"
+          className="header-search-input"
+          aria-label="Quick search"
+        />
+      </div>
+
       <div className="header-right">
 
-        {/* Attendance quick scanner button (for Admin and Super Admin) */}
-        {currentUser.role !== 'member' && (
+        {/* Attendance quick scanner button (for Librarian staff & Volunteers) */}
+        {(currentUser.role === 'admin' || currentUser.role === 'volunteer') && (
           <button
             onClick={onOpenScanner}
             className="btn btn-secondary btn-sm"
             style={{ gap: '6px' }}
             title="Scan Member QR for Attendance or Circulation"
           >
-            <QrCode size={16} />
+            <QrCode size={16} color="var(--primary-green)" />
             <span>Scan QR / Card</span>
           </button>
         )}
@@ -57,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
           style={{ position: 'relative', padding: '8px' }}
           aria-label="View notifications"
         >
-          <Bell size={18} />
+          <Bell size={18} color="var(--text-secondary)" />
           {unreadCount > 0 && (
             <span
               style={{
@@ -74,68 +96,15 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* Reset Mock Data trigger */}
-        <button
-          onClick={onResetData}
-          className="btn btn-ghost btn-sm"
-          title="Reset demo data to initial state"
-          style={{ padding: '8px', color: 'var(--text-subtle)' }}
-        >
-          <RefreshCw size={15} />
-        </button>
 
-        {/* Active User pill */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            paddingLeft: '8px',
-            borderLeft: '1px solid var(--border-main)'
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              backgroundColor: 'var(--bg-subtle)',
-              border: '1px solid var(--border-main)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <UserIcon size={16} />
-          </div>
-          <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {currentUser.name}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-              {currentUser.role.replace('_', ' ')}
-            </div>
-          </div>
-
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="btn btn-ghost btn-sm"
-              title="Sign out of current account"
-              style={{
-                marginLeft: '4px',
-                padding: '6px 8px',
-                color: 'var(--text-muted)',
-                gap: '4px'
-              }}
-            >
-              <LogOut size={15} />
-              <span style={{ fontSize: '12px' }}>Sign Out</span>
-            </button>
-          )}
-        </div>
+        {/* Interactive User Profile Dropdown */}
+        <UserProfileDropdown
+          currentUser={currentUser}
+          onNavigate={onNavigate}
+          onRequestLogout={onLogout || (() => {})}
+        />
       </div>
     </header>
   );
 };
+

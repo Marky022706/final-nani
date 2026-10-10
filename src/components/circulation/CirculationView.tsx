@@ -10,6 +10,8 @@ import type {
 import { CirculationScannerModal } from './CirculationScannerModal';
 import { LoanSlipModal } from './LoanSlipModal';
 import { IssueLoanWizardModal } from './IssueLoanWizardModal';
+import { useBreadcrumbs } from '../../context/BreadcrumbContext';
+import { StorageService } from '../../utils/storage';
 import {
   Repeat,
   BookOpen,
@@ -85,6 +87,30 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
 
   const [isWizardModalOpen, setIsWizardModalOpen] = useState<boolean>(false);
 
+  // Dynamic Breadcrumb synchronization
+  const { setSubTrail, clearSubTrail } = useBreadcrumbs();
+
+  React.useEffect(() => {
+    const tabLabels: Record<string, string> = {
+      approvals: 'Borrow Requests',
+      borrow: 'Issue Loan Wizard',
+      return: 'Return Books & Restock',
+      loans: 'Active Loans Registry',
+      reservations: 'Hold Reservations'
+    };
+    if (isWizardModalOpen) {
+      setSubTrail([{ label: 'Issue Loan Wizard', current: true }]);
+    } else if (activeTab && tabLabels[activeTab]) {
+      setSubTrail([{ label: tabLabels[activeTab], current: true }]);
+    } else {
+      setSubTrail([]);
+    }
+
+    return () => {
+      clearSubTrail();
+    };
+  }, [activeTab, isWizardModalOpen, setSubTrail, clearSubTrail]);
+
   // Calculate default dates
   const todayDateStr = new Date().toISOString().split('T')[0];
   const defaultDueDate = new Date();
@@ -132,8 +158,15 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
     (t) => t.memberId === borrowMemberId && t.status === 'Overdue'
   );
 
+  // Superadmin global settings & tier policies
+  const systemSettings = StorageService.getSystemSettings();
+  const selectedMemberTier = systemSettings.tierPolicies.find(
+    (p) => p.tierName.toLowerCase() === (selectedMember?.membershipType || '').toLowerCase()
+  ) || systemSettings.tierPolicies[0];
+  const maxAllowedLoans = selectedMemberTier?.maxLoanLimit ?? 3;
+
   const isAccountActive = selectedMember?.status === 'active';
-  const isWithinLimit = memberActiveLoans.length < 3;
+  const isWithinLimit = memberActiveLoans.length < maxAllowedLoans;
   const hasNoOverdue = memberOverdueLoans.length === 0;
   const hasNoBlockedFines = true;
   const isMemberEligible = !!selectedMember && isAccountActive && isWithinLimit && hasNoOverdue && hasNoBlockedFines;
@@ -176,17 +209,32 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
       ) || null;
   }
 
-  // Calculate fine for matched return loan
+  // Calculate dynamic fine for matched return loan using Superadmin tier policy
   const computeOverdueInfo = (tx: CirculationTransaction | null) => {
-    if (!tx) return { isOverdue: false, daysLate: 0, fine: 0 };
+    if (!tx) return { isOverdue: false, daysLate: 0, fine: 0, rate: systemSettings.dailyFineRate, isExempt: false };
     const today = new Date();
     const dueDate = new Date(tx.dueDate);
     const diffTime = today.getTime() - dueDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays > 0) {
-      return { isOverdue: true, daysLate: diffDays, fine: diffDays * 10 }; // ₱10/day
+      const txMember = members.find((m) => m.memberId === tx.memberId);
+      const tierPolicy = systemSettings.tierPolicies.find(
+        (p) => p.tierName.toLowerCase() === (txMember?.membershipType || '').toLowerCase()
+      ) || systemSettings.tierPolicies[0];
+
+      if (tierPolicy?.fineExempt) {
+        return { isOverdue: true, daysLate: diffDays, fine: 0, rate: 0, isExempt: true };
+      }
+
+      const graceDays = tierPolicy?.gracePeriodDays ?? systemSettings.gracePeriodDays ?? 1;
+      const chargeableDays = Math.max(0, diffDays - graceDays);
+      const rate = tierPolicy?.dailyFineRate ?? systemSettings.dailyFineRate ?? 5;
+      const rawFine = chargeableDays * rate;
+      const fine = Math.min(rawFine, systemSettings.maxFineCap || 300);
+
+      return { isOverdue: true, daysLate: diffDays, fine, rate, isExempt: false };
     }
-    return { isOverdue: false, daysLate: 0, fine: 0 };
+    return { isOverdue: false, daysLate: 0, fine: 0, rate: systemSettings.dailyFineRate, isExempt: false };
   };
 
   const overdueInfo = computeOverdueInfo(matchedReturnLoan);
@@ -980,59 +1028,62 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
               </p>
             </div>
 
-            {/* Input & Scanner Buttons */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: 0 }}>
-                  Scan Book Barcode or Member QR
-                </label>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setScannerModal({ isOpen: true, mode: 'book_barcode', targetAction: 'return_scan' })}
-                    className="btn btn-secondary btn-sm"
-                    style={{ gap: '6px', fontSize: '12px' }}
-                  >
-                    <Barcode size={14} />
-                    <span>📷 Scan Barcode</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScannerModal({ isOpen: true, mode: 'member_qr', targetAction: 'return_scan' })}
-                    className="btn btn-secondary btn-sm"
-                    style={{ gap: '6px', fontSize: '12px' }}
-                  >
-                    <QrCode size={14} />
-                    <span>📷 Scan Member QR</span>
-                  </button>
-                </div>
-              </div>
+            {/* Centered Scan Action Buttons */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '14px',
+                margin: '28px 0 20px',
+                flexWrap: 'wrap'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setScannerModal({ isOpen: true, mode: 'book_barcode', targetAction: 'return_scan' })}
+                className="btn btn-primary"
+                style={{ gap: '8px', padding: '12px 26px', fontSize: '14px', fontWeight: 600 }}
+              >
+                <Barcode size={18} />
+                <span>Scan Barcode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScannerModal({ isOpen: true, mode: 'member_qr', targetAction: 'return_scan' })}
+                className="btn btn-secondary"
+                style={{ gap: '8px', padding: '12px 26px', fontSize: '14px', fontWeight: 600 }}
+              >
+                <QrCode size={18} />
+                <span>Scan Member QR</span>
+              </button>
+            </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. BPL-000101, ACC-000101, or MBR-000001"
-                  value={returnBarcode}
-                  onChange={(e) => {
-                    setReturnBarcode(e.target.value);
+            {returnBarcode && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '18px'
+                }}
+              >
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Scanned Code:</span>
+                <code style={{ fontSize: '13px', fontWeight: 700 }}>{returnBarcode}</code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReturnBarcode('');
                     setReturnStatusMessage(null);
                   }}
-                  style={{ fontFamily: 'var(--font-mono)' }}
-                />
-                {matchedReturnLoan && (
-                  <button
-                    type="button"
-                    onClick={() => handleExecuteReturn()}
-                    className="btn btn-primary"
-                    style={{ minWidth: '140px', gap: '6px' }}
-                  >
-                    <Check size={15} />
-                    <span>Confirm Return</span>
-                  </button>
-                )}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: '11px', padding: '2px 8px' }}
+                >
+                  Clear
+                </button>
               </div>
-            </div>
+            )}
 
             {/* Matched Loan Card with Overdue Fine Engine */}
             {matchedReturnLoan ? (
@@ -1109,7 +1160,9 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
                       </div>
                       <div style={{ fontSize: '11.5px', color: overdueInfo.isOverdue ? '#b91c1c' : '#15803d' }}>
                         {overdueInfo.isOverdue
-                          ? `Daily Penalty Rate: ₱10.00 / day • Total Fine: ₱${overdueInfo.fine}.00`
+                          ? overdueInfo.isExempt
+                            ? 'Patron tier is fine-exempt (₱0.00 assessed).'
+                            : `Daily Rate: ₱${overdueInfo.rate.toFixed(2)} / day • Total Fine: ₱${overdueInfo.fine.toFixed(2)}`
                           : 'No overdue fines assessed. Account in good standing.'}
                       </div>
                     </div>
@@ -1162,34 +1215,6 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
                 <span>{returnStatusMessage.text}</span>
               </div>
             )}
-
-            {/* Quick Click from Active Loans */}
-            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', marginTop: '16px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                Quick Return from Active Loans:
-              </div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {activeLoans.length === 0 ? (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No books currently checked out.</span>
-                ) : (
-                  activeLoans.map((loan) => (
-                    <button
-                      key={loan.id}
-                      type="button"
-                      onClick={() => {
-                        setReturnBarcode(loan.barcode);
-                        setReturnStatusMessage(null);
-                      }}
-                      className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '12px' }}
-                    >
-                      <span>{loan.barcode}</span>
-                      <span style={{ color: 'var(--text-muted)' }}>({(loan.bookTitle || (loan as any).book_title || '').slice(0, 16)}...)</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         </div>
       )}
