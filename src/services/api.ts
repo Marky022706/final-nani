@@ -45,11 +45,12 @@ function setToken(token: string | null): void {
  */
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const headers = {
-    'Content-Type': 'application/json',
+  const isFormData = options.body instanceof FormData;
+  const headers: Record<string, string> = {
     Accept: 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {})
+    ...((options.headers as Record<string, string>) || {})
   };
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -106,6 +107,42 @@ export const api = {
     return request<{ success: boolean; message: string }>(`/books/${id}`, {
       method: 'DELETE'
     });
+  },
+
+  async validateBookImport(fileOrRows: File | any[]): Promise<any> {
+    if (fileOrRows instanceof File) {
+      const formData = new FormData();
+      formData.append('file', fileOrRows);
+      return request<any>('/books/import/validate', {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      return request<any>('/books/import/validate', {
+        method: 'POST',
+        body: JSON.stringify({ rows: fileOrRows })
+      });
+    }
+  },
+
+  async bulkImportBooks(
+    fileOrRows: File | any[],
+    mode: 'all_or_nothing' | 'skip_errors' = 'all_or_nothing'
+  ): Promise<any> {
+    if (fileOrRows instanceof File) {
+      const formData = new FormData();
+      formData.append('file', fileOrRows);
+      formData.append('mode', mode);
+      return request<any>('/books/import', {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      return request<any>('/books/import', {
+        method: 'POST',
+        body: JSON.stringify({ rows: fileOrRows, mode })
+      });
+    }
   },
 
   // Members

@@ -363,6 +363,21 @@ export function App() {
     addToast('success', 'Book Cataloged Successfully', `Generated Accession numbers for ${newBook.copies.length} copies`);
   };
 
+  const handleBooksBulkImported = (importedBooks: Book[]) => {
+    const importedIds = new Set(importedBooks.map((b) => b.id));
+    const nextBooks = [...importedBooks, ...books.filter((b) => !importedIds.has(b.id))];
+    setBooks(nextBooks);
+    StorageService.saveBooks(nextBooks);
+
+    StorageService.addAuditLog(
+      'BULK_BOOK_IMPORT',
+      'Books',
+      `Bulk imported ${importedBooks.length} book titles with physical copies`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
+  };
+
   const handleAddPhysicalCopy = (bookId: string, copy: PhysicalCopy) => {
     const updated = books.map((b) => {
       if (b.id === bookId) {
@@ -1745,6 +1760,7 @@ export function App() {
               onArchiveBooks={handleBulkArchiveBooks}
               onRestoreBooks={handleBulkRestoreBooks}
               onDeleteBooks={handleBulkDeleteBooks}
+              onBooksImported={handleBooksBulkImported}
               onShowToast={addToast}
             />
           )}

@@ -5,7 +5,6 @@ import {
   BookOpen,
   UserPlus,
   Repeat,
-  Clock,
   BarChart3,
   Globe,
   GraduationCap,

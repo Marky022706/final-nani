@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\BookController;
+use App\Http\Controllers\BookImportController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\CirculationController;
 use App\Http\Controllers\ReservationController;
@@ -28,6 +29,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Books & Physical Copies
     Route::get('/books', [BookController::class, 'index']);
+    Route::get('/books/import/template', [BookImportController::class, 'downloadTemplate']);
+    Route::post('/books/import/validate', [BookImportController::class, 'validateImport']);
+    Route::post('/books/import', [BookImportController::class, 'import']);
     Route::get('/books/{id}', [BookController::class, 'show']);
     Route::post('/books', [BookController::class, 'store']);
     Route::put('/books/{id}', [BookController::class, 'update']);

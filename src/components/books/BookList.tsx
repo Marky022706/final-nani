@@ -6,6 +6,7 @@ import { EditBookModal } from './EditBookModal';
 import { BookSelectionToolbar } from './BookSelectionToolbar';
 import { ArchiveBookDialog } from './ArchiveBookDialog';
 import { DeleteBookDialog } from './DeleteBookDialog';
+import { BulkImportBooksModal } from './BulkImportBooksModal';
 import { useBreadcrumbs } from '../../context/BreadcrumbContext';
 import {
   Search,
@@ -17,7 +18,8 @@ import {
   Pencil,
   Archive,
   ArchiveRestore,
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
 
 interface BookListProps {
@@ -33,6 +35,7 @@ interface BookListProps {
   onArchiveBooks?: (bookIds: string[]) => void | Promise<void>;
   onRestoreBooks?: (bookIds: string[]) => void | Promise<void>;
   onDeleteBooks?: (bookIds: string[]) => void | Promise<void>;
+  onBooksImported?: (newBooks: Book[]) => void;
   onShowToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -49,6 +52,7 @@ export const BookList: React.FC<BookListProps> = ({
   onArchiveBooks,
   onRestoreBooks,
   onDeleteBooks,
+  onBooksImported,
   onShowToast
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -63,6 +67,7 @@ export const BookList: React.FC<BookListProps> = ({
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
+  const [isImportOpen, setIsImportOpen] = useState<boolean>(false);
 
   // Controlled Selection System
   const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
@@ -393,10 +398,21 @@ export const BookList: React.FC<BookListProps> = ({
 
         <div className="page-actions">
           {userRole !== 'member' && (
-            <button onClick={() => setIsAddOpen(true)} className="btn btn-primary btn-sm">
-              <Plus size={16} />
-              <span>Catalog Book (ISBN)</span>
-            </button>
+            <>
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                title="Bulk import books from CSV or Excel"
+              >
+                <Upload size={15} />
+                <span>Bulk Import</span>
+              </button>
+              <button onClick={() => setIsAddOpen(true)} className="btn btn-primary btn-sm">
+                <Plus size={16} />
+                <span>Catalog Book (ISBN)</span>
+              </button>
+            </>
           )}
 
           <div style={{ display: 'flex', border: '1px solid var(--border-main)', borderRadius: 'var(--radius-md)', padding: 2, background: 'var(--bg-surface)' }}>
@@ -941,6 +957,24 @@ export const BookList: React.FC<BookListProps> = ({
         onClose={() => setIsAddOpen(false)}
         onBookAdded={onBookAdded}
         existingBooksCount={books.length}
+      />
+
+      {/* Bulk Import Books Modal */}
+      <BulkImportBooksModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        existingBooks={books}
+        onImportSuccess={(newBooks, msg) => {
+          if (onBooksImported) {
+            onBooksImported(newBooks);
+          } else {
+            newBooks.forEach((b) => onBookAdded(b));
+          }
+          if (onShowToast) {
+            onShowToast('success', 'Import Completed', msg);
+          }
+        }}
+        onShowToast={onShowToast}
       />
 
       {/* Edit Book Modal (Reused existing modal) */}

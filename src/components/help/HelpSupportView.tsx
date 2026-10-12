@@ -13,15 +13,13 @@ import {
   Send,
   ChevronDown,
   ChevronRight,
-  ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   Sparkles,
   QrCode,
   Repeat,
   UserCheck
 } from 'lucide-react';
-import type { User, UserRole } from '../../types';
+import type { User } from '../../types';
 import { EXTERNAL_QUICK_LINKS } from '../common/QuickLinksWidget';
 
 interface HelpSupportViewProps {
@@ -128,7 +126,7 @@ const FAQS = [
 ];
 
 export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
-  currentUser,
+  currentUser: _currentUser,
   onNavigate,
   onShowToast
 }) => {
