@@ -284,7 +284,7 @@ export const ScanQrModal: React.FC<ScanQrModalProps> = ({
                   }}
                 >
                   <img
-                    src={scanResult.member.photoUrl}
+                    src={scanResult.member.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                     alt={scanResult.member.fullName}
                     style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }}
                   />

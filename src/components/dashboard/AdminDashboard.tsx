@@ -144,9 +144,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Primary KPI Grid */}
+      {/* Primary KPI Grid - Interactive Shortcuts */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <button
+          type="button"
+          onClick={() => onNavigate('books')}
+          className="stat-card stat-card-interactive"
+          title="Shortcut to Book Catalog"
+          aria-label={`Total Books: ${books.length}. Click to view book catalog`}
+        >
           <div className="stat-card-header">
             <span className="stat-label">Total Books</span>
             <div className="stat-icon" style={{ backgroundColor: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
@@ -156,10 +162,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="stat-value">{books.length}</div>
           <div className="stat-footer">
             <span>{totalPhysicalCopies} physical copies cataloged</span>
+            <span className="stat-card-hint">
+              <span>View Books</span>
+              <ArrowRight size={12} />
+            </span>
           </div>
-        </div>
+        </button>
 
-        <div className="stat-card">
+        <button
+          type="button"
+          onClick={() => onNavigate('books')}
+          className="stat-card stat-card-interactive"
+          title="Shortcut to Available Books on Shelf"
+          aria-label={`Available on Shelf: ${availableCopies}. Click to view book catalog`}
+        >
           <div className="stat-card-header">
             <span className="stat-label">Available on Shelf</span>
             <div className="stat-icon" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}>
@@ -169,10 +185,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="stat-value" style={{ color: 'var(--success)' }}>{availableCopies}</div>
           <div className="stat-footer">
             <span>{borrowedCopies} currently on loan</span>
+            <span className="stat-card-hint" style={{ color: 'var(--success)' }}>
+              <span>View Books</span>
+              <ArrowRight size={12} />
+            </span>
           </div>
-        </div>
+        </button>
 
-        <div className="stat-card">
+        <button
+          type="button"
+          onClick={() => onNavigate('attendance')}
+          className="stat-card stat-card-interactive"
+          title="Shortcut to Attendance Tracker"
+          aria-label={`Currently Inside: ${currentlyInside.length}. Click to view attendance tracker`}
+        >
           <div className="stat-card-header">
             <span className="stat-label">Currently Inside</span>
             <div className="stat-icon" style={{ backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' }}>
@@ -182,10 +208,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="stat-value">{currentlyInside.length}</div>
           <div className="stat-footer">
             <span>{todayVisits.length} total visitors today</span>
+            <span className="stat-card-hint" style={{ color: 'var(--warning-dark, #b45309)' }}>
+              <span>View Attendance</span>
+              <ArrowRight size={12} />
+            </span>
           </div>
-        </div>
+        </button>
 
-        <div className="stat-card">
+        <button
+          type="button"
+          onClick={() => onNavigate('circulation')}
+          className="stat-card stat-card-interactive"
+          title="Shortcut to Circulation & Loans"
+          aria-label={`Overdue Loans: ${overdueTransactions.length}. Click to view circulation loans`}
+        >
           <div className="stat-card-header">
             <span className="stat-label">Overdue Loans</span>
             <div className="stat-icon" style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}>
@@ -197,8 +233,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
           <div className="stat-footer">
             <span>{activeMembers.length} active registered patrons</span>
+            <span className="stat-card-hint" style={{ color: 'var(--danger)' }}>
+              <span>View Loans</span>
+              <ArrowRight size={12} />
+            </span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Main Grid: Active Visitors & Category Distribution */}

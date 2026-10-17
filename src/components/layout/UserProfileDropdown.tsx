@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { User as UserType } from '../../types';
-import { User, Settings, LogOut, ChevronDown, Mail } from 'lucide-react';
+import { User, Settings, LogOut, ChevronDown, Mail, HelpCircle } from 'lucide-react';
 
 interface UserProfileDropdownProps {
   currentUser: UserType;
@@ -171,6 +171,17 @@ export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
             >
               <Settings size={16} className="profile-menu-icon" />
               <span>Account Settings</span>
+            </button>
+
+            {/* 2b. Help & Support */}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => handleSelect('help_support')}
+              className="profile-menu-item"
+            >
+              <HelpCircle size={16} className="profile-menu-icon" />
+              <span>Help & Support</span>
             </button>
           </div>
 

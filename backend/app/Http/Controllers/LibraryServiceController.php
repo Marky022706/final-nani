@@ -32,7 +32,16 @@ class LibraryServiceController extends Controller
             ->orWhere('service_key', $validated['service_id'])
             ->firstOrFail();
 
-        $member = Member::where('member_id', $validated['member_id'])->firstOrFail();
+        $member = Member::where('member_id', $validated['member_id'])->first();
+        if (!$member) {
+            return response()->json(['message' => 'Member not found.'], 404);
+        }
+
+        if ($member->status !== 'active') {
+            return response()->json([
+                'message' => 'Your library account is currently inactive. Please contact the library administrator.',
+            ], 403);
+        }
 
         $now = now();
         $record = ServiceRecord::create([

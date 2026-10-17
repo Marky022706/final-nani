@@ -21,7 +21,23 @@ class AttendanceController extends Controller
 
         $member = Member::where('member_id', $request->member_id)
             ->orWhere('qr_code_data', $request->member_id)
-            ->firstOrFail();
+            ->first();
+
+        if (!$member) {
+            return response()->json(['message' => 'Member not found.'], 404);
+        }
+
+        if ($member->status === 'inactive') {
+            return response()->json([
+                'message' => 'Your library account is currently inactive. Please contact the library administrator.',
+            ], 403);
+        }
+
+        if ($member->status === 'suspended') {
+            return response()->json([
+                'message' => 'Your library account is currently suspended. Please contact the library administrator.',
+            ], 403);
+        }
 
         $now = now();
         $record = AttendanceRecord::create([

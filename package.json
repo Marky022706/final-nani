@@ -4,9 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:all": "concurrently -n vite,api -c cyan,green \"npm run dev\" \"npm run api\"",
+    "dev": "concurrently -k -n vite,api -c cyan,green \"npm run dev:frontend\" \"npm run api\"",
+    "dev:frontend": "vite",
+    "dev:all": "npm run dev",
     "api": "php backend/artisan serve --host=127.0.0.1 --port=8000",
+    "test:backend": "cd backend && php artisan test",
+    "test:integration": "node scripts/test-login-flow.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

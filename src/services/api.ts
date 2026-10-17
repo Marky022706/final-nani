@@ -7,6 +7,7 @@ import type {
   AuditLog,
   NotificationItem,
   User,
+  UserRole,
   LibraryServiceItem,
   ServiceRecord,
   LibrarianPrivileges
@@ -53,10 +54,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...((options.headers as Record<string, string>) || {})
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch (err) {
+    throw new Error(
+      'Unable to connect to the server. Please check your network connection and ensure the backend service is running.'
+    );
+  }
 
   if (response.status === 401) {
     // Token missing/expired/revoked - clear it so the app returns to the login screen.
@@ -64,19 +72,37 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   if (!response.ok) {
-    let errorDetail = `HTTP ${response.status}: ${response.statusText}`;
+    let errorDetail = `HTTP ${response.status}: ${response.statusText || 'Error'}`;
     try {
-      const errData = await response.json();
-      if (errData.message) {
-        errorDetail = errData.message;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const errData = await response.json();
+        if (errData.message) {
+          errorDetail = errData.message;
+        } else if (errData.error) {
+          errorDetail = errData.error;
+        }
+      } else {
+        const rawText = await response.text();
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          errorDetail = `Backend server is unreachable (${response.status} ${response.statusText || 'Bad Gateway'}). Please ensure the Laravel API server is running on port 8000.`;
+        } else if (rawText && rawText.length < 200 && !rawText.trim().startsWith('<')) {
+          errorDetail = rawText.trim();
+        }
       }
     } catch {
-      // ignore
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        errorDetail = `Backend server is unreachable (${response.status} ${response.statusText || 'Bad Gateway'}). Please ensure the Laravel API server is running on port 8000.`;
+      }
     }
     throw new Error(errorDetail);
   }
 
-  return response.json() as Promise<T>;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error('Received an invalid non-JSON response from the server.');
+  }
 }
 
 export const api = {
@@ -363,7 +389,7 @@ export const api = {
   },
 
   async createUser(
-    user: Partial<User> & { role: 'super_admin' | 'admin' }
+    user: Partial<User> & { role: UserRole }
   ): Promise<{ user: User; temporary_password: string }> {
     return request<{ user: User; temporary_password: string }>('/users', {
       method: 'POST',

@@ -187,27 +187,52 @@ class MemberController extends Controller
             'is_archived' => 'nullable|boolean',
         ])->validate();
 
+        $oldStatus = $member->status;
         $member->update($validated);
 
         // Sync linked user status / details if exists
+        $user = null;
         if ($member->user_id) {
             $user = User::find($member->user_id);
-            if ($user) {
-                $user->update([
-                    'name' => $member->full_name,
-                    'email' => $member->email,
-                    'status' => $member->status,
-                ]);
+        }
+        if (!$user) {
+            $user = User::where('member_id', $member->member_id)
+                ->orWhere('email', $member->email)
+                ->first();
+        }
+
+        if ($user) {
+            $userUpdates = [
+                'name' => $member->full_name,
+                'email' => $member->email,
+            ];
+            if (isset($validated['status'])) {
+                $userUpdates['status'] = $member->status;
+            }
+            $user->update($userUpdates);
+
+            // Automatic Deactivation: Revoke active session tokens when status becomes inactive or suspended
+            if ($member->status !== 'active') {
+                $user->tokens()->delete();
             }
         }
 
+        $auditAction = 'MEMBER_UPDATED';
+        $auditDetails = "Updated member information for {$member->full_name} ({$member->member_id})";
+
+        if (array_key_exists('is_archived', $validated)) {
+            $auditAction = $validated['is_archived'] ? 'MEMBER_ARCHIVED' : 'MEMBER_RESTORED';
+            $auditDetails = ($validated['is_archived'] ? 'Archived' : 'Restored') . " member account for {$member->full_name} ({$member->member_id})";
+        } elseif (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+            $auditAction = 'MEMBER_STATUS_CHANGED';
+            $auditDetails = "Changed account status for member {$member->full_name} ({$member->member_id}) from '{$oldStatus}' to '{$member->status}' (Automatic deactivation: " . ($member->status === 'inactive' ? 'Enabled' : 'Disabled') . ")";
+        }
+
         AuditLog::create([
-            'action' => array_key_exists('is_archived', $validated)
-                ? ($validated['is_archived'] ? 'MEMBER_ARCHIVED' : 'MEMBER_RESTORED')
-                : 'MEMBER_UPDATED',
+            'action' => $auditAction,
             'category' => 'Members',
-            'details' => "Updated member information for {$member->full_name} ({$member->member_id})",
-            'performed_by' => 'Library Administrator',
+            'details' => $auditDetails,
+            'performed_by' => optional($request->user())->name ?? 'Library Administrator',
             'ip_address' => $request->ip(),
         ]);
 

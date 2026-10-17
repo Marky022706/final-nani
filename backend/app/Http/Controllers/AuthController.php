@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Models\Member;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -23,18 +24,31 @@ class AuthController extends Controller
 
         $user = User::where('email', $identifier)
             ->orWhere('username', $identifier)
+            ->orWhere('member_id', $identifier)
             ->first();
+
+        // Check if identifier belongs to a Member record directly
+        $member = Member::where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->orWhere('member_id', $identifier)
+            ->first();
+
+        if ($member && $member->status === 'inactive') {
+            return response()->json([
+                'message' => 'Your library account is currently inactive. Please contact the library administrator.',
+            ], 403);
+        }
+
+        if ($member && $member->status === 'suspended') {
+            return response()->json([
+                'message' => 'Your library account is currently suspended. Please contact the library administrator.',
+            ], 403);
+        }
 
         if (!$user || !Hash::check($request->input('password'), $user->password)) {
             return response()->json([
                 'message' => 'Invalid credentials. Please verify your email / username and password.',
             ], 401);
-        }
-
-        if ($user->role === 'member') {
-            return response()->json([
-                'message' => 'Library member accounts do not have access to the staff dashboard. Web portal access is restricted to Super Admin and Admin staff.',
-            ], 403);
         }
 
         if ($user->status === 'inactive') {
@@ -49,17 +63,27 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($user->role === 'member') {
+            return response()->json([
+                'message' => 'Library member accounts do not have access to the staff dashboard. Web portal access is restricted to Super Admin and Admin staff.',
+            ], 403);
+        }
+
         // Invalidate previous tokens so only one active session token exists at a time.
         $user->tokens()->delete();
         $token = $user->createToken('bpl-staff-portal')->plainTextToken;
 
-        AuditLog::create([
-            'action' => 'USER_LOGIN',
-            'category' => 'Admin',
-            'details' => "{$user->name} ({$user->role}) signed in to the staff dashboard.",
-            'performed_by' => $user->name,
-            'ip_address' => $request->ip(),
-        ]);
+        try {
+            AuditLog::create([
+                'action' => 'USER_LOGIN',
+                'category' => 'Admin',
+                'details' => "{$user->name} ({$user->role}) signed in to the staff dashboard.",
+                'performed_by' => $user->name,
+                'ip_address' => $request->ip(),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Login audit log recording failed: ' . $e->getMessage());
+        }
 
         return response()->json([
             'user' => $user->toPublicArray(),

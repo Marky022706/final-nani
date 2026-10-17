@@ -24,7 +24,7 @@ interface MemberListProps {
   onMemberCreated: (member: Member, user: User, tempPass?: string) => void;
   onMemberUpdated: (member: Member) => void;
   onMemberDeleted: (memberId: string) => void;
-  onToggleStatus: (memberId: string, newStatus?: AccountStatus) => void;
+  onToggleStatus?: (memberId: string, newStatus?: AccountStatus) => void;
   onToggleArchive: (memberId: string) => void;
 }
 
@@ -34,7 +34,6 @@ export const MemberList: React.FC<MemberListProps> = ({
   onMemberCreated,
   onMemberUpdated,
   onMemberDeleted,
-  onToggleStatus,
   onToggleArchive
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -254,7 +253,7 @@ export const MemberList: React.FC<MemberListProps> = ({
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <img
-                        src={member.photoUrl}
+                        src={member.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                         alt={member.fullName}
                         style={{
                           width: 34,
@@ -342,28 +341,6 @@ export const MemberList: React.FC<MemberListProps> = ({
                         <QrCode size={15} />
                       </button>
 
-                      {/* Activate / Deactivate Toggle */}
-                      {userRole !== 'member' && (
-                        <button
-                          onClick={() =>
-                            onToggleStatus(
-                              member.memberId,
-                              member.status === 'active' ? 'inactive' : 'active'
-                            )
-                          }
-                          className={`btn btn-sm ${
-                            member.status === 'active' ? 'btn-ghost' : 'btn-secondary'
-                          }`}
-                          style={{ fontSize: '11.5px', padding: '3px 8px' }}
-                          title={
-                            member.status === 'active'
-                              ? 'Deactivate Member Account'
-                              : 'Activate Member Account'
-                          }
-                        >
-                          {member.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                      )}
 
                       {/* Archive */}
                       {userRole !== 'member' && (

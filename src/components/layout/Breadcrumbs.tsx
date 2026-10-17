@@ -65,6 +65,9 @@ const DESTINATION_META: Record<string, NavMeta> = {
   },
   profile: {
     label: 'Profile & Digital Card'
+  },
+  help_support: {
+    label: 'Help & Support'
   }
 };
 

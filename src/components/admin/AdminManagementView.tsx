@@ -6,14 +6,25 @@ import {
   ShieldCheck,
   X,
   Search,
-  Activity
+  Activity,
+  CheckCircle2,
+  Loader2,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  Mail,
+  Lock,
+  User as UserIcon,
+  Shield,
+  Sparkles
 } from 'lucide-react';
 import { StorageService } from '../../utils/storage';
 
 interface AdminManagementViewProps {
   users: User[];
   currentUser?: User;
-  onAddAdmin: (newAdmin: User) => void;
+  onAddAdmin: (newAdmin: User) => Promise<any> | void;
   onToggleAdminStatus: (userId: string) => void;
   onResetAdminPassword: (userId: string) => void;
   onUpdatePrivileges?: (userId: string, privileges: LibrarianPrivileges) => void;
@@ -38,10 +49,27 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'staff' | 'access_audit'>('staff');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+
+  // Form Fields per specification:
+  // 1. Staff Role
+  // 2. Firstname, Middlename(Optional), Lastname
+  // 3. Email
+  // 4. Password
   const [role, setRole] = useState<'admin' | 'volunteer'>('admin');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [department, setDepartment] = useState('Library Operations');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Creation Feedback & Loading Animation States
+  const [createState, setCreateState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [createdUserResult, setCreatedUserResult] = useState<{ user: User; passwordUsed: string } | null>(null);
+  const [showCreatedPassword, setShowCreatedPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Privileges Management Modal State
   const [selectedStaffForPrivileges, setSelectedStaffForPrivileges] = useState<User | null>(null);
@@ -55,14 +83,54 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
 
   const adminUsers = users.filter((u) => u.role === 'admin' || u.role === 'super_admin' || u.role === 'volunteer');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleResetCreateForm = () => {
+    setFirstName('');
+    setMiddleName('');
+    setLastName('');
+    setEmail('');
+    setPassword('');
+    setRole('admin');
+    setDepartment('Library Operations');
+    setShowPassword(false);
+    setCreateState('idle');
+    setCreatedUserResult(null);
+    setShowCreatedPassword(false);
+    setCopiedPassword(false);
+    setFormError(null);
+  };
+
+  const handleCloseModal = () => {
+    if (createState === 'loading') return;
+    setIsCreateOpen(false);
+    handleResetCreateForm();
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
+    setFormError(null);
+
+    const fName = firstName.trim();
+    const lName = lastName.trim();
+    const em = email.trim();
+    const pwd = password.trim();
+
+    if (!fName || !lName || !em || !pwd) {
+      setFormError('Please fill out all required fields (Role, First Name, Last Name, Email, Password).');
+      return;
+    }
+
+    if (pwd.length < 6) {
+      setFormError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    const fullName = [fName, middleName.trim(), lName].filter(Boolean).join(' ');
 
     const newAdmin: User = {
       id: `usr-${Date.now()}`,
-      name: name.trim(),
-      email: email.trim(),
+      name: fullName,
+      email: em,
+      password: pwd,
       role: role,
       status: 'active',
       createdAt: new Date().toISOString().split('T')[0],
@@ -81,20 +149,34 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
       lastLoginIp: '192.168.1.100'
     };
 
-    onAddAdmin(newAdmin);
-    StorageService.addStaffAccessLog({
-      userId: newAdmin.id,
-      userName: newAdmin.name,
-      role: 'admin',
-      event: 'LOGIN_SUCCESS',
-      details: `Staff account provisioned by ${currentUser?.name || 'Administrator'}`,
-      ipAddress: '127.0.0.1'
-    });
-    setAccessLogs(StorageService.getStaffAccessLogs());
+    setCreateState('loading');
 
-    setIsCreateOpen(false);
-    setName('');
-    setEmail('');
+    try {
+      // Run creation and provide a minimum 900ms smooth loading animation for visual clarity
+      const [result] = await Promise.all([
+        Promise.resolve(onAddAdmin(newAdmin)),
+        new Promise((resolve) => setTimeout(resolve, 900))
+      ]);
+
+      StorageService.addStaffAccessLog({
+        userId: newAdmin.id,
+        userName: newAdmin.name,
+        role: newAdmin.role,
+        event: 'LOGIN_SUCCESS',
+        details: `Staff account (${newAdmin.role.toUpperCase()}) provisioned by ${currentUser?.name || 'Administrator'}`,
+        ipAddress: '127.0.0.1'
+      });
+      setAccessLogs(StorageService.getStaffAccessLogs());
+
+      setCreatedUserResult({
+        user: (result && result.user) || newAdmin,
+        passwordUsed: pwd
+      });
+      setCreateState('success');
+    } catch (err: any) {
+      setCreateState('idle');
+      setFormError(err?.message || 'Failed to create staff account. Please check the network connection and try again.');
+    }
   };
 
   const handleOpenPrivilegesModal = (staff: User) => {
@@ -582,83 +664,560 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
         </div>
       )}
 
-      {/* Create Admin Modal */}
+      {/* Create Library Staff Account Modal */}
       {isCreateOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Create Library Staff Account</h3>
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(false)}
-                className="btn-icon"
-                aria-label="Close"
+        <div
+          className="modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && createState !== 'loading') {
+              handleCloseModal();
+            }
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '540px',
+              width: '100%',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}
+          >
+            {/* 1. LOADING ANIMATION STATE */}
+            {createState === 'loading' && (
+              <div
+                style={{
+                  padding: '52px 28px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '18px'
+                }}
               >
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleCreate}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Staff Role *</label>
-                  <select
-                    className="form-input"
-                    value={role}
-                    onChange={(e) => {
-                      const newRole = e.target.value as 'admin' | 'volunteer';
-                      setRole(newRole);
-                      if (newRole === 'volunteer' && department === 'Library Operations') {
-                        setDepartment('Front Desk Operations Relief');
-                      } else if (newRole === 'admin' && department === 'Front Desk Operations Relief') {
-                        setDepartment('Library Operations');
-                      }
+                <div
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(23, 77, 50, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--brand-green, #174D32)'
+                  }}
+                >
+                  <Loader2 size={38} className="spinner-icon" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                    Creating Staff Account...
+                  </h3>
+                  <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto', lineHeight: 1.5 }}>
+                    Provisioning security credentials for{' '}
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {[firstName, lastName].filter(Boolean).join(' ')}
+                    </strong>{' '}
+                    as <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{role === 'volunteer' ? 'Volunteer Staff' : 'Librarian (Admin)'}</span>.
+                  </p>
+                </div>
+
+                {/* Animated Track */}
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: '320px',
+                    height: '6px',
+                    backgroundColor: 'var(--border-subtle)',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    marginTop: '4px'
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      backgroundColor: 'var(--brand-green, #174D32)',
+                      width: '80%',
+                      borderRadius: '4px'
+                    }}
+                    className="spinner-icon"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    backgroundColor: 'var(--bg-subtle)',
+                    padding: '6px 14px',
+                    borderRadius: '20px'
+                  }}
+                >
+                  <Shield size={13} color="var(--brand-green, #174D32)" />
+                  <span>Enforcing Municipal Access Privileges & Password Policy</span>
+                </div>
+              </div>
+            )}
+
+            {/* 2. SUCCESSFUL MESSAGE STATE */}
+            {createState === 'success' && createdUserResult && (
+              <div>
+                <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: '0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="var(--brand-green, #174D32)" />
+                    <span
+                      style={{
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        color: 'var(--brand-green, #174D32)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}
+                    >
+                      Staff Provisioned
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="btn-icon"
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="modal-body" style={{ textAlign: 'center', paddingTop: '4px' }}>
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                      color: '#16a34a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px',
+                      boxShadow: '0 0 0 8px rgba(22, 163, 74, 0.08)'
                     }}
                   >
-                    <option value="admin">Librarian (Admin - Full Operations & Reports)</option>
-                    <option value="volunteer">Volunteer (Desk Relief - Attendance, Circulation & Members)</option>
-                  </select>
+                    <CheckCircle2 size={36} strokeWidth={2.5} />
+                  </div>
+
+                  <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    Staff Account Created Successfully!
+                  </h3>
+                  <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginBottom: '20px', maxWidth: '440px', margin: '0 auto 20px' }}>
+                    The staff account has been registered and provisioned with authorized access credentials.
+                  </p>
+
+                  {/* Summary Card */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--bg-subtle)',
+                      border: '1px solid var(--border-main)',
+                      borderRadius: '12px',
+                      padding: '16px 20px',
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        paddingBottom: '10px'
+                      }}
+                    >
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                        Staff Role
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          backgroundColor:
+                            createdUserResult.user.role === 'admin'
+                              ? 'rgba(23, 77, 50, 0.12)'
+                              : 'rgba(217, 119, 6, 0.12)',
+                          color:
+                            createdUserResult.user.role === 'admin'
+                              ? 'var(--brand-green, #174D32)'
+                              : '#b45309'
+                        }}
+                      >
+                        {createdUserResult.user.role === 'admin' ? 'Librarian (Admin)' : 'Volunteer Staff'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Full Name</span>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {createdUserResult.user.name}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Official Email</span>
+                      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {createdUserResult.user.email}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Password</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            fontSize: '13.5px',
+                            fontWeight: 600,
+                            fontFamily: 'monospace',
+                            color: 'var(--text-primary)',
+                            backgroundColor: 'var(--bg-main)',
+                            padding: '3px 9px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-main)',
+                            letterSpacing: showCreatedPassword ? '0.04em' : '0.15em'
+                          }}
+                        >
+                          {showCreatedPassword ? createdUserResult.passwordUsed : '••••••••'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCreatedPassword((prev) => !prev)}
+                          className="btn-icon"
+                          style={{ width: '28px', height: '28px' }}
+                          title={showCreatedPassword ? 'Hide password' : 'Show password'}
+                          aria-label={showCreatedPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showCreatedPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(createdUserResult.passwordUsed);
+                            setCopiedPassword(true);
+                            setTimeout(() => setCopiedPassword(false), 2000);
+                          }}
+                          className="btn-icon"
+                          style={{ width: '28px', height: '28px', color: copiedPassword ? '#16a34a' : undefined }}
+                          title={copiedPassword ? 'Copied to clipboard' : 'Copy password'}
+                          aria-label="Copy password"
+                        >
+                          {copiedPassword ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Department</span>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
+                        {createdUserResult.user.department || 'Library Operations'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Account Status</span>
+                      <span
+                        style={{
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          color: '#16a34a',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '7px',
+                            height: '7px',
+                            borderRadius: '50%',
+                            backgroundColor: '#16a34a',
+                            display: 'inline-block'
+                          }}
+                        />
+                        Active & Ready for Login
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    className="form-input"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Maria Clara Santos"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Official Email *</label>
-                  <input
-                    type="email"
-                    required
-                    className="form-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@balingasag.gov.ph"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Department</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                  />
+
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <button
+                    type="button"
+                    onClick={handleResetCreateForm}
+                    className="btn btn-secondary"
+                    style={{ gap: '6px' }}
+                  >
+                    <UserPlus size={15} />
+                    <span>Create Another Staff</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="btn btn-primary"
+                    style={{ gap: '6px' }}
+                  >
+                    <Check size={16} />
+                    <span>Done</span>
+                  </button>
                 </div>
               </div>
-              <div className="modal-footer">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Create Staff Account
-                </button>
-              </div>
-            </form>
+            )}
+
+            {/* 3. INPUT FORM STATE (IDLE) */}
+            {createState === 'idle' && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <UserPlus size={20} color="var(--brand-green, #174D32)" />
+                      <span>Create Library Staff Account</span>
+                    </h3>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Fill in the staff role, full name, email, and password to provision an account
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="btn-icon"
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreate}>
+                  <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {formError && (
+                      <div
+                        role="alert"
+                        style={{
+                          padding: '10px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          backgroundColor: 'var(--danger-bg, #fef2f2)',
+                          border: '1px solid var(--danger-border, #fecaca)',
+                          color: 'var(--danger, #dc2626)',
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <X size={16} />
+                        <span>{formError}</span>
+                      </div>
+                    )}
+
+                    {/* Requirement 1: Staff Role (FIRST) */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label
+                        className="form-label"
+                        style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Shield size={14} color="var(--brand-green, #174D32)" />
+                        <span>1. Staff Role <span style={{ color: 'var(--danger)' }}>*</span></span>
+                      </label>
+                      <select
+                        className="form-input"
+                        value={role}
+                        onChange={(e) => {
+                          const newRole = e.target.value as 'admin' | 'volunteer';
+                          setRole(newRole);
+                          if (newRole === 'volunteer' && department === 'Library Operations') {
+                            setDepartment('Front Desk Operations Relief');
+                          } else if (newRole === 'admin' && department === 'Front Desk Operations Relief') {
+                            setDepartment('Library Operations');
+                          }
+                        }}
+                        style={{ fontWeight: 500 }}
+                      >
+                        <option value="admin">Librarian (Admin - Full Operations, Cataloging & Reports)</option>
+                        <option value="volunteer">Volunteer (Desk Relief - Attendance, Circulation & Members)</option>
+                      </select>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {role === 'admin'
+                          ? 'Grants full operational authority for circulation desk, cataloging, patrons, and reports.'
+                          : 'Grants front-desk relief authority for QR attendance scanning, patron loans, and check-ins.'}
+                      </div>
+                    </div>
+
+                    {/* Requirement 2: Firstname, Middlename(Optional), Lastname (SECOND) */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label
+                        className="form-label"
+                        style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <UserIcon size={14} color="var(--brand-green, #174D32)" />
+                        <span>2. Full Name <span style={{ color: 'var(--danger)' }}>*</span></span>
+                      </label>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                          gap: '10px'
+                        }}
+                      >
+                        <div>
+                          <input
+                            type="text"
+                            required
+                            className="form-input"
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            placeholder="First Name *"
+                            aria-label="First Name"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={middleName}
+                            onChange={(e) => setMiddleName(e.target.value)}
+                            placeholder="Middle Name (Optional)"
+                            aria-label="Middle Name (Optional)"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            required
+                            className="form-input"
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            placeholder="Last Name *"
+                            aria-label="Last Name"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Requirement 3: Email (THIRD) */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label
+                        className="form-label"
+                        style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Mail size={14} color="var(--brand-green, #174D32)" />
+                        <span>3. Official Email <span style={{ color: 'var(--danger)' }}>*</span></span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        className="form-input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="e.g. maria.santos@balingasag.gov.ph"
+                      />
+                    </div>
+
+                    {/* Requirement 4: Password (LAST ONE) */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '4px'
+                        }}
+                      >
+                        <label
+                          className="form-label"
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Lock size={14} color="var(--brand-green, #174D32)" />
+                          <span>4. Password <span style={{ color: 'var(--danger)' }}>*</span></span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const randomChars = Math.random().toString(36).substring(2, 7).toUpperCase();
+                            setPassword(`BPL@${randomChars}26`);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--brand-green, #174D32)',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          Generate Password
+                        </button>
+                      </div>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          className="form-input"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Enter account password (min. 6 characters)"
+                          style={{ paddingRight: '42px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '4px'
+                          }}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        The staff member will use this password to sign into the system.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="modal-footer">
+                    <button type="button" onClick={handleCloseModal} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary" style={{ gap: '6px' }}>
+                      <UserPlus size={16} />
+                      <span>Create Staff Account</span>
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}

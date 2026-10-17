@@ -63,33 +63,6 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   // accepted, before the wizard auto-advances to the next step.
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
-  // Reset wizard when opened
-  useEffect(() => {
-    if (isOpen) {
-      setCurrentStep(1);
-      setSelectedMemberId(members[0]?.memberId || '');
-      setSelectedBarcode('');
-      setIssuedTransaction(null);
-      setErrorMessage(null);
-      setSuccessNotice(null);
-      setDueDate(defaultDueStr);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  // Dynamically synchronize loan duration with Superadmin tier policy
-  useEffect(() => {
-    if (selectedMember) {
-      const tier = systemSettings.tierPolicies.find(
-        (p) => p.tierName.toLowerCase() === (selectedMember.membershipType || '').toLowerCase()
-      ) || systemSettings.tierPolicies[0];
-      const days = tier?.loanPeriodDays || systemSettings.standardLoanPeriodDays || 7;
-      const targetDue = new Date();
-      targetDue.setDate(targetDue.getDate() + days);
-      setDueDate(targetDue.toISOString().split('T')[0]);
-    }
-  }, [selectedMemberId]);
-
   // Clean scanned code helper (handles JSON payloads, URLs, whitespace)
   const cleanScannedCode = (raw: string): string => {
     let text = (raw || '').trim();
@@ -136,8 +109,6 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     return null;
   };
 
-  if (!isOpen) return null;
-
   // Derive Member & Eligibility for Step 1
   const selectedMember = members.find((m) => m.memberId === selectedMemberId);
   const memberActiveLoans = transactions.filter(
@@ -170,6 +141,35 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         (t) => t.barcode === selectedCopy?.barcode && (t.status === 'Active' || t.status === 'Overdue')
       )
     : null;
+
+  // Reset wizard when opened
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1);
+      setSelectedMemberId(members[0]?.memberId || '');
+      setSelectedBarcode('');
+      setIssuedTransaction(null);
+      setErrorMessage(null);
+      setSuccessNotice(null);
+      setDueDate(defaultDueStr);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Dynamically synchronize loan duration with Superadmin tier policy
+  useEffect(() => {
+    if (selectedMember) {
+      const tier = systemSettings.tierPolicies.find(
+        (p) => p.tierName.toLowerCase() === (selectedMember.membershipType || '').toLowerCase()
+      ) || systemSettings.tierPolicies[0];
+      const days = tier?.loanPeriodDays || systemSettings.standardLoanPeriodDays || 7;
+      const targetDue = new Date();
+      targetDue.setDate(targetDue.getDate() + days);
+      setDueDate(targetDue.toISOString().split('T')[0]);
+    }
+  }, [selectedMemberId, selectedMember, systemSettings]);
+
+  if (!isOpen) return null;
 
   // Commit the loan using explicitly-provided records (safe to call from a
   // delayed auto-advance without depending on state having already updated).

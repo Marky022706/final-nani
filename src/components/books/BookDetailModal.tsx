@@ -91,7 +91,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                 height: '240px'
               }}
             >
-              {book.coverImage ? (
+              {book.coverImage && book.coverImage.trim() !== '' ? (
                 <img
                   src={book.coverImage}
                   alt={book.title}

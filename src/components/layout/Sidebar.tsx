@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { UserRole, User as UserType } from '../../types';
 import {
   LayoutDashboard,
@@ -7,7 +7,6 @@ import {
   UserCheck,
   Clock,
   Repeat,
-  Bell,
   History,
   BarChart3,
   ShieldCheck,
@@ -15,15 +14,20 @@ import {
   BookmarkCheck,
   User,
   ChevronRight,
-  Archive
+  Archive,
+  HelpCircle
 } from 'lucide-react';
 
-interface NavItem {
+export interface NavItem {
   id: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number; color?: string }>;
   badge?: number;
 }
+
+export type SidebarNavItem = NavItem;
+export type NavLeafItem = NavItem;
+export type NavSingleItem = NavItem;
 
 interface SidebarProps {
   currentRole: UserRole;
@@ -45,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (currentRole === 'super_admin') {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'admin_mgmt', label: 'User & Access Management', icon: Users },
+        { id: 'admin_mgmt', label: 'User & Access', icon: Users },
         { id: 'audit_logs', label: 'Audit Logs', icon: ShieldCheck },
         { id: 'system_settings', label: 'System Settings', icon: Settings }
       ];
@@ -57,27 +61,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }
       ];
 
+      // Catalog & Archive
       if (!privs || privs.inventoryManagement !== false) {
         items.push({ id: 'books', label: 'Books', icon: BookOpen });
-      }
-      if (!privs || privs.memberManagement !== false) {
-        items.push({ id: 'members', label: 'Manage Members', icon: UserCheck });
-      }
-      if (!privs || privs.inventoryManagement !== false) {
         items.push({ id: 'archive', label: 'Archive', icon: Archive });
+      }
+
+      // Circulation & Desk
+      if (!privs || privs.circulationDesk !== false) {
+        items.push({ id: 'circulation', label: 'Circulation', icon: Repeat });
       }
       if (!privs || privs.servicesManagement !== false) {
         items.push({ id: 'attendance', label: 'Attendance', icon: Clock });
       }
-      if (!privs || privs.circulationDesk !== false) {
-        items.push({ id: 'circulation', label: 'Circulation', icon: Repeat });
+
+      // Users & Members
+      if (!privs || privs.memberManagement !== false) {
+        items.push({ id: 'members', label: 'Manage Members', icon: UserCheck });
       }
-      items.push({ id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined });
-      items.push({ id: 'history', label: 'History', icon: History });
+      items.push({ id: 'admin_mgmt', label: 'User & Access Management', icon: Users });
+
+      // Reports & Logs
       if (!privs || privs.reportsExport !== false) {
         items.push({ id: 'reports', label: 'Reports', icon: BarChart3 });
       }
-      items.push({ id: 'admin_mgmt', label: 'User & Access Management', icon: Users });
+      items.push({ id: 'history', label: 'History', icon: History });
+
       return items;
     }
 
@@ -87,7 +96,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dashboard', label: 'Operations Desk', icon: LayoutDashboard }
       ];
 
-      // Volunteer navigation items are strictly driven by granted privileges
       if (!privs || privs.servicesManagement !== false) {
         items.push({ id: 'attendance', label: 'Attendance', icon: Clock });
       }
@@ -103,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (privs?.reportsExport) {
         items.push({ id: 'reports', label: 'Reports', icon: BarChart3 });
       }
-      items.push({ id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined });
+
       return items;
     }
 
@@ -114,13 +122,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'my_books', label: 'My Books', icon: BookmarkCheck },
       { id: 'reservations', label: 'Reservations', icon: Repeat },
       { id: 'attendance', label: 'Attendance', icon: Clock },
-      { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifsCount > 0 ? unreadNotifsCount : undefined },
       { id: 'history', label: 'History', icon: History },
       { id: 'profile', label: 'Profile & Card', icon: User }
     ];
   };
 
-  const navItems = getNavItems();
+  const navItems = useMemo(() => getNavItems(), [currentRole, currentUser, unreadNotifsCount]);
 
   return (
     <aside className="app-sidebar no-print">
@@ -138,16 +145,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Sidebar Navigation">
         <div className="sidebar-section-title">Navigation</div>
+
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentDestination === item.id;
+
           return (
             <button
               key={item.id}
+              type="button"
               onClick={() => onNavigate(item.id)}
               className={`nav-item ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
             >
               <span className="nav-accent-bar" aria-hidden="true" />
               <Icon size={18} strokeWidth={isActive ? 2.3 : 1.9} className="nav-item-icon" />
@@ -177,7 +188,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </nav>
+
+      {/* Pinned Help & Support Link at Bottom of Sidebar */}
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          onClick={() => onNavigate('help_support')}
+          className={`nav-item ${currentDestination === 'help_support' ? 'active' : ''}`}
+          aria-current={currentDestination === 'help_support' ? 'page' : undefined}
+          title="Open Help & Support guides, FAQs, and desk assistance"
+        >
+          <span className="nav-accent-bar" aria-hidden="true" />
+          <HelpCircle
+            size={18}
+            strokeWidth={currentDestination === 'help_support' ? 2.3 : 1.9}
+            className="nav-item-icon"
+          />
+          <span className="nav-item-label" style={{ flex: 1 }}>Help & Support</span>
+          <ChevronRight
+            size={14}
+            className="nav-slide-indicator"
+            strokeWidth={currentDestination === 'help_support' ? 2.5 : 2}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
     </aside>
   );
 };
-

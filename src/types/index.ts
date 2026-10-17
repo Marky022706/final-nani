@@ -181,6 +181,8 @@ export interface NotificationItem {
   read: boolean;
   targetRole?: UserRole | 'all';
   targetMemberId?: string;
+  destination?: string;
+  actionText?: string;
 }
 
 export interface AuditLog {

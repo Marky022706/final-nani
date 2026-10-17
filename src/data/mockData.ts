@@ -95,9 +95,66 @@ export const INITIAL_TRANSACTIONS: CirculationTransaction[] = [];
 export const INITIAL_RESERVATIONS: BookReservation[] = [];
 
 /**
- * Clean live state - No mock notifications.
+ * Initial Operational Notifications
  */
-export const INITIAL_NOTIFICATIONS: NotificationItem[] = [];
+export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
+  {
+    id: 'notif-init-1',
+    title: 'Overdue Loan Alert: "Noli Me Tangere"',
+    message: 'Copy BPL-000101 issued to Juan Dela Cruz is past due. Settle return and fine rate (₱5.00/day) at desk.',
+    type: 'alert',
+    timestamp: '15 mins ago',
+    read: false,
+    targetRole: 'admin',
+    destination: 'circulation',
+    actionText: 'View in Circulation'
+  },
+  {
+    id: 'notif-init-2',
+    title: 'Borrow Request Awaiting Review',
+    message: 'Patron Maria Santos (MBR-000002) submitted a borrow request for "Florante at Laura".',
+    type: 'info',
+    timestamp: '35 mins ago',
+    read: false,
+    targetRole: 'admin',
+    destination: 'circulation',
+    actionText: 'Review Approval'
+  },
+  {
+    id: 'notif-init-3',
+    title: 'Hold Reservation Ready for Pickup',
+    message: 'Your reserved title "El Filibusterismo" is ready at the circulation counter. Hold valid for 7 days.',
+    type: 'success',
+    timestamp: '1 hour ago',
+    read: false,
+    targetRole: 'member',
+    targetMemberId: 'MBR-000001',
+    destination: 'reservations',
+    actionText: 'View Hold'
+  },
+  {
+    id: 'notif-init-4',
+    title: 'QR Attendance Confirmed',
+    message: 'Time-in recorded at Municipal Library front desk. Free WiFi & study station access activated.',
+    type: 'info',
+    timestamp: '2 hours ago',
+    read: true,
+    targetRole: 'all',
+    destination: 'attendance',
+    actionText: 'View Attendance'
+  },
+  {
+    id: 'notif-init-5',
+    title: 'New Catalog Acquisition Available',
+    message: '15 new physical copies of Philippine History and Information Technology books cataloged on shelves.',
+    type: 'info',
+    timestamp: 'Yesterday',
+    read: true,
+    targetRole: 'all',
+    destination: 'books',
+    actionText: 'Browse Books'
+  }
+];
 
 /**
  * System Audit Log - Initialized with real operational start record.

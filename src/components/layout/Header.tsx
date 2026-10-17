@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import type { User, UserRole } from '../../types';
-import { QrCode, Bell, Search } from 'lucide-react';
+import type { User, UserRole, NotificationItem } from '../../types';
+import { QrCode, Search } from 'lucide-react';
 import { Breadcrumbs } from './Breadcrumbs';
 import { UserProfileDropdown } from './UserProfileDropdown';
+import { NotificationDropdown } from './NotificationDropdown';
 
 interface HeaderProps {
   currentUser: User;
@@ -10,8 +11,13 @@ interface HeaderProps {
   onNavigate: (destination: string) => void;
   onRoleChange?: (role: UserRole) => void;
   onOpenScanner: () => void;
+  notifications?: NotificationItem[];
   unreadCount: number;
-  onOpenNotifications: () => void;
+  onMarkAllAsRead?: () => void;
+  onMarkSingleAsRead?: (id: string) => void;
+  onDeleteSingle?: (id: string) => void;
+  onClearAll?: () => void;
+  onOpenNotifications?: () => void;
   onResetData?: () => void;
   onLogout?: () => void;
 }
@@ -21,8 +27,13 @@ export const Header: React.FC<HeaderProps> = ({
   currentDestination,
   onNavigate,
   onOpenScanner,
+  notifications = [],
   unreadCount,
-  onOpenNotifications,
+  onMarkAllAsRead = () => {},
+  onMarkSingleAsRead = () => {},
+  onDeleteSingle,
+  onClearAll,
+  onOpenNotifications: _onOpenNotifications,
   onLogout
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,29 +83,17 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Notifications trigger */}
-        <button
-          onClick={onOpenNotifications}
-          className="btn btn-ghost btn-sm"
-          style={{ position: 'relative', padding: '8px' }}
-          aria-label="View notifications"
-        >
-          <Bell size={18} color="var(--text-secondary)" />
-          {unreadCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '5px',
-                right: '5px',
-                width: '8px',
-                height: '8px',
-                backgroundColor: 'var(--danger)',
-                borderRadius: '50%',
-                border: '2px solid #ffffff'
-              }}
-            />
-          )}
-        </button>
+        {/* Interactive Notification Bell Dropdown */}
+        <NotificationDropdown
+          currentUser={currentUser}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkAllAsRead={onMarkAllAsRead}
+          onMarkSingleAsRead={onMarkSingleAsRead}
+          onDeleteSingle={onDeleteSingle}
+          onClearAll={onClearAll}
+          onNavigate={onNavigate}
+        />
 
 
         {/* Interactive User Profile Dropdown */}

@@ -22,4 +22,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Database error encountered. Please verify the database service is running.',
+                    'code' => 'DATABASE_ERROR',
+                ], 503);
+            }
+        });
+
+        $exceptions->render(function (\PDOException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Database connection failed. Please ensure the database server is running.',
+                    'code' => 'DATABASE_CONNECTION_ERROR',
+                ], 503);
+            }
+        });
     })->create();

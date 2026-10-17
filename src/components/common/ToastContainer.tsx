@@ -8,6 +8,20 @@ interface ToastContainerProps {
 }
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
+  const [exitingIds, setExitingIds] = React.useState<Record<string, boolean>>({});
+
+  const handleDismiss = (id: string) => {
+    setExitingIds((prev) => ({ ...prev, [id]: true }));
+    setTimeout(() => {
+      onDismiss(id);
+      setExitingIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }, 180);
+  };
+
   if (toasts.length === 0) return null;
 
   return (
@@ -31,10 +45,12 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
           borderColor = 'var(--danger-border)';
         }
 
+        const isExiting = !!exitingIds[toast.id];
+
         return (
           <div
             key={toast.id}
-            className="toast"
+            className={`toast ${isExiting ? 'toast-exiting' : ''}`}
             style={{ borderColor }}
             role="alert"
           >
@@ -50,7 +66,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
               )}
             </div>
             <button
-              onClick={() => onDismiss(toast.id)}
+              onClick={() => handleDismiss(toast.id)}
               style={{
                 background: 'transparent',
                 border: 'none',

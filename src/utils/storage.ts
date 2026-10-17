@@ -286,7 +286,12 @@ export const StorageService = {
   },
 
   getNotifications(): NotificationItem[] {
-    return getStored<NotificationItem[]>(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const list = getStored<NotificationItem[]>(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    if (!list || list.length === 0) {
+      setStored(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+      return INITIAL_NOTIFICATIONS;
+    }
+    return list;
   },
 
   saveNotifications(notifications: NotificationItem[]): void {

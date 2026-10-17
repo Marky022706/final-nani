@@ -43,7 +43,7 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <img
-              src={member.photoUrl}
+              src={member.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
               alt={member.fullName}
               style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border-main)' }}
             />
@@ -126,7 +126,7 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
 
               <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                 <div style={{ width: 64, height: 64, borderRadius: 8, overflow: 'hidden', border: '2px solid rgba(255,255,255,0.25)', flexShrink: 0 }}>
-                  <img src={member.photoUrl} alt={member.fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={member.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'} alt={member.fullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
 
                 <div style={{ flex: 1 }}>

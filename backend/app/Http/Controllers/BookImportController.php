@@ -12,9 +12,35 @@ use Exception;
 
 class BookImportController extends Controller
 {
-    private const REQUIRED_HEADERS = ['isbn', 'title', 'author', 'quantity'];
+    private const REQUIRED_HEADERS = ['book_title', 'author', 'format', 'accession_number', 'availability', 'quantity'];
     private const MAX_FILE_SIZE_BYTES = 5242880; // 5 MB
     private const MAX_ROWS = 1000;
+
+    /**
+     * Resolves spreadsheet header labels against catalog fields.
+     */
+    public static function resolveHeader(string $header): ?string
+    {
+        $clean = strtolower(trim($header));
+        $clean = preg_replace('/[*()]/', '', $clean);
+        $clean = preg_replace('/\s+/', ' ', trim($clean));
+
+        if (in_array($clean, ['book title', 'title', 'book_title', 'primary book title'])) return 'book_title';
+        if (in_array($clean, ['category', 'book category', 'genre'])) return 'category';
+        if (in_array($clean, ['subtitle', 'sub title', 'subtitle or edition notes'])) return 'subtitle';
+        if (in_array($clean, ['author', 'authors', 'author full name', 'primary author'])) return 'author';
+        if (in_array($clean, ['publisher', 'publishing house'])) return 'publisher';
+        if (in_array($clean, ['publication year', 'year', 'pub year', 'publication_year', 'published year'])) return 'publication_year';
+        if (in_array($clean, ['classification ddc', 'classification', 'ddc', 'dewey decimal', 'call number'])) return 'classification';
+        if (in_array($clean, ['format', 'binding', 'book format'])) return 'format';
+        if (in_array($clean, ['accession number', 'accession', 'accession no', 'accession_number'])) return 'accession_number';
+        if (in_array($clean, ['availability', 'status', 'availability status'])) return 'availability';
+        if (in_array($clean, ['description / abstract', 'description', 'abstract', 'summary'])) return 'description';
+        if (in_array($clean, ['number of copies', 'copies', 'quantity', 'qty', 'number_of_copies'])) return 'quantity';
+        if (in_array($clean, ['isbn', 'isbn 10', 'isbn 13', 'isbn10', 'isbn13'])) return 'isbn';
+
+        return null;
+    }
 
     /**
      * Checks if current authenticated user has administrative import permission.
@@ -102,56 +128,115 @@ class BookImportController extends Controller
                 return [[], 'The uploaded file contains no data rows.', []];
             }
 
-            // Extract and verify headers
-            $headerRow = array_shift($rawMatrix);
-            $cleanHeaders = array_map(function ($h) {
-                return strtolower(trim((string) $h));
-            }, $headerRow);
+            // Dynamically locate the header row (supports files with top institutional headers or banners)
+            $headerRowIndex = 0;
+            foreach ($rawMatrix as $rIdx => $row) {
+                if ($rIdx > 12) break;
+                $trimmedRow = array_map('trim', array_map('strval', $row));
+                if (count(array_filter($trimmedRow, fn($v) => $v !== '')) === 0) continue;
+                if (str_starts_with($trimmedRow[0], '#')) continue;
 
-            // Check duplicate headers
-            $counts = array_count_values(array_filter($cleanHeaders, fn($h) => $h !== ''));
-            foreach ($counts as $name => $count) {
-                if ($count > 1) {
-                    return [[], "Duplicate column header detected: \"{$name}\"", $cleanHeaders];
+                $canonicals = array_filter(array_map(fn($h) => self::resolveHeader((string) $h), $trimmedRow));
+                if (
+                    in_array('book_title', $canonicals, true) ||
+                    (in_array('author', $canonicals, true) && in_array('format', $canonicals, true)) ||
+                    (in_array('isbn', $canonicals, true) && in_array('author', $canonicals, true))
+                ) {
+                    $headerRowIndex = $rIdx;
+                    break;
                 }
             }
 
+            $headerRow = $rawMatrix[$headerRowIndex] ?? [];
+            $canonicalHeaders = [];
+            foreach ($headerRow as $h) {
+                $canonicalHeaders[] = self::resolveHeader((string) $h);
+            }
+
+            // Check duplicate canonical headers
+            $counts = array_count_values(array_filter($canonicalHeaders, fn($h) => $h !== null));
+            foreach ($counts as $name => $count) {
+                if ($count > 1) {
+                    return [[], "Duplicate column header detected for field: \"{$name}\"", $headerRow];
+                }
+            }
+
+            // Check legacy format
+            $hasLegacy = in_array('isbn', $canonicalHeaders, true) && in_array('title', $canonicalHeaders, true) && in_array('author', $canonicalHeaders, true) && in_array('quantity', $canonicalHeaders, true);
+
             // Check missing required headers
             $missing = [];
-            foreach (self::REQUIRED_HEADERS as $req) {
-                if (!in_array($req, $cleanHeaders, true)) {
-                    $missing[] = ucfirst($req);
+            if (!$hasLegacy) {
+                foreach (self::REQUIRED_HEADERS as $req) {
+                    if (!in_array($req, $canonicalHeaders, true)) {
+                        $label = ucwords(str_replace('_', ' ', $req));
+                        if ($req === 'book_title') $label = 'Book Title *';
+                        if ($req === 'author') $label = 'Author(s) *';
+                        if ($req === 'format') $label = 'Format *';
+                        if ($req === 'accession_number') $label = 'Accession Number *';
+                        if ($req === 'availability') $label = 'Availability *';
+                        if ($req === 'quantity') $label = 'Number of Copies';
+                        $missing[] = $label;
+                    }
                 }
             }
 
             if (!empty($missing)) {
-                return [[], 'Missing required column headers: ' . implode(', ', $missing) . '. Required: ISBN, Title, Author, Quantity.', $cleanHeaders];
+                return [[], 'Missing required column headers: ' . implode(', ', $missing) . '. Please use the official Bulk Upload template.', $headerRow];
             }
 
             // Map rows to associative arrays
-            $mappedRows = [];
             $colIndexes = [];
-            foreach (self::REQUIRED_HEADERS as $req) {
-                $colIndexes[$req] = array_search($req, $cleanHeaders, true);
+            foreach ($canonicalHeaders as $idx => $canonical) {
+                if ($canonical) {
+                    $colIndexes[$canonical] = $idx;
+                }
             }
 
-            foreach ($rawMatrix as $rowIndex => $cols) {
-                // Check if row is entirely empty
+            $dataRows = array_slice($rawMatrix, $headerRowIndex + 1);
+            $mappedRows = [];
+            foreach ($dataRows as $rIdx => $cols) {
                 $trimmedCols = array_map('trim', array_map('strval', $cols));
                 if (count(array_filter($trimmedCols, fn($v) => $v !== '')) === 0) {
                     continue; // Skip completely blank lines
                 }
+                if (str_starts_with($trimmedCols[0], '#')) {
+                    continue; // Skip comment rows
+                }
+
+                $title = trim((string) ($cols[$colIndexes['book_title'] ?? $colIndexes['title'] ?? -1] ?? ''));
+                $author = trim((string) ($cols[$colIndexes['author'] ?? -1] ?? ''));
+                $category = trim((string) ($cols[$colIndexes['category'] ?? -1] ?? 'General Reference'));
+                $subtitle = trim((string) ($cols[$colIndexes['subtitle'] ?? -1] ?? ''));
+                $publisher = trim((string) ($cols[$colIndexes['publisher'] ?? -1] ?? 'Balingasag Municipal Library'));
+                $pubYear = trim((string) ($cols[$colIndexes['publication_year'] ?? -1] ?? date('Y')));
+                $classification = trim((string) ($cols[$colIndexes['classification'] ?? -1] ?? 'General Stacks'));
+                $format = trim((string) ($cols[$colIndexes['format'] ?? -1] ?? 'Paperback'));
+                $accession = trim((string) ($cols[$colIndexes['accession_number'] ?? -1] ?? ''));
+                $availability = trim((string) ($cols[$colIndexes['availability'] ?? -1] ?? 'Available'));
+                $description = trim((string) ($cols[$colIndexes['description'] ?? -1] ?? ''));
+                $quantity = trim((string) ($cols[$colIndexes['quantity'] ?? -1] ?? '1'));
+                $isbn = trim((string) ($cols[$colIndexes['isbn'] ?? -1] ?? ''));
 
                 $mappedRows[] = [
-                    'file_row_num' => $rowIndex + 2, // 1-based, accounting for header
-                    'isbn' => trim((string) ($cols[$colIndexes['isbn']] ?? '')),
-                    'title' => trim((string) ($cols[$colIndexes['title']] ?? '')),
-                    'author' => trim((string) ($cols[$colIndexes['author']] ?? '')),
-                    'quantity' => trim((string) ($cols[$colIndexes['quantity']] ?? '')),
+                    'file_row_num' => $headerRowIndex + 1 + $rIdx + 1,
+                    'title' => $title,
+                    'author' => $author,
+                    'category' => $category ?: 'General Reference',
+                    'subtitle' => $subtitle,
+                    'publisher' => $publisher ?: 'Balingasag Municipal Library',
+                    'publication_year' => $pubYear ?: date('Y'),
+                    'classification' => $classification ?: 'General Stacks',
+                    'format' => $format ?: 'Paperback',
+                    'accession_number' => $accession,
+                    'availability' => $availability ?: 'Available',
+                    'description' => $description,
+                    'quantity' => $quantity,
+                    'isbn' => $isbn,
                 ];
             }
 
-            return [$mappedRows, null, $cleanHeaders];
+            return [$mappedRows, null, $headerRow];
         }
 
         // Handle JSON payload
@@ -161,10 +246,19 @@ class BookImportController extends Controller
             foreach ($rawList as $index => $item) {
                 $mappedRows[] = [
                     'file_row_num' => $item['rowNumber'] ?? $item['file_row_num'] ?? ($index + 2),
-                    'isbn' => trim((string) ($item['isbn'] ?? '')),
-                    'title' => trim((string) ($item['title'] ?? '')),
+                    'title' => trim((string) ($item['title'] ?? $item['book_title'] ?? '')),
                     'author' => trim((string) ($item['author'] ?? '')),
-                    'quantity' => trim((string) ($item['quantity'] ?? '')),
+                    'category' => trim((string) ($item['category'] ?? 'General Reference')),
+                    'subtitle' => trim((string) ($item['subtitle'] ?? '')),
+                    'publisher' => trim((string) ($item['publisher'] ?? 'Balingasag Municipal Library')),
+                    'publication_year' => trim((string) ($item['publicationYear'] ?? $item['publication_year'] ?? date('Y'))),
+                    'classification' => trim((string) ($item['classification'] ?? 'General Stacks')),
+                    'format' => trim((string) ($item['format'] ?? 'Paperback')),
+                    'accession_number' => trim((string) ($item['accessionNumber'] ?? $item['accession_number'] ?? '')),
+                    'availability' => trim((string) ($item['availability'] ?? 'Available')),
+                    'description' => trim((string) ($item['description'] ?? '')),
+                    'quantity' => trim((string) ($item['quantity'] ?? $item['numberOfCopies'] ?? '1')),
+                    'isbn' => trim((string) ($item['isbn'] ?? '')),
                 ];
             }
             return [$mappedRows, null, self::REQUIRED_HEADERS];
@@ -215,29 +309,53 @@ class BookImportController extends Controller
      */
     private function validateRowsData(array $rows): array
     {
-        // 1. Fetch all existing books and index by normalized ISBN
+        // 1. Fetch all existing books and physical copies for duplication checks
         $existingBooks = Book::select('id', 'isbn', 'title', 'author')->get();
         $dbIsbnMap = [];
         foreach ($existingBooks as $book) {
             $cleaned = strtoupper((string) preg_replace('/[-\s]/', '', $book->isbn));
-            $dbIsbnMap[$cleaned] = [
-                'id' => $book->id,
-                'title' => $book->title,
-                'author' => $book->author,
-                'isbn' => $book->isbn,
-            ];
+            if ($cleaned !== '') {
+                $dbIsbnMap[$cleaned] = [
+                    'id' => $book->id,
+                    'title' => $book->title,
+                    'author' => $book->author,
+                    'isbn' => $book->isbn,
+                ];
+            }
         }
 
-        // 2. Track ISBN occurrences within this upload to detect duplicates
-        $fileIsbnOccurrences = [];
-        foreach ($rows as $r) {
-            $rawIsbn = (string) $r['isbn'];
-            $cleaned = strtoupper((string) preg_replace('/[-\s]/', '', $rawIsbn));
+        $existingCopies = PhysicalCopy::with('book:id,title')->get();
+        $dbAccMap = [];
+        foreach ($existingCopies as $copy) {
+            $cleaned = strtoupper(trim((string) $copy->accession_number));
             if ($cleaned !== '') {
-                if (!isset($fileIsbnOccurrences[$cleaned])) {
-                    $fileIsbnOccurrences[$cleaned] = [];
+                $dbAccMap[$cleaned] = [
+                    'book_title' => $copy->book?->title ?? 'Existing Library Book',
+                    'accession_number' => $copy->accession_number,
+                ];
+            }
+        }
+
+        // 2. Track ISBN and Accession occurrences within this upload to detect duplicates
+        $fileIsbnOccurrences = [];
+        $fileAccOccurrences = [];
+        foreach ($rows as $r) {
+            $rawIsbn = (string) ($r['isbn'] ?? '');
+            $cleanedIsbn = strtoupper((string) preg_replace('/[-\s]/', '', $rawIsbn));
+            if ($cleanedIsbn !== '') {
+                if (!isset($fileIsbnOccurrences[$cleanedIsbn])) {
+                    $fileIsbnOccurrences[$cleanedIsbn] = [];
                 }
-                $fileIsbnOccurrences[$cleaned][] = $r['file_row_num'];
+                $fileIsbnOccurrences[$cleanedIsbn][] = $r['file_row_num'];
+            }
+
+            $rawAcc = (string) ($r['accession_number'] ?? '');
+            $cleanedAcc = strtoupper(trim($rawAcc));
+            if ($cleanedAcc !== '') {
+                if (!isset($fileAccOccurrences[$cleanedAcc])) {
+                    $fileAccOccurrences[$cleanedAcc] = [];
+                }
+                $fileAccOccurrences[$cleanedAcc][] = $r['file_row_num'];
             }
         }
 
@@ -249,79 +367,113 @@ class BookImportController extends Controller
 
         foreach ($rows as $r) {
             $rowNum = $r['file_row_num'];
-            $rawIsbn = (string) $r['isbn'];
-            $rawTitle = (string) $r['title'];
-            $rawAuthor = (string) $r['author'];
-            $rawQuantity = (string) $r['quantity'];
+            $rawTitle = (string) ($r['title'] ?? '');
+            $rawAuthor = (string) ($r['author'] ?? '');
+            $rawCategory = (string) ($r['category'] ?? 'General Reference');
+            $rawSubtitle = (string) ($r['subtitle'] ?? '');
+            $rawPublisher = (string) ($r['publisher'] ?? '');
+            $rawPubYear = (string) ($r['publication_year'] ?? '');
+            $rawClassification = (string) ($r['classification'] ?? '');
+            $rawFormat = (string) ($r['format'] ?? 'Paperback');
+            $rawAccession = (string) ($r['accession_number'] ?? '');
+            $rawAvailability = (string) ($r['availability'] ?? 'Available');
+            $rawDescription = (string) ($r['description'] ?? '');
+            $rawQuantity = (string) ($r['quantity'] ?? '1');
+            $rawIsbn = (string) ($r['isbn'] ?? '');
 
             $errors = [];
             $status = 'valid';
             $cleanedIsbn = strtoupper((string) preg_replace('/[-\s]/', '', $rawIsbn));
+            $cleanedAcc = strtoupper(trim($rawAccession));
             $parsedQuantity = null;
 
             // Missing mandatory fields
-            if ($rawIsbn === '') {
-                $errors[] = 'ISBN is required.';
-            }
             if ($rawTitle === '') {
-                $errors[] = 'Title is required.';
+                $errors[] = 'Book Title is required.';
             }
             if ($rawAuthor === '') {
-                $errors[] = 'Author is required.';
+                $errors[] = 'Author(s) is required.';
+            }
+            if ($rawFormat === '') {
+                $errors[] = 'Format is required (e.g. Paperback, Hardcover).';
+            }
+            if ($rawAccession === '') {
+                $errors[] = 'Accession Number is required (e.g. BPL-ACC-0006).';
+            }
+            if ($rawAvailability === '') {
+                $errors[] = 'Availability is required (e.g. Available).';
             }
             if ($rawQuantity === '') {
-                $errors[] = 'Quantity is required.';
+                $errors[] = 'Number of Copies is required.';
             }
 
             // Quantity constraints & casting
             if ($rawQuantity !== '') {
                 if (str_contains($rawQuantity, '.') || str_contains($rawQuantity, ',')) {
-                    $errors[] = "Quantity must be a positive whole number (decimal values like '{$rawQuantity}' are not allowed).";
+                    $errors[] = "Number of Copies must be a positive whole number (decimal values like '{$rawQuantity}' are not allowed).";
                 } elseif (!ctype_digit($rawQuantity)) {
-                    $errors[] = "Quantity must be a valid numeric integer.";
+                    $errors[] = "Number of Copies must be a valid numeric integer.";
                 } else {
                     $qtyInt = (int) $rawQuantity;
                     if ($qtyInt <= 0) {
-                        $errors[] = "Quantity must be greater than zero.";
+                        $errors[] = "Number of Copies must be greater than zero.";
                     } elseif ($qtyInt > 10000) {
-                        $errors[] = "Quantity exceeds maximum allowable batch limit of 10,000.";
+                        $errors[] = "Number of Copies exceeds maximum allowable batch limit of 10,000.";
                     } else {
                         $parsedQuantity = $qtyInt;
                     }
                 }
             }
 
-            // ISBN format validation
-            if ($cleanedIsbn !== '') {
-                if (!$this->validateIsbnFormat($cleanedIsbn)) {
-                    $errors[] = "Invalid ISBN format (must be a valid 10-digit or 13-digit standard ISBN).";
-                }
-            }
-
-            // Duplicate detection within uploaded file
+            // Accession Number duplicate detection within uploaded file
             $duplicateWithRow = null;
-            if ($cleanedIsbn !== '' && isset($fileIsbnOccurrences[$cleanedIsbn]) && count($fileIsbnOccurrences[$cleanedIsbn]) > 1) {
-                $occurrences = $fileIsbnOccurrences[$cleanedIsbn];
+            if ($cleanedAcc !== '' && isset($fileAccOccurrences[$cleanedAcc]) && count($fileAccOccurrences[$cleanedAcc]) > 1) {
+                $occurrences = $fileAccOccurrences[$cleanedAcc];
                 $otherRows = array_filter($occurrences, fn($rn) => $rn !== $rowNum);
                 $firstRow = reset($occurrences);
                 $duplicateWithRow = $firstRow !== $rowNum ? $firstRow : reset($otherRows);
 
                 if ($firstRow !== $rowNum) {
                     $status = 'duplicate_file';
-                    $errors[] = "Duplicate ISBN in file: conflicts with Row {$firstRow}. Use 'Quantity' to add multiple copies.";
+                    $errors[] = "Duplicate Accession Number in file: conflicts with Row {$firstRow}.";
                 } else {
-                    // First occurrence is also flagged with duplicate notice
                     $otherRowsStr = implode(', ', $otherRows);
-                    $errors[] = "Duplicate ISBN in file: matches subsequent Row(s) {$otherRowsStr}.";
+                    $errors[] = "Duplicate Accession Number in file: matches subsequent Row(s) {$otherRowsStr}.";
                 }
             }
 
-            // Duplicate detection against existing Database records
+            // Accession Number duplicate detection against database
             $existingBookMatch = null;
-            if ($cleanedIsbn !== '' && isset($dbIsbnMap[$cleanedIsbn])) {
+            if ($cleanedAcc !== '' && isset($dbAccMap[$cleanedAcc])) {
                 $status = 'duplicate_db';
-                $existingBookMatch = $dbIsbnMap[$cleanedIsbn];
-                $errors[] = "ISBN already exists in database (Title: \"{$existingBookMatch['title']}\", ISBN: {$existingBookMatch['isbn']}).";
+                $match = $dbAccMap[$cleanedAcc];
+                $existingBookMatch = [
+                    'id' => $match['accession_number'],
+                    'title' => $match['book_title'],
+                    'accession_number' => $match['accession_number'],
+                ];
+                $errors[] = "Accession Number '{$rawAccession}' already exists in database (Book: \"{$match['book_title']}\").";
+            }
+
+            // Optional ISBN format validation & duplicate checks
+            if ($cleanedIsbn !== '') {
+                if (!$this->validateIsbnFormat($cleanedIsbn)) {
+                    $errors[] = "Invalid ISBN format (must be a valid 10-digit or 13-digit standard ISBN).";
+                }
+
+                if (isset($fileIsbnOccurrences[$cleanedIsbn]) && count($fileIsbnOccurrences[$cleanedIsbn]) > 1 && $status !== 'duplicate_file') {
+                    $firstRow = reset($fileIsbnOccurrences[$cleanedIsbn]);
+                    if ($firstRow !== $rowNum) {
+                        $status = 'duplicate_file';
+                        $errors[] = "Duplicate ISBN in file: conflicts with Row {$firstRow}.";
+                    }
+                }
+
+                if (isset($dbIsbnMap[$cleanedIsbn]) && $status !== 'duplicate_db') {
+                    $status = 'duplicate_db';
+                    $existingBookMatch = $dbIsbnMap[$cleanedIsbn];
+                    $errors[] = "ISBN already exists in database (Title: \"{$existingBookMatch['title']}\", ISBN: {$existingBookMatch['isbn']}).";
+                }
             }
 
             if (!empty($errors) && $status === 'valid') {
@@ -340,12 +492,21 @@ class BookImportController extends Controller
 
             $validatedRows[] = [
                 'row_number' => $rowNum,
-                'isbn' => $rawIsbn,
-                'normalized_isbn' => $cleanedIsbn,
                 'title' => $rawTitle,
                 'author' => $rawAuthor,
+                'category' => $rawCategory ?: 'General Reference',
+                'subtitle' => $rawSubtitle,
+                'publisher' => $rawPublisher ?: 'Balingasag Municipal Library',
+                'publication_year' => $rawPubYear ?: date('Y'),
+                'classification' => $rawClassification ?: 'General Stacks',
+                'format' => $rawFormat ?: 'Paperback',
+                'accession_number' => $rawAccession ?: ('ACC-' . str_pad((string) $rowNum, 6, '0', STR_PAD_LEFT)),
+                'availability' => $rawAvailability ?: 'Available',
+                'description' => $rawDescription,
                 'quantity' => $parsedQuantity,
                 'raw_quantity' => $rawQuantity,
+                'isbn' => $rawIsbn ?: ('978-BPL-' . ($rawAccession ?: str_pad((string) $rowNum, 6, '0', STR_PAD_LEFT))),
+                'normalized_isbn' => $cleanedIsbn,
                 'status' => $status,
                 'errors' => $errors,
                 'duplicate_with_row' => $duplicateWithRow,
@@ -489,32 +650,48 @@ class BookImportController extends Controller
             $currentSeq = max($maxCopyId, $latestNum);
 
             foreach ($rowsToImport as $row) {
+                // Ensure unique ISBN if not supplied
+                $isbn = !empty($row['isbn']) ? $row['isbn'] : null;
+                if (!$isbn) {
+                    $sanitizedAcc = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $row['accession_number'] ?? ''));
+                    $candidateIsbn = '978-BPL-' . ($sanitizedAcc ?: str_pad((string) $currentSeq, 6, '0', STR_PAD_LEFT));
+                    if (Book::where('isbn', $candidateIsbn)->exists()) {
+                        $candidateIsbn .= '-' . substr(uniqid(), -4);
+                    }
+                    $isbn = $candidateIsbn;
+                }
+
                 $book = Book::create([
-                    'isbn' => $row['isbn'],
+                    'isbn' => $isbn,
                     'title' => $row['title'],
+                    'subtitle' => !empty($row['subtitle']) ? $row['subtitle'] : null,
                     'author' => $row['author'],
-                    'category' => 'General Collection',
-                    'classification' => 'General Stacks',
+                    'category' => !empty($row['category']) ? $row['category'] : 'General Reference',
+                    'classification' => !empty($row['classification']) ? $row['classification'] : 'General Stacks',
                     'language' => 'English',
-                    'publisher' => 'Balingasag Municipal Library',
-                    'publication_year' => (int) date('Y'),
+                    'publisher' => !empty($row['publisher']) ? $row['publisher'] : 'Balingasag Municipal Library',
+                    'publication_year' => !empty($row['publication_year']) ? (int) $row['publication_year'] : (int) date('Y'),
+                    'description' => !empty($row['description']) ? $row['description'] : null,
                     'pages' => 0,
                     'is_archived' => false,
                 ]);
 
-                $qty = (int) $row['quantity'];
+                $qty = (int) ($row['quantity'] ?? 1);
                 for ($i = 1; $i <= $qty; $i++) {
                     $currentSeq++;
                     $padded = str_pad((string) $currentSeq, 6, '0', STR_PAD_LEFT);
+                    $baseAcc = !empty($row['accession_number']) ? $row['accession_number'] : "BPL-ACC-{$padded}";
+                    $accNum = ($qty > 1 && $i > 1) ? "{$baseAcc}-C{$i}" : $baseAcc;
+
                     PhysicalCopy::create([
                         'book_id' => $book->id,
                         'copy_id' => "cp-{$padded}",
-                        'accession_number' => "ACC-{$padded}",
+                        'accession_number' => $accNum,
                         'barcode' => "BPL-{$padded}",
                         'shelf_location' => 'General Stacks',
                         'classification' => $book->classification,
                         'condition' => 'New',
-                        'status' => 'Available',
+                        'status' => in_array($row['availability'] ?? 'Available', ['Available', 'Borrowed', 'Reserved', 'Lost', 'Under Repair']) ? $row['availability'] : 'Available',
                         'date_added' => now()->toDateString(),
                     ]);
                     $totalCopiesCreated++;
@@ -544,7 +721,7 @@ class BookImportController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Database transaction failed during bulk import. No records were saved.',
+                'message' => 'Database transaction failed during bulk import. No records were saved: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -556,17 +733,89 @@ class BookImportController extends Controller
     {
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="bpl_bulk_book_import_template.csv"',
+            'Content-Disposition' => 'attachment; filename="balingasag_library_bulk_upload_template.csv"',
         ];
 
         $callback = function () {
             $handle = fopen('php://output', 'w');
             // Write UTF-8 BOM for Microsoft Excel compatibility
             fputs($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, ['ISBN', 'Title', 'Author', 'Quantity']);
-            fputcsv($handle, ['978-0132350884', 'Clean Code: A Handbook of Agile Software Craftsmanship', 'Robert C. Martin', '3']);
-            fputcsv($handle, ['978-0201616224', 'The Pragmatic Programmer', 'David Thomas, Andrew Hunt', '2']);
-            fputcsv($handle, ['978-0143127741', 'Designing Data-Intensive Applications', 'Martin Kleppmann', '1']);
+            fputs($handle, "# ==========================================================================================================\r\n");
+            fputs($handle, "# BALINGASAG PUBLIC LIBRARY — OFFICIAL BOOK CATALOGING TEMPLATE (v2026.2)\r\n");
+            fputs($handle, "# Municipality of Balingasag, Misamis Oriental • Public Library Management System\r\n");
+            fputs($handle, "# INSTRUCTIONS: Columns with (*) are REQUIRED. Accession numbers must be unique. Fill entries below.\r\n");
+            fputs($handle, "# ==========================================================================================================\r\n");
+
+            fputcsv($handle, [
+                'Book Title *',
+                'Category',
+                'Subtitle',
+                'Author(s) *',
+                'Publisher',
+                'Publication Year',
+                'Classification (DDC)',
+                'Format *',
+                'Accession Number *',
+                'Availability *',
+                'Description / Abstract',
+                'Number of Copies'
+            ]);
+            fputcsv($handle, [
+                'Clean Code: A Handbook of Agile Software Craftsmanship',
+                'General Reference',
+                'A Handbook of Agile Software Craftsmanship',
+                'Robert C. Martin',
+                'Prentice Hall',
+                '2026',
+                '005.133 MAR',
+                'Paperback',
+                'BPL-ACC-0006',
+                'Available',
+                'Even bad code can function. But if code is not clean, it can bring a development organization to its knees.',
+                '1'
+            ]);
+            fputcsv($handle, [
+                'Introduction to Algorithms',
+                'General Reference',
+                'Fourth Edition',
+                'Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein',
+                'MIT Press',
+                '2022',
+                '005.1 COR',
+                'Hardcover',
+                'BPL-ACC-0007',
+                'Available',
+                'Comprehensive textbook covering modern computer algorithms, data structures, and algorithmic complexity analysis.',
+                '2'
+            ]);
+            fputcsv($handle, [
+                'The Philippine Islands, 1493–1898',
+                'Filipiniana',
+                'Explorations by Early Navigators, Descriptions of the Islands and their Peoples',
+                'Emma Helen Blair, James Alexander Robertson',
+                'Arthur H. Clark Company',
+                '2024',
+                '959.9 BLA',
+                'Hardcover',
+                'BPL-ACC-0008',
+                'Available',
+                'Monumental collection of historical records, exploration accounts, and colonial documents on the Philippines.',
+                '1'
+            ]);
+            fputcsv($handle, [
+                'To Kill a Mockingbird',
+                'Fiction',
+                'Perennial Classics Edition',
+                'Harper Lee',
+                'HarperCollins',
+                '2025',
+                '813.54 LEE',
+                'Paperback',
+                'BPL-ACC-0009',
+                'Available',
+                'The unforgettable novel of childhood in a sleepy Southern town and the crisis of conscience that rocked it.',
+                '1'
+            ]);
             fclose($handle);
         };
 

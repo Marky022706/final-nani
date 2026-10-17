@@ -25,7 +25,18 @@ class ReservationController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $member = Member::where('member_id', $request->member_id)->firstOrFail();
+        $member = Member::where('member_id', $request->member_id)->first();
+        if (!$member) {
+            return response()->json(['success' => false, 'message' => "Member '{$request->member_id}' not found."], 404);
+        }
+
+        if ($member->status !== 'active') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your library account is currently inactive. Please contact the library administrator.'
+            ], 403);
+        }
+
         $book = Book::findOrFail($request->book_id);
 
         $queue = BookReservation::where('book_id', $book->id)

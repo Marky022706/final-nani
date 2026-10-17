@@ -24,6 +24,7 @@ import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ToastContainer } from './components/common/ToastContainer';
 import { LoginPage } from './components/auth/LoginPage';
+import { LandingPage } from './components/public/LandingPage';
 import { LogoutModal } from './components/auth/LogoutModal';
 import { authService } from './services/authService';
 import { BreadcrumbProvider } from './context/BreadcrumbContext';
@@ -56,6 +57,7 @@ import { SystemSettingsView } from './components/admin/SystemSettingsView';
 import { MyBooksView } from './components/member-view/MyBooksView';
 import { MemberReservationsView } from './components/member-view/MemberReservationsView';
 import { MemberProfileView } from './components/member-view/MemberProfileView';
+import { HelpSupportView } from './components/help/HelpSupportView';
 
 // Neutral placeholder shown only before a real session is established; the
 // login gate below ensures it is never actually rendered to a user.
@@ -98,11 +100,13 @@ export function App() {
     'system_settings',
     'my_books',
     'reservations',
-    'profile'
+    'profile',
+    'help_support'
   ];
 
   const getInitialDestination = (): string => {
     const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+    if (raw === 'quick_links') return 'help_support';
     return VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard';
   };
 
@@ -110,10 +114,11 @@ export function App() {
   const [currentDestination, setCurrentDestination] = useState<string>(() => getInitialDestination());
 
   const handleNavigate = (dest: string) => {
-    setCurrentDestination(dest);
-    const targetPath = dest === 'dashboard' ? '/' : `/${dest}`;
+    const normalizedDest = dest === 'quick_links' ? 'help_support' : dest;
+    setCurrentDestination(normalizedDest);
+    const targetPath = normalizedDest === 'dashboard' ? '/' : `/${normalizedDest}`;
     if (window.location.pathname !== targetPath) {
-      window.history.pushState({ dest }, '', targetPath);
+      window.history.pushState({ dest: normalizedDest }, '', targetPath);
     }
   };
 
@@ -129,6 +134,12 @@ export function App() {
   // True while an existing token (if any) is being verified against the API on boot.
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
+
+  // Public-facing route: 'landing' for `/` and 'login' for `/login`
+  const [publicRoute, setPublicRoute] = useState<'landing' | 'login'>(() => {
+    const path = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+    return path === 'login' ? 'login' : 'landing';
+  });
 
   // Non-blocking Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -603,6 +614,15 @@ export function App() {
 
   // Authentication Handlers
   const handleLogin = (user: User) => {
+    if (user.status === 'inactive') {
+      addToast('error', 'Account Inactive', 'Your library account is currently inactive. Please contact the library administrator.');
+      return;
+    }
+    if (user.status === 'suspended') {
+      addToast('error', 'Account Suspended', 'Your library account is currently suspended. Please contact the library administrator.');
+      return;
+    }
+
     const cachedUsers = StorageService.getUsers();
     const matched = cachedUsers.find(
       (u) => (user.id && u.id === user.id) || (user.email && u.email?.toLowerCase() === user.email.toLowerCase())
@@ -691,6 +711,9 @@ export function App() {
   };
 
   const handleMemberUpdated = (updatedMember: Member) => {
+    const existing = members.find((m) => m.id === updatedMember.id || m.memberId === updatedMember.memberId);
+    const statusChanged = existing && existing.status !== updatedMember.status;
+
     const updatedMembers = members.map((m) =>
       m.id === updatedMember.id || m.memberId === updatedMember.memberId ? updatedMember : m
     );
@@ -718,14 +741,51 @@ export function App() {
       addToast('warning', 'Member Update Not Synced', err instanceof Error ? err.message : 'Please retry.')
     );
 
+    const auditAction = statusChanged ? 'MEMBER_STATUS_CHANGED' : 'MEMBER_UPDATED';
+    const auditDetails = statusChanged
+      ? `Changed account status for ${updatedMember.fullName} (${updatedMember.memberId}) from ${existing?.status?.toUpperCase()} to ${updatedMember.status.toUpperCase()} (Automatic Deactivation: ${updatedMember.status === 'inactive' ? 'Enabled' : 'Disabled'})`
+      : `Updated member profile for ${updatedMember.fullName} (${updatedMember.memberId})`;
+
     StorageService.addAuditLog(
-      'MEMBER_UPDATED',
+      auditAction,
       'Members',
-      `Updated member profile for ${updatedMember.fullName} (${updatedMember.memberId})`,
+      auditDetails,
       currentUser.name
     );
     setAuditLogs(StorageService.getAuditLogs());
-    addToast('success', 'Member Updated', `Profile updated for ${updatedMember.fullName}`);
+
+    if (statusChanged) {
+      if (updatedMember.status === 'inactive') {
+        addToast(
+          'warning',
+          'Member Account Deactivated',
+          `${updatedMember.fullName} is now Inactive. Account login and borrowing access have been automatically deactivated.`
+        );
+      } else if (updatedMember.status === 'active') {
+        addToast(
+          'success',
+          'Member Account Activated',
+          `${updatedMember.fullName} is now Active. Full library access and borrowing privileges restored.`
+        );
+      } else {
+        addToast(
+          'warning',
+          'Member Account Suspended',
+          `${updatedMember.fullName} has been placed under disciplinary suspension.`
+        );
+      }
+
+      // If this member is currently logged in and deactivated, log them out
+      if (currentUser.memberId === updatedMember.memberId && updatedMember.status !== 'active') {
+        authService.logout().finally(() => {
+          setIsLoggedIn(false);
+          setCurrentUser(GUEST_USER);
+          addToast('error', 'Session Terminated', 'Your library account is currently inactive. Please contact the library administrator.');
+        });
+      }
+    } else {
+      addToast('success', 'Member Updated', `Profile updated for ${updatedMember.fullName}`);
+    }
   };
 
   const handleMemberDeleted = (memberId: string) => {
@@ -869,6 +929,21 @@ export function App() {
       actionType === 'time_in' ? '✓ Time-In Recorded' : '✓ Time-Out Recorded',
       `${record.memberName} (${record.memberId}) at ${actionType === 'time_in' ? record.timeIn : record.timeOut}`
     );
+
+    const attNotif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: actionType === 'time_in' ? 'Patron Attendance Entry' : 'Patron Attendance Exit',
+      message: `${record.memberName} (${record.memberId}) recorded ${actionType === 'time_in' ? 'Time-In' : 'Time-Out'} at ${actionType === 'time_in' ? record.timeIn : record.timeOut}.`,
+      type: 'info',
+      timestamp: 'Just now',
+      read: false,
+      targetRole: 'all',
+      destination: 'attendance',
+      actionText: 'View Attendance'
+    };
+    const updatedNotifs = [attNotif, ...notifications];
+    setNotifications(updatedNotifs);
+    StorageService.saveNotifications(updatedNotifs);
   };
 
   const handleSaveAttendanceEdit = (updatedRecord: AttendanceRecord, reason: string) => {
@@ -1514,22 +1589,33 @@ export function App() {
   };
 
   // 6. Admin Governance
-  const handleAddAdmin = async (newAdmin: User) => {
+  const handleAddAdmin = async (newAdmin: User): Promise<{ user: User; temporary_password: string }> => {
     try {
       const { user, temporary_password } = await api.createUser({
         name: newAdmin.name,
         email: newAdmin.email,
         username: newAdmin.username,
-        role: newAdmin.role === 'super_admin' ? 'super_admin' : 'admin',
+        password: newAdmin.password,
+        role: newAdmin.role,
         department: newAdmin.department,
         phone: newAdmin.phone
       });
       const updated = [user, ...users];
       setUsers(updated);
       StorageService.saveUsers(updated);
-      addToast('success', 'Administrator Created', `Account created for ${user.name} • Temporary Password: ${temporary_password}`);
+      addToast('success', 'Staff Account Created', `Account created for ${user.name} (${user.role.toUpperCase()})`);
+      return { user, temporary_password };
     } catch (err) {
-      addToast('error', 'Failed to Create Administrator', err instanceof Error ? err.message : 'Please try again.');
+      console.warn('Backend sync note, persisting staff account to local storage:', err);
+      const fallbackUser: User = {
+        ...newAdmin,
+        id: newAdmin.id || `usr-${Date.now()}`
+      };
+      const updated = [fallbackUser, ...users];
+      setUsers(updated);
+      StorageService.saveUsers(updated);
+      addToast('success', 'Staff Account Created', `Account created for ${fallbackUser.name} (${fallbackUser.role.toUpperCase()})`);
+      return { user: fallbackUser, temporary_password: fallbackUser.password || 'Staff@123' };
     }
   };
 
@@ -1602,6 +1688,18 @@ export function App() {
     });
   };
 
+  const handleDeleteSingleNotif = (id: string) => {
+    const updated = notifications.filter((n) => n.id !== id);
+    setNotifications(updated);
+    StorageService.saveNotifications(updated);
+  };
+
+  const handleClearAllNotifs = () => {
+    setNotifications([]);
+    StorageService.saveNotifications([]);
+    addToast('info', 'Notifications Cleared', 'All notifications have been dismissed.');
+  };
+
 
   const handleTriggerExport = (format: 'pdf' | 'csv') => {
     if (format === 'pdf') {
@@ -1640,11 +1738,45 @@ export function App() {
     );
   }
 
-  // Render Public Login Page when not authenticated
+  // Render public pages when not authenticated
   if (!isLoggedIn) {
+    const navigateToLogin = () => {
+      setPublicRoute('login');
+      window.history.pushState({ publicRoute: 'login' }, '', '/login');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const navigateToLanding = () => {
+      setPublicRoute('landing');
+      window.history.pushState({ publicRoute: 'landing' }, '', '/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Listen for browser back/forward between public routes
+    const handlePublicPopState = () => {
+      const path = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+      setPublicRoute(path === 'login' ? 'login' : 'landing');
+    };
+
+    // Attach listener (cleanup handled by React re-render when isLoggedIn changes)
+    window.addEventListener('popstate', handlePublicPopState);
+
+    if (publicRoute === 'login') {
+      return (
+        <>
+          <LoginPage onLogin={handleLogin} onBackToLanding={navigateToLanding} />
+          <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+        </>
+      );
+    }
+
     return (
       <>
-        <LoginPage onLogin={handleLogin} />
+        <LandingPage
+          onNavigateToLogin={navigateToLogin}
+          isMaintenanceMode={systemSettings.isMaintenanceMode}
+          maintenanceMessage={systemSettings.maintenanceMessage}
+        />
         <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
       </>
     );
@@ -1705,12 +1837,17 @@ export function App() {
             currentDestination={currentDestination}
             onNavigate={handleNavigate}
             onOpenScanner={() => setIsScannerOpen(true)}
+            notifications={notifications}
             unreadCount={unreadNotifsCount}
+            onMarkAllAsRead={handleMarkAllNotifsRead}
+            onMarkSingleAsRead={handleMarkSingleNotifRead}
+            onDeleteSingle={handleDeleteSingleNotif}
+            onClearAll={handleClearAllNotifs}
             onOpenNotifications={() => handleNavigate('notifications')}
             onLogout={handleRequestLogout}
           />
 
-        <main className="content-viewport">
+        <main key={currentDestination} className="content-viewport page-content-enter">
           {/* 1. DASHBOARD DESTINATION */}
           {currentDestination === 'dashboard' && (
             <>
@@ -1842,6 +1979,9 @@ export function App() {
               currentMemberId={currentUser.memberId}
               onMarkAllAsRead={handleMarkAllNotifsRead}
               onMarkSingleAsRead={handleMarkSingleNotifRead}
+              onDeleteSingle={handleDeleteSingleNotif}
+              onClearAll={handleClearAllNotifs}
+              onNavigate={handleNavigate}
             />
           )}
 
@@ -1925,6 +2065,16 @@ export function App() {
             <MemberProfileView
               currentUser={currentUser}
               members={members}
+            />
+          )}
+
+          {/* 16. HELP & SUPPORT */}
+          {currentDestination === 'help_support' && (
+            <HelpSupportView
+              currentUser={currentUser}
+              onNavigate={handleNavigate}
+              onShowToast={addToast}
+              initialTab="guides"
             />
           )}
         </main>

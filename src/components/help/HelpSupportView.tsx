@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   HelpCircle,
   BookOpen,
   Headphones,
   FileText,
   Search,
-  ExternalLink,
   Mail,
   Phone,
   MapPin,
@@ -14,18 +13,15 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
-  Sparkles,
-  QrCode,
-  Repeat,
-  UserCheck
+  Sparkles
 } from 'lucide-react';
 import type { User } from '../../types';
-import { EXTERNAL_QUICK_LINKS } from '../common/QuickLinksWidget';
 
 interface HelpSupportViewProps {
   currentUser?: User;
   onNavigate: (dest: string) => void;
   onShowToast?: (type: 'success' | 'info' | 'warning' | 'error', title: string, message?: string) => void;
+  initialTab?: 'guides' | 'helpdesk' | 'faq';
 }
 
 interface UserGuideArticle {
@@ -127,10 +123,17 @@ const FAQS = [
 
 export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
   currentUser: _currentUser,
-  onNavigate,
-  onShowToast
+  onNavigate: _onNavigate,
+  onShowToast,
+  initialTab = 'guides'
 }) => {
-  const [activeTab, setActiveTab] = useState<'guides' | 'helpdesk' | 'faq' | 'shortcuts'>('guides');
+  const [activeTab, setActiveTab] = useState<'guides' | 'helpdesk' | 'faq' | 'shortcuts'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGuide, setSelectedGuide] = useState<UserGuideArticle | null>(USER_GUIDES[0]);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
@@ -227,15 +230,6 @@ export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
         >
           <FileText size={16} />
           <span>Frequently Asked Questions ({FAQS.length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('shortcuts')}
-          className={`tab-btn ${activeTab === 'shortcuts' ? 'active' : ''}`}
-          style={{ gap: '8px' }}
-        >
-          <ExternalLink size={16} />
-          <span>Quick Links Directory</span>
         </button>
       </div>
 
@@ -612,175 +606,6 @@ export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: QUICK LINKS DIRECTORY */}
-      {activeTab === 'shortcuts' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Internal Workflows */}
-          <div className="card" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>
-              Direct Internal Workflow Shortcuts
-            </h3>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              Quickly jump to primary library functions across departments:
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => onNavigate('circulation')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-main)',
-                  backgroundColor: 'var(--bg-subtle)',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#dcfce7', color: '#166534' }}>
-                  <Repeat size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>Circulation Desk Hub</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Issue loans, returns, and approvals</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('attendance')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-main)',
-                  backgroundColor: 'var(--bg-subtle)',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#e0e7ff', color: '#3730a3' }}>
-                  <QrCode size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>Attendance Monitoring</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Scan QR entry & exit logs</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('books')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-main)',
-                  backgroundColor: 'var(--bg-subtle)',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#fef3c7', color: '#92400e' }}>
-                  <BookOpen size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>Book Catalog & Inventory</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Lookup titles, ISBNs, shelf copies</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('members')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-main)',
-                  backgroundColor: 'var(--bg-subtle)',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#fce7f3', color: '#9d174d' }}>
-                  <UserCheck size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>Member Registration</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>Patron accounts & digital cards</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* External Portals Directory */}
-          <div className="card" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '6px' }}>
-              National & Regional Verified Library Portals
-            </h3>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              Authoritative external portals for reference and research assistance:
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-              {EXTERNAL_QUICK_LINKS.map((link) => {
-                const Icon = link.icon;
-                return (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      padding: '14px',
-                      backgroundColor: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-main)',
-                      borderRadius: 'var(--radius-md)',
-                      textDecoration: 'none',
-                      color: 'inherit'
-                    }}
-                    className="external-quick-link-card"
-                  >
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <div style={{ padding: '6px', borderRadius: '6px', backgroundColor: '#f1f5f9', color: '#475569' }}>
-                          <Icon size={16} />
-                        </div>
-                        <ExternalLink size={14} color="var(--text-muted)" />
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                        {link.title}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                        {link.description}
-                      </div>
-                    </div>
-                    <div style={{ marginTop: '12px' }}>
-                      <span className="badge badge-info" style={{ fontSize: '10.5px' }}>
-                        {link.badge}
-                      </span>
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
           </div>
         </div>
       )}

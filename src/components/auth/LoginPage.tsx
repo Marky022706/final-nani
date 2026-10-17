@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import type { User } from '../../types';
 import { api } from '../../services/api';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, HelpCircle, X, ArrowRight, ShieldCheck, Check, Wrench } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, HelpCircle, X, ArrowRight, ArrowLeft, ShieldCheck, Check, Wrench, Loader2 } from 'lucide-react';
 import { FloatingQrBackground } from './FloatingQrBackground';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
+  onBackToLanding?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -89,6 +90,46 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       {/* Floating QR codes drifting behind the login card, bouncing off the screen edges */}
       <FloatingQrBackground count={16} />
 
+      {/* Back to Landing Page Button */}
+      {onBackToLanding && (
+        <button
+          onClick={onBackToLanding}
+          aria-label="Back to Landing Page"
+          style={{
+            position: 'absolute',
+            top: '24px',
+            left: '24px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 18px',
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '12px',
+            color: 'rgba(255,255,255,0.85)',
+            fontSize: '13.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            zIndex: 10,
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.18)';
+            e.currentTarget.style.color = '#ffffff';
+            e.currentTarget.style.transform = 'translateX(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+            e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
+            e.currentTarget.style.transform = 'translateX(0)';
+          }}
+        >
+          <ArrowLeft size={16} />
+          Back to Home
+        </button>
+      )}
+
       <div
         style={{
           width: '100%',
@@ -98,9 +139,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
           padding: '40px 36px',
           position: 'relative',
+          overflow: 'hidden',
           zIndex: 1
         }}
       >
+        {/* Animated Indeterminate Progress Bar on Authentication */}
+        {isLoading && <div className="animate-login-progress" />}
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div
@@ -332,11 +376,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               fontSize: '14px',
               fontWeight: 600,
               justifyContent: 'center',
-              boxShadow: '0 4px 6px -1px rgba(6, 78, 59, 0.25)'
+              boxShadow: '0 4px 6px -1px rgba(6, 78, 59, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.9 : 1,
+              transition: 'all 0.2s ease-in-out'
             }}
           >
             {isLoading ? (
-              <span>Authenticating...</span>
+              <>
+                <Loader2 size={18} className="animate-spin-smooth" />
+                <span>Verifying credentials...</span>
+              </>
             ) : (
               <>
                 <span>Sign In to Account</span>

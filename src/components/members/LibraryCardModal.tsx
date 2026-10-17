@@ -97,7 +97,7 @@ export const LibraryCardModal: React.FC<LibraryCardModalProps> = ({
                   }}
                 >
                   <img
-                    src={member.photoUrl}
+                    src={member.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                     alt={member.fullName}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />

@@ -266,10 +266,13 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
                   value={status}
                   onChange={(e) => setStatus(e.target.value as AccountStatus)}
                 >
-                  <option value="active">Active (Can log in & borrow)</option>
-                  <option value="inactive">Inactive (Account locked)</option>
-                  <option value="suspended">Suspended (Disciplinary lock)</option>
+                  <option value="active">Active (Full access & borrowing)</option>
+                  <option value="inactive">Inactive (Automatically deactivates account)</option>
+                  <option value="suspended">Suspended (Disciplinary account hold)</option>
                 </select>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Setting to Inactive automatically deactivates login and borrowing access.
+                </div>
               </div>
             </div>
 
@@ -284,7 +287,7 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
                   onChange={(e) => setPhotoUrl(e.target.value)}
                 />
                 <img
-                  src={photoUrl}
+                  src={photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                   alt="Preview"
                   style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-main)', flexShrink: 0 }}
                   onError={(e) => {

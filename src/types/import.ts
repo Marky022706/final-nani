@@ -1,21 +1,40 @@
 export type ImportRowStatus = 'valid' | 'invalid' | 'duplicate_file' | 'duplicate_db';
 
 export interface RawImportRow {
-  isbn?: string;
   title?: string;
+  category?: string;
+  subtitle?: string;
   author?: string;
+  publisher?: string;
+  publicationYear?: string | number;
+  classification?: string;
+  format?: string;
+  accessionNumber?: string;
+  availability?: string;
+  description?: string;
+  numberOfCopies?: string | number;
+  isbn?: string;
   quantity?: string | number;
   [key: string]: any;
 }
 
 export interface ValidatedImportRow {
   rowNumber: number;
-  isbn: string;
-  normalizedIsbn: string;
   title: string;
+  category?: string;
+  subtitle?: string;
   author: string;
+  publisher?: string;
+  publicationYear?: number;
+  classification?: string;
+  format: string;
+  accessionNumber: string;
+  availability: string;
+  description?: string;
   quantity: number | null;
   rawQuantity: string;
+  isbn: string;
+  normalizedIsbn: string;
   status: ImportRowStatus;
   errors: string[];
   duplicateWithRow?: number | null;
@@ -23,7 +42,8 @@ export interface ValidatedImportRow {
     id: string | number;
     title: string;
     author?: string;
-    isbn: string;
+    isbn?: string;
+    accessionNumber?: string;
   } | null;
 }
 

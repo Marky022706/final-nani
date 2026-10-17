@@ -610,7 +610,7 @@ export const BookList: React.FC<BookListProps> = ({
                     </div>
                   )}
 
-                  {book.coverImage ? (
+                  {book.coverImage && book.coverImage.trim() !== '' ? (
                     <img
                       src={book.coverImage}
                       alt={book.title}
