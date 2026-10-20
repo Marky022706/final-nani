@@ -6,6 +6,7 @@ import type {
   UserRole
 } from '../../types';
 import { Search } from 'lucide-react';
+import { NotificationsHistorySkeleton } from '../common/skeleton';
 
 interface HistoryViewProps {
   transactions: CirculationTransaction[];
@@ -13,6 +14,7 @@ interface HistoryViewProps {
   services: ServiceRecord[];
   userRole: UserRole;
   currentMemberId?: string;
+  isLoading?: boolean;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
@@ -20,10 +22,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   attendance,
   services,
   userRole,
-  currentMemberId
+  currentMemberId,
+  isLoading = false
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'circulation' | 'attendance' | 'services'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  if (isLoading) {
+    return <NotificationsHistorySkeleton />;
+  }
 
   interface TimelineItem {
     id: string;

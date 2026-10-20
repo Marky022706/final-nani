@@ -7,12 +7,14 @@ import { BookSelectionToolbar } from './BookSelectionToolbar';
 import { ArchiveBookDialog } from './ArchiveBookDialog';
 import { DeleteBookDialog } from './DeleteBookDialog';
 import { BulkImportBooksModal } from './BulkImportBooksModal';
+import { BookCover } from './BookCover';
 import { useBreadcrumbs } from '../../context/BreadcrumbContext';
+import { BookCatalogSkeleton } from '../common/skeleton';
 import {
   Search,
   Plus,
   Filter,
-  Layers,
+  BookOpen,
   LayoutGrid,
   List,
   Pencil,
@@ -25,6 +27,7 @@ import {
 interface BookListProps {
   books: Book[];
   userRole: UserRole;
+  isLoading?: boolean;
   onBookAdded: (newBook: Book) => void;
   onAddCopy: (bookId: string, copy: PhysicalCopy) => void;
   onReserveBook?: (book: Book) => void;
@@ -42,6 +45,7 @@ interface BookListProps {
 export const BookList: React.FC<BookListProps> = ({
   books,
   userRole,
+  isLoading = false,
   onBookAdded,
   onAddCopy,
   onReserveBook,
@@ -141,6 +145,10 @@ export const BookList: React.FC<BookListProps> = ({
     setSubTrail,
     clearSubTrail
   ]);
+
+  if (isLoading) {
+    return <BookCatalogSkeleton />;
+  }
 
   // Filtering
   const filteredBooks = books.filter((book) => {
@@ -528,7 +536,7 @@ export const BookList: React.FC<BookListProps> = ({
       {/* Books Content */}
       {filteredBooks.length === 0 ? (
         <div className="card" style={{ padding: '48px', textAlign: 'center' }}>
-          <Layers size={40} color="var(--text-subtle)" style={{ margin: '0 auto 12px' }} />
+          <BookOpen size={40} color="var(--text-subtle)" style={{ margin: '0 auto 12px' }} />
           <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>
             {archiveFilter === 'archived' ? 'No Archived Books Found' : 'No books found'}
           </h3>
@@ -610,17 +618,12 @@ export const BookList: React.FC<BookListProps> = ({
                     </div>
                   )}
 
-                  {book.coverImage && book.coverImage.trim() !== '' ? (
-                    <img
-                      src={book.coverImage}
-                      alt={book.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                      <Layers size={36} color="var(--text-subtle)" />
-                    </div>
-                  )}
+                  <BookCover
+                    coverImage={book.coverImage}
+                    title={book.title}
+                    author={book.author}
+                    size="md"
+                  />
                   {book.isArchived && (
                     <span
                       className="badge badge-warning"
@@ -727,14 +730,14 @@ export const BookList: React.FC<BookListProps> = ({
                         </button>
                       </div>
                     ) : (
-                      <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
+                      <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleOpenDetail(book);
                           }}
                           className="btn btn-secondary btn-sm"
-                          style={{ padding: '4px 7px', fontSize: '11.5px' }}
+                          style={{ padding: '4px 8px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center' }}
                         >
                           Details
                         </button>
@@ -743,8 +746,16 @@ export const BookList: React.FC<BookListProps> = ({
                             e.stopPropagation();
                             handleStartEdit(book);
                           }}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '4px 6px', color: 'var(--brand-forest)' }}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            padding: '4px 6px',
+                            color: 'var(--brand-forest)',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid var(--border-color, #cbd5e1)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
                           title="Edit Book Record"
                         >
                           <Pencil size={13} />
@@ -754,8 +765,16 @@ export const BookList: React.FC<BookListProps> = ({
                             e.stopPropagation();
                             handleSingleArchiveOrRestore(book);
                           }}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '4px 6px', color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)' }}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            padding: '4px 6px',
+                            color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid var(--border-color, #cbd5e1)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
                           title={book.isArchived ? 'Restore book to catalog' : 'Archive book'}
                         >
                           {book.isArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
@@ -765,12 +784,17 @@ export const BookList: React.FC<BookListProps> = ({
                             e.stopPropagation();
                             handleSingleDelete(book);
                           }}
-                          className="btn btn-ghost btn-sm"
+                          className="btn btn-secondary btn-sm"
                           style={{
                             padding: '4px 6px',
-                            color: book.isArchived ? 'var(--danger)' : 'var(--text-subtle)',
+                            color: book.isArchived ? '#dc2626' : '#94a3b8',
+                            backgroundColor: book.isArchived ? '#fef2f2' : '#f8fafc',
+                            border: book.isArchived ? '1px solid #fecaca' : '1px solid var(--border-color, #e2e8f0)',
                             cursor: book.isArchived ? 'pointer' : 'not-allowed',
-                            opacity: book.isArchived ? 1 : 0.4
+                            opacity: book.isArchived ? 1 : 0.5,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                           title={book.isArchived ? 'Delete Book' : 'Active books must be archived first before deletion'}
                         >
@@ -801,7 +825,7 @@ export const BookList: React.FC<BookListProps> = ({
                     />
                   </th>
                 )}
-                <th>Title / Author</th>
+                <th>Book Title & Author</th>
                 <th>Category</th>
                 <th>Publisher & Year</th>
                 <th>ISBN</th>
@@ -840,11 +864,34 @@ export const BookList: React.FC<BookListProps> = ({
                       </td>
                     )}
                     <td>
-                      <div style={{ fontWeight: 600 }}>{book.title}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{book.author}</div>
-                      {book.isArchived && (
-                        <span className="badge badge-warning" style={{ fontSize: '10px', marginTop: '2px' }}>ARCHIVED</span>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: '42px',
+                            height: '58px',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            backgroundColor: '#0f2d1f',
+                            border: '1px solid var(--border-color, #cbd5e1)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                          }}
+                        >
+                          <BookCover
+                            coverImage={book.coverImage}
+                            title={book.title}
+                            author={book.author}
+                            size="sm"
+                          />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{book.title}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>by {book.author}</div>
+                          {book.isArchived && (
+                            <span className="badge badge-warning" style={{ fontSize: '10px', marginTop: '2px' }}>ARCHIVED</span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <span className="badge badge-neutral" style={{ fontSize: '11px' }}>{book.category}</span>
@@ -895,37 +942,58 @@ export const BookList: React.FC<BookListProps> = ({
                           View
                         </button>
                         {userRole !== 'member' && (
-                          <>
+                          <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
                             <button
                               onClick={() => handleStartEdit(book)}
-                              className="btn btn-ghost btn-sm"
-                              style={{ padding: '4px 6px', color: 'var(--brand-forest)' }}
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                padding: '4px 6px',
+                                color: 'var(--brand-forest)',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid var(--border-color, #cbd5e1)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
                               title="Edit Book"
                             >
                               <Pencil size={14} />
                             </button>
                             <button
                               onClick={() => handleSingleArchiveOrRestore(book)}
-                              className="btn btn-ghost btn-sm"
-                              style={{ padding: '4px 6px', color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)' }}
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                padding: '4px 6px',
+                                color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid var(--border-color, #cbd5e1)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
                               title={book.isArchived ? 'Restore book' : 'Archive book'}
                             >
                               {book.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                             </button>
                             <button
                               onClick={() => handleSingleDelete(book)}
-                              className="btn btn-ghost btn-sm"
+                              className="btn btn-secondary btn-sm"
                               style={{
                                 padding: '4px 6px',
-                                color: book.isArchived ? 'var(--danger)' : 'var(--text-subtle)',
+                                color: book.isArchived ? '#dc2626' : '#94a3b8',
+                                backgroundColor: book.isArchived ? '#fef2f2' : '#f8fafc',
+                                border: book.isArchived ? '1px solid #fecaca' : '1px solid var(--border-color, #e2e8f0)',
                                 cursor: book.isArchived ? 'pointer' : 'not-allowed',
-                                opacity: book.isArchived ? 1 : 0.4
+                                opacity: book.isArchived ? 1 : 0.5,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                               }}
                               title={book.isArchived ? 'Delete Book' : 'Active books must be archived first before deletion'}
                             >
                               <Trash2 size={14} />
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
                     </td>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Library, Search, GraduationCap, Users2, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Library, Search, GraduationCap, Users2, ShieldCheck, ArrowRight } from 'lucide-react';
 
 interface ServicesSectionProps {
   onNavigateToLogin?: () => void;
@@ -10,13 +10,13 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
     {
       id: 'reading-learning',
       icon: BookOpen,
-      title: 'Reading & Learning Space',
-      badge: 'On-Site Service',
+      title: 'Reading & Study Space',
+      badge: 'On-Site Facility',
       description:
         'A quiet, comfortable environment dedicated to reading, textbook review, and independent self-study for learners of all ages.',
-      actionText: 'Visit Reading Area',
+      actionText: 'Visitor Guidelines',
       actionType: 'scroll',
-      actionTarget: 'contact',
+      actionTarget: 'visit',
     },
     {
       id: 'book-collection',
@@ -27,18 +27,18 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
         'Access printed reference books, general non-fiction, literature, Filipiniana materials, children’s storybooks, and encyclopedias.',
       actionText: 'Browse In Person',
       actionType: 'scroll',
-      actionTarget: 'contact',
+      actionTarget: 'visit',
     },
     {
       id: 'research-info',
       icon: Search,
-      title: 'Research & Information',
+      title: 'Research & Learning Support',
       badge: 'Staff Assisted',
       description:
         'Guidance from library personnel in locating reference materials, government records, and educational resources for academic projects.',
-      actionText: 'Ask Librarian',
+      actionText: 'Contact Librarian',
       actionType: 'scroll',
-      actionTarget: 'contact',
+      actionTarget: 'visit',
     },
     {
       id: 'student-support',
@@ -47,7 +47,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
       badge: 'Youth & Academia',
       description:
         'Supplementary learning resources and a safe study haven designed to support primary, junior, and senior high school students in Balingasag.',
-      actionText: 'Student Guidelines',
+      actionText: 'About Our Support',
       actionType: 'scroll',
       actionTarget: 'about',
     },
@@ -65,8 +65,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
     {
       id: 'system-access',
       icon: ShieldCheck,
-      title: 'Library System Access',
-      badge: 'Staff & Admin Portal',
+      title: 'Library System Portal',
+      badge: 'Staff & Admin Only',
       description:
         'Modernized internal management portal enabling authorized library staff to catalog books, log attendance, and manage book circulation.',
       actionText: 'Sign In to Portal',
@@ -95,7 +95,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
       style={{
         padding: '72px 24px',
         backgroundColor: '#F5F1E8',
-        borderBottom: '1px solid #E8F3E8'
+        borderBottom: '1px solid #E8F3E8',
       }}
     >
       <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
@@ -108,10 +108,10 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
               color: '#228B22',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              marginBottom: '8px'
+              marginBottom: '8px',
             }}
           >
-            Public Services & Facilities
+            What We Offer
           </div>
           <h2
             style={{
@@ -120,74 +120,63 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
               color: '#174D32',
               letterSpacing: '-0.02em',
               lineHeight: 1.25,
-              marginBottom: '14px'
+              marginBottom: '14px',
             }}
           >
-            Serving the Readers of Balingasag
+            Library Services
           </h2>
           <p style={{ fontSize: '16px', lineHeight: 1.6, color: '#667166' }}>
-            Discover the verified services, collections, and educational facilities available to all municipal residents and visitors.
+            Providing essential educational resources, quiet study spaces, and research assistance to the Balingasag community.
           </p>
         </div>
 
-        {/* Services 3x2 Grid */}
+        {/* 6-Card Services Grid */}
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
             gap: '24px',
-            marginBottom: '40px'
           }}
         >
-          {services.map((svc) => {
-            const Icon = svc.icon;
-            const isSystemPortal = svc.id === 'system-access';
-
+          {services.map((service) => {
+            const Icon = service.icon;
             return (
               <div
-                key={svc.id}
+                key={service.id}
                 style={{
                   backgroundColor: '#FFFFFF',
                   borderRadius: '16px',
-                  border: isSystemPortal ? '2px solid #228B22' : '1px solid #E8F3E8',
-                  padding: '28px 26px',
+                  border: '1px solid #E8F3E8',
+                  padding: '28px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  boxShadow: '0 4px 16px -2px rgba(23, 77, 50, 0.05)',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  position: 'relative'
+                  boxShadow: '0 4px 14px rgba(23, 77, 50, 0.05)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
                 }}
-                className="service-card"
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 12px 24px -4px rgba(23, 77, 50, 0.12)';
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = '0 12px 28px rgba(23, 77, 50, 0.12)';
+                  e.currentTarget.style.borderColor = '#228B22';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 16px -2px rgba(23, 77, 50, 0.05)';
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(23, 77, 50, 0.05)';
+                  e.currentTarget.style.borderColor = '#E8F3E8';
                 }}
               >
                 <div>
-                  {/* Top Icon & Badge Row */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '18px'
-                    }}
-                  >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
                     <div
                       style={{
-                        width: '44px',
-                        height: '44px',
+                        width: '46px',
+                        height: '46px',
                         borderRadius: '12px',
                         backgroundColor: '#E8F3E8',
                         color: '#174D32',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
                       }}
                     >
                       <Icon size={22} />
@@ -196,92 +185,66 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onNavigateToLo
                       style={{
                         fontSize: '11px',
                         fontWeight: 700,
+                        backgroundColor: '#F5F1E8',
+                        color: '#174D32',
                         padding: '4px 10px',
                         borderRadius: '999px',
-                        backgroundColor: isSystemPortal ? '#DCFCE7' : '#F5F1E8',
-                        color: isSystemPortal ? '#14532D' : '#667166'
+                        letterSpacing: '0.03em',
                       }}
                     >
-                      {svc.badge}
+                      {service.badge}
                     </span>
                   </div>
 
-                  {/* Title & Description */}
                   <h3
                     style={{
                       fontSize: '18px',
                       fontWeight: 700,
                       color: '#174D32',
-                      marginBottom: '10px'
+                      marginBottom: '10px',
+                      lineHeight: 1.3,
                     }}
                   >
-                    {svc.title}
+                    {service.title}
                   </h3>
                   <p
                     style={{
-                      fontSize: '14px',
+                      fontSize: '14.5px',
+                      color: '#667166',
                       lineHeight: 1.6,
-                      color: '#202820',
-                      marginBottom: '20px'
+                      marginBottom: '20px',
                     }}
                   >
-                    {svc.description}
+                    {service.description}
                   </p>
                 </div>
 
-                {/* Card Action Link */}
-                <div style={{ paddingTop: '16px', borderTop: '1px solid #F5F1E8' }}>
+                <div>
                   <button
-                    onClick={(e) => handleAction(e, svc)}
-                    aria-label={`${svc.actionText} for ${svc.title}`}
+                    onClick={(e) => handleAction(e, service)}
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#228B22',
+                      padding: 0,
                       fontSize: '13.5px',
                       fontWeight: 700,
+                      color: '#228B22',
                       cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
-                      padding: 0,
-                      transition: 'gap 0.15s ease'
+                      transition: 'color 0.15s ease',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#174D32';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = '#228B22';
-                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#174D32')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#228B22')}
                   >
-                    <span>{svc.actionText}</span>
-                    <ArrowRight size={15} />
+                    <span>{service.actionText}</span>
+                    <ArrowRight size={14} />
                   </button>
                 </div>
               </div>
             );
           })}
-        </div>
-
-        {/* Factual Disclaimer Notice */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E8F3E8',
-            padding: '16px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            color: '#667166',
-            fontSize: '12.5px',
-            lineHeight: 1.5
-          }}
-        >
-          <CheckCircle2 size={18} style={{ color: '#228B22', flexShrink: 0 }} />
-          <span>
-            <strong>Service Accuracy Notice:</strong> Physical services and reading access are provided on-site at the Municipal Hall Compound, Poblacion. Digital cataloging and circulation are managed internally by designated staff.
-          </span>
         </div>
       </div>
     </section>

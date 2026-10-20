@@ -1,24 +1,51 @@
 import React from 'react';
-import { ArrowDown, LogIn, BookOpen, Compass, Award } from 'lucide-react';
+import { ArrowDown, Calendar, BookOpen, MapPin, Clock, ShieldCheck } from 'lucide-react';
 
-interface HeroSectionProps {
-  onNavigateToLogin: () => void;
-}
-
-export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) => {
-  const scrollToServices = (e: React.MouseEvent) => {
+export const HeroSection: React.FC = () => {
+  const scrollToSection = (e: React.MouseEvent, targetId: string) => {
     e.preventDefault();
-    const servicesEl = document.getElementById('services');
-    if (servicesEl) {
+    const el = document.getElementById(targetId);
+    if (el) {
       const navOffset = 76;
-      const elementPosition = servicesEl.getBoundingClientRect().top;
+      const elementPosition = el.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - navOffset;
       window.scrollTo({
         top: offsetPosition,
-        behavior: 'smooth'
+        behavior: 'smooth',
       });
     }
   };
+
+  const quickDetails = [
+    {
+      icon: MapPin,
+      title: 'Location',
+      value: 'Municipal Hall Compound',
+      subtext: 'Poblacion, Balingasag, Misamis Oriental',
+      target: 'visit',
+    },
+    {
+      icon: Clock,
+      title: 'Opening Hours',
+      value: 'Mon – Fri: 8:00 AM – 5:00 PM',
+      subtext: 'Closed weekends and official holidays',
+      target: 'visit-hours',
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Free Admission',
+      value: 'Open to All Readers',
+      subtext: 'Students, researchers, educators, and citizens',
+      target: 'about',
+    },
+    {
+      icon: BookOpen,
+      title: 'Facilities & Resources',
+      value: 'Quiet Study & Books',
+      subtext: 'Reference volumes, storybooks, and study desks',
+      target: 'services',
+    },
+  ];
 
   return (
     <section
@@ -26,36 +53,88 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
       aria-label="Welcome to Balingasag Public Library"
       style={{
         position: 'relative',
-        backgroundColor: '#F5F1E8',
-        backgroundImage: 'linear-gradient(180deg, #F5F1E8 0%, #FFFFFF 100%)',
-        padding: '56px 24px 72px',
-        overflow: 'hidden'
+        backgroundColor: 'transparent',
+        padding: 'clamp(72px, 8.5vh, 108px) 24px clamp(28px, 3.5vh, 44px)',
+        overflow: 'hidden',
+        minHeight: 'calc(100vh - 76px)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        flex: 1,
+        gap: 'clamp(28px, 3.5vh, 44px)',
+        boxSizing: 'border-box',
       }}
     >
+      {/* Blurred Photographic Background of Balingasag Public Library */}
+      <div
+        id="hero-background-image"
+        style={{
+          position: 'absolute',
+          top: '-20px',
+          left: '-20px',
+          right: '-20px',
+          bottom: '-20px',
+          backgroundImage: 'url(/balingasag-library-bg.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          filter: 'blur(5px)',
+          transform: 'scale(1.04)',
+          opacity: 0.95,
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Atmospheric Left-Weighted Gradient Overlay for Crystal Clear Text Contrast */}
       <div
         style={{
-          maxWidth: '1240px',
-          margin: '0 auto',
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: '48px',
-          alignItems: 'center'
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(90deg, rgba(7, 30, 18, 0.90) 0%, rgba(11, 45, 27, 0.78) 50%, rgba(15, 61, 38, 0.50) 100%)',
+          zIndex: 1,
         }}
-        className="hero-grid"
+        aria-hidden="true"
+      />
+
+      {/* Main Container */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 3,
+          maxWidth: '1240px',
+          width: '100%',
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+        }}
       >
-        {/* Left Content Column */}
-        <div>
+        {/* Left-Aligned Hero Message Content (NO WHITE CARD BACKGROUND) */}
+        <div
+          style={{
+            maxWidth: '700px',
+            textAlign: 'left',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            paddingTop: 'clamp(28px, 4.5vh, 56px)',
+          }}
+        >
           {/* Institutional Identification Badge */}
           <div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#E8F3E8',
-              border: '1px solid rgba(34, 139, 34, 0.25)',
+              backgroundColor: 'rgba(255, 255, 255, 0.16)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255, 255, 255, 0.32)',
               borderRadius: '999px',
-              padding: '6px 14px',
-              marginBottom: '20px'
+              padding: '7px 16px',
+              marginBottom: '20px',
             }}
           >
             <span
@@ -63,15 +142,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: '#228B22'
+                backgroundColor: '#4ADE80',
+                boxShadow: '0 0 8px #4ADE80',
               }}
             />
             <span
               style={{
-                fontSize: '12.5px',
+                fontSize: '13px',
                 fontWeight: 700,
-                color: '#174D32',
-                letterSpacing: '0.02em'
+                color: '#A7F3D0',
+                letterSpacing: '0.02em',
               }}
             >
               Municipality of Balingasag • Misamis Oriental
@@ -81,12 +161,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
           {/* Headline */}
           <h1
             style={{
-              fontSize: '44px',
+              fontSize: '48px',
               lineHeight: 1.15,
               fontWeight: 800,
-              color: '#174D32',
+              color: '#FFFFFF',
               letterSpacing: '-0.025em',
-              marginBottom: '18px'
+              marginBottom: '18px',
+              textShadow: '0 2px 14px rgba(0, 0, 0, 0.5)',
             }}
             className="hero-headline"
           >
@@ -96,11 +177,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
           {/* Supporting Text */}
           <p
             style={{
-              fontSize: '17px',
-              lineHeight: 1.6,
-              color: '#202820',
+              fontSize: '17.5px',
+              lineHeight: 1.65,
+              color: 'rgba(255, 255, 255, 0.92)',
               marginBottom: '32px',
-              maxWidth: '560px'
+              maxWidth: '620px',
+              textShadow: '0 1px 6px rgba(0, 0, 0, 0.45)',
             }}
           >
             Discover a welcoming community space for reading, knowledge, research, and lifelong learning in Balingasag, Misamis Oriental.
@@ -113,31 +195,33 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
               alignItems: 'center',
               gap: '14px',
               flexWrap: 'wrap',
-              marginBottom: '40px'
+              marginBottom: '36px',
             }}
           >
             {/* Primary CTA */}
-            <button
-              onClick={scrollToServices}
+            <a
+              href="#services"
+              onClick={(e) => scrollToSection(e, 'services')}
               aria-label="Explore Library Services"
               style={{
                 backgroundColor: '#228B22',
                 color: '#FFFFFF',
                 border: 'none',
-                padding: '13px 26px',
+                padding: '13px 28px',
                 borderRadius: '999px',
-                fontSize: '14.5px',
+                fontSize: '15px',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                boxShadow: '0 4px 14px rgba(34, 139, 34, 0.28)',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
                 transition: 'all 0.15s ease',
-                minHeight: '44px'
+                minHeight: '46px',
+                textDecoration: 'none',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#174D32';
+                e.currentTarget.style.backgroundColor = '#166534';
                 e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
@@ -145,167 +229,161 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToLogin }) =
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <span>Explore Our Library</span>
+              <span>Explore Library Services</span>
               <ArrowDown size={16} />
-            </button>
+            </a>
 
             {/* Secondary CTA */}
-            <button
-              onClick={onNavigateToLogin}
-              aria-label="Sign In to Staff and System Portal"
+            <a
+              href="#visit"
+              onClick={(e) => scrollToSection(e, 'visit')}
+              aria-label="Plan Your Visit to Balingasag Public Library"
               style={{
-                backgroundColor: '#FFFFFF',
-                color: '#174D32',
-                border: '1.5px solid #174D32',
-                padding: '12px 24px',
+                backgroundColor: 'rgba(255, 255, 255, 0.14)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                color: '#FFFFFF',
+                border: '1.5px solid rgba(255, 255, 255, 0.65)',
+                padding: '12px 26px',
                 borderRadius: '999px',
-                fontSize: '14.5px',
+                fontSize: '15px',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
                 transition: 'all 0.15s ease',
-                minHeight: '44px'
+                minHeight: '46px',
+                textDecoration: 'none',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#E8F3E8';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)';
                 e.currentTarget.style.transform = 'translateY(-1px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.14)';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <LogIn size={16} />
-              <span>Sign In</span>
-            </button>
-          </div>
-
-          {/* Quick Institutional Highlights */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '24px',
-              flexWrap: 'wrap',
-              paddingTop: '20px',
-              borderTop: '1px solid #E8F3E8'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Compass size={18} style={{ color: '#228B22' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#667166' }}>
-                Municipal Hall Compound
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BookOpen size={18} style={{ color: '#228B22' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#667166' }}>
-                Public Reading & Study Space
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Award size={18} style={{ color: '#228B22' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#667166' }}>
-                National Library Affiliate
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Visual Image Card Column */}
-        <div style={{ position: 'relative' }}>
-          <div
-            style={{
-              borderRadius: '20px',
-              overflow: 'hidden',
-              boxShadow: '0 20px 40px -10px rgba(23, 77, 50, 0.22)',
-              border: '4px solid #FFFFFF',
-              position: 'relative',
-              backgroundColor: '#174D32',
-              maxHeight: '440px'
-            }}
-          >
-            <img
-              src="/balingasag-library-bg.jpg"
-              alt="Balingasag Municipal Library reading area and book collections"
-              style={{
-                width: '100%',
-                height: '440px',
-                objectFit: 'cover',
-                display: 'block'
-              }}
-              onError={(e) => {
-                // Fallback to library-books-corner.png if banner unavailable
-                (e.currentTarget as HTMLImageElement).src = '/library-books-corner.png';
-              }}
-            />
-
-            {/* Subtle Gradient Overlay */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'linear-gradient(180deg, transparent 60%, rgba(23, 77, 50, 0.85) 100%)'
-              }}
-            />
-
-            {/* Image Caption Tag */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '16px',
-                left: '16px',
-                right: '16px',
-                color: '#FFFFFF',
-                fontSize: '12.5px',
-                fontWeight: 600,
-                textShadow: '0 1px 3px rgba(0,0,0,0.6)'
-              }}
-            >
-              Balingasag Municipal Library • Learning space serving the youth and citizens of Balingasag
-            </div>
-          </div>
-
-          {/* Decorative Corner Foliage / Seal Badge */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '-16px',
-              right: '-16px',
-              backgroundColor: '#FFFFFF',
-              borderRadius: '14px',
-              padding: '8px 14px',
-              boxShadow: '0 8px 18px rgba(0,0,0,0.12)',
-              border: '1px solid #E8F3E8',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <div
-              style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor: '#228B22'
-              }}
-            />
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#174D32' }}>
-              Open to the Public
-            </span>
+              <Calendar size={16} />
+              <span>Plan Your Visit</span>
+            </a>
           </div>
         </div>
       </div>
 
+      {/* 4 Quick Visitor Information Cards directly on the blurred background */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 3,
+          maxWidth: '1240px',
+          width: '100%',
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '16px',
+        }}
+      >
+        {quickDetails.map((item, index) => {
+          const Icon = item.icon;
+          return (
+            <div
+              key={index}
+              onClick={(e) => scrollToSection(e, item.target)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  scrollToSection(e as unknown as React.MouseEvent, item.target);
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '14px',
+                padding: '16px 18px',
+                backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderRadius: '16px',
+                border: '1.5px solid rgba(255, 255, 255, 0.85)',
+                boxShadow: '0 12px 24px -6px rgba(0, 0, 0, 0.22)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                e.currentTarget.style.borderColor = '#228B22';
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 16px 32px -6px rgba(0, 0, 0, 0.32)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.94)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.85)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 12px 24px -6px rgba(0, 0, 0, 0.22)';
+              }}
+            >
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  backgroundColor: '#E8F3E8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#174D32',
+                  flexShrink: 0,
+                }}
+              >
+                <Icon size={20} />
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: '#228B22',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '2px',
+                  }}
+                >
+                  {item.title}
+                </div>
+                <div
+                  style={{
+                    fontSize: '14.5px',
+                    fontWeight: 700,
+                    color: '#174D32',
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {item.value}
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#667166',
+                    marginTop: '3px',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item.subtext}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <style>{`
         @media (min-width: 900px) {
-          .hero-grid {
-            grid-template-columns: 1.1fr 0.9fr !important;
-          }
           .hero-headline {
-            fontSize: 50px !important;
+            font-size: 52px !important;
           }
         }
       `}</style>

@@ -1,16 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { QrCode } from 'lucide-react';
 
-interface Sprite {
-  el: HTMLDivElement | null;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  rotation: number;
-  rotationSpeed: number;
-}
 
 interface SpriteConfig {
   size: number;
@@ -34,12 +24,19 @@ interface FloatingQrBackgroundProps {
  */
 export const FloatingQrBackground: React.FC<FloatingQrBackgroundProps> = ({ count = 16 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const spritesRef = useRef<Sprite[]>([]);
+  const domRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const spritesRef = useRef<Array<{
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    rotation: number;
+    rotationSpeed: number;
+  }>>([]);
   const frameRef = useRef<number | null>(null);
 
   // Fixed per-icon config, chosen once so it stays stable across re-renders
-  // (and so the rendered icon size always matches the size used for the
-  // bounce/boundary math - randomizing per-render would desync them).
   const [configs] = useState<SpriteConfig[]>(() =>
     Array.from({ length: count }, () => ({
       size: 28 + Math.random() * 40,
@@ -51,56 +48,42 @@ export const FloatingQrBackground: React.FC<FloatingQrBackgroundProps> = ({ coun
   );
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const getBounds = () => {
+      const container = containerRef.current;
+      const w = container?.clientWidth || window.innerWidth || 1400;
+      const h = container?.clientHeight || window.innerHeight || 900;
+      return { width: Math.max(w, 320), height: Math.max(h, 320) };
+    };
 
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const bounds = () => ({
-      width: container.clientWidth,
-      height: container.clientHeight
-    });
-
-    // Initialize each sprite with a random position, velocity and spin.
-    const { width, height } = bounds();
-    spritesRef.current = configs.map(({ size }, i) => {
-      const speed = 1.4 + Math.random() * 1.8;
+    const { width, height } = getBounds();
+    spritesRef.current = configs.map(({ size }) => {
+      const speed = 1.0 + Math.random() * 1.5;
       const angle = Math.random() * Math.PI * 2;
       return {
-        el: spritesRef.current[i]?.el ?? null,
         size,
-        x: Math.random() * Math.max(width - size, 1),
-        y: Math.random() * Math.max(height - size, 1),
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
+        x: Math.random() * Math.max(width - size, 20),
+        y: Math.random() * Math.max(height - size, 20),
+        vx: (Math.cos(angle) || 0.7) * speed,
+        vy: (Math.sin(angle) || 0.7) * speed,
         rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 1.6
+        rotationSpeed: (Math.random() - 0.5) * 1.2 || 0.5
       };
     });
 
-    const applyTransform = (sprite: Sprite) => {
-      if (!sprite.el) return;
-      sprite.el.style.transform = `translate(${sprite.x}px, ${sprite.y}px) rotate(${sprite.rotation}deg)`;
-    };
-
-    if (prefersReducedMotion) {
-      // Respect reduced-motion preference: place icons statically, no drift/spin.
-      // The CSS pulse/scan animations are separately skipped via a media query.
-      spritesRef.current.forEach(applyTransform);
-      return;
-    }
-
     const tick = () => {
-      const { width, height } = bounds();
-      for (const sprite of spritesRef.current) {
+      const { width, height } = getBounds();
+      for (let i = 0; i < spritesRef.current.length; i++) {
+        const sprite = spritesRef.current[i];
+        const el = domRefs.current[i];
+        if (!sprite || !el) continue;
+
         sprite.x += sprite.vx;
         sprite.y += sprite.vy;
         sprite.rotation += sprite.rotationSpeed;
 
-        const maxX = Math.max(width - sprite.size, 0);
-        const maxY = Math.max(height - sprite.size, 0);
+        const maxX = Math.max(width - sprite.size, 10);
+        const maxY = Math.max(height - sprite.size, 10);
 
-        // Bounce back off every edge, DVD-logo style.
         if (sprite.x <= 0) {
           sprite.x = 0;
           sprite.vx = Math.abs(sprite.vx);
@@ -117,7 +100,7 @@ export const FloatingQrBackground: React.FC<FloatingQrBackgroundProps> = ({ coun
           sprite.vy = -Math.abs(sprite.vy);
         }
 
-        applyTransform(sprite);
+        el.style.transform = `translate3d(${sprite.x}px, ${sprite.y}px, 0) rotate(${sprite.rotation}deg)`;
       }
       frameRef.current = requestAnimationFrame(tick);
     };
@@ -147,21 +130,7 @@ export const FloatingQrBackground: React.FC<FloatingQrBackgroundProps> = ({ coun
         <div
           key={i}
           ref={(el) => {
-            const existing = spritesRef.current[i];
-            if (existing) {
-              existing.el = el;
-            } else {
-              spritesRef.current[i] = {
-                el,
-                x: 0,
-                y: 0,
-                vx: 0,
-                vy: 0,
-                size: config.size,
-                rotation: 0,
-                rotationSpeed: 0
-              };
-            }
+            domRefs.current[i] = el;
           }}
           style={{
             position: 'absolute',

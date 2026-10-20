@@ -6,6 +6,7 @@ import { MemberCreatedModal } from './MemberCreatedModal';
 import { EditMemberModal } from './EditMemberModal';
 import { ViewQrModal } from './ViewQrModal';
 import { useBreadcrumbs } from '../../context/BreadcrumbContext';
+import { MemberListSkeleton } from '../common/skeleton';
 import {
   Search,
   UserPlus,
@@ -21,6 +22,7 @@ import {
 interface MemberListProps {
   members: Member[];
   userRole: UserRole;
+  isLoading?: boolean;
   onMemberCreated: (member: Member, user: User, tempPass?: string) => void;
   onMemberUpdated: (member: Member) => void;
   onMemberDeleted: (memberId: string) => void;
@@ -31,6 +33,7 @@ interface MemberListProps {
 export const MemberList: React.FC<MemberListProps> = ({
   members,
   userRole,
+  isLoading = false,
   onMemberCreated,
   onMemberUpdated,
   onMemberDeleted,
@@ -76,6 +79,10 @@ export const MemberList: React.FC<MemberListProps> = ({
       clearSubTrail();
     };
   }, [selectedMember, isCardModalOpen, isCreateModalOpen, statusFilter, typeFilter, setSubTrail, clearSubTrail]);
+
+  if (isLoading) {
+    return <MemberListSkeleton />;
+  }
 
   // Filter logic: Search by Member ID, Name, Email, Contact Number
   // Archived members live on the dedicated Archive page, not here.

@@ -28,6 +28,7 @@ import { LandingPage } from './components/public/LandingPage';
 import { LogoutModal } from './components/auth/LogoutModal';
 import { authService } from './services/authService';
 import { BreadcrumbProvider } from './context/BreadcrumbContext';
+import { useActionLoading } from './context/ActionLoadingContext';
 
 // Dashboards
 import { SuperAdminDashboard } from './components/dashboard/SuperAdminDashboard';
@@ -56,8 +57,10 @@ import { SystemSettingsView } from './components/admin/SystemSettingsView';
 // Member Specific Views
 import { MyBooksView } from './components/member-view/MyBooksView';
 import { MemberReservationsView } from './components/member-view/MemberReservationsView';
-import { MemberProfileView } from './components/member-view/MemberProfileView';
 import { HelpSupportView } from './components/help/HelpSupportView';
+import { SignInFeedbackModal } from './components/auth/SignInFeedbackModal';
+import { ProfileSettingsView, type ProfileTab } from './components/profile/ProfileSettingsView';
+
 
 // Neutral placeholder shown only before a real session is established; the
 // login gate below ensures it is never actually rendered to a user.
@@ -71,6 +74,9 @@ const GUEST_USER: User = {
 };
 
 export function App() {
+  const { showActionLoading, hideActionLoading } = useActionLoading();
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
+
   // State from Storage
   const [currentUser, setCurrentUser] = useState<User>(GUEST_USER);
   const [users, setUsers] = useState<User[]>(() => StorageService.getUsers());
@@ -106,6 +112,7 @@ export function App() {
 
   const getInitialDestination = (): string => {
     const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
+    if (!raw || raw === '') return 'dashboard';
     if (raw === 'quick_links') return 'help_support';
     return VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard';
   };
@@ -127,6 +134,7 @@ export function App() {
   const [isAddBookOpen, setIsAddBookOpen] = useState<boolean>(false);
   const [isCreateMemberOpen, setIsCreateMemberOpen] = useState<boolean>(false);
   const [selectedCardMember, setSelectedCardMember] = useState<Member | null>(null);
+  const [profileActiveTab, setProfileActiveTab] = useState<ProfileTab>('profile');
 
   // Authentication State & Protection
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -134,8 +142,9 @@ export function App() {
   // True while an existing token (if any) is being verified against the API on boot.
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
 
-  // Public-facing route: 'landing' for `/` and 'login' for `/login`
+  // Public-facing route: 'landing' for `/`, 'login' for `/login`
   const [publicRoute, setPublicRoute] = useState<'landing' | 'login'>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
     return path === 'login' ? 'login' : 'landing';
@@ -159,6 +168,42 @@ export function App() {
 
   const handleDismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleSaveProfile = async (updatedData: { name: string; email: string; phone?: string; department?: string }) => {
+    if (!currentUser) return;
+    try {
+      const res = await api.updateProfile(updatedData);
+      const updatedUser: User = {
+        ...currentUser,
+        name: updatedData.name,
+        email: updatedData.email,
+        phone: updatedData.phone || currentUser.phone,
+        department: updatedData.department || currentUser.department
+      };
+      if (res?.user) {
+        Object.assign(updatedUser, res.user);
+      }
+      setCurrentUser(updatedUser);
+      StorageService.setCurrentUser(updatedUser);
+      const allUsers = StorageService.getUsers().map((u) => (u.id === currentUser.id ? updatedUser : u));
+      StorageService.saveUsers(allUsers);
+      addToast('success', 'Profile Updated', 'Your profile details have been saved successfully.');
+    } catch {
+      // Local storage fallback
+      const updatedUser: User = {
+        ...currentUser,
+        name: updatedData.name,
+        email: updatedData.email,
+        phone: updatedData.phone || currentUser.phone,
+        department: updatedData.department || currentUser.department
+      };
+      setCurrentUser(updatedUser);
+      StorageService.setCurrentUser(updatedUser);
+      const allUsers = StorageService.getUsers().map((u) => (u.id === currentUser.id ? updatedUser : u));
+      StorageService.saveUsers(allUsers);
+      addToast('success', 'Profile Updated', 'Your profile details have been updated.');
+    }
   };
 
   // Verify any locally-stored session token against the backend on load,
@@ -214,7 +259,11 @@ export function App() {
         return;
       }
       const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
-      setCurrentDestination(VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard');
+      if (!raw || raw === '') {
+        setCurrentDestination('dashboard');
+      } else {
+        setCurrentDestination(VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard');
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -286,6 +335,7 @@ export function App() {
     if (!isLoggedIn) return;
 
     async function fetchBackendData() {
+      setIsDataLoading(true);
       try {
         const [
           backendBooks,
@@ -350,6 +400,8 @@ export function App() {
         }
       } catch (e) {
         console.info('Using local cache until Laravel API connects:', e);
+      } finally {
+        setIsDataLoading(false);
       }
     }
     fetchBackendData();
@@ -639,6 +691,7 @@ export function App() {
     StorageService.setCurrentUser(userWithPrivs);
     authService.login(userWithPrivs, true);
     setIsLoggedIn(true);
+    setShowWelcomeModal(true);
     handleNavigate(getInitialDestination());
     addToast('success', `Welcome, ${userWithPrivs.name}`, `Signed in as ${userWithPrivs.role.replace('_', ' ')}`);
   };
@@ -1090,6 +1143,120 @@ export function App() {
       success: true,
       message: `✓ Successfully borrowed "${targetedBook.title}". Due date: ${dueDate}`,
       transaction: newTx
+    };
+  };
+
+  const handleBorrowBooksBatch = (memberId: string, barcodes: string[], dueDate: string) => {
+    const member = members.find((m) => m.memberId === memberId);
+    if (!member) return { success: false, message: 'Member record not found.' };
+    if (member.status === 'inactive') return { success: false, message: 'Member account is inactive.' };
+
+    const currentMemberActiveLoans = transactions.filter(
+      (t) => t.memberId === memberId && (t.status === 'Active' || t.status === 'Overdue')
+    );
+    if (currentMemberActiveLoans.length + barcodes.length > 3) {
+      const remaining = Math.max(0, 3 - currentMemberActiveLoans.length);
+      return {
+        success: false,
+        message: `Member has ${currentMemberActiveLoans.length} active loans and can only borrow ${remaining} more book(s) (Maximum 3).`
+      };
+    }
+
+    const uniqueBarcodes = Array.from(new Set(barcodes));
+    const targetedPairs: { book: Book; copy: PhysicalCopy }[] = [];
+
+    for (const barcode of uniqueBarcodes) {
+      let foundBook: Book | null = null;
+      let foundCopy: PhysicalCopy | null = null;
+      for (const b of books) {
+        const copy = b.copies.find(
+          (c) => c.barcode.toUpperCase() === barcode.toUpperCase() || c.accessionNumber.toUpperCase() === barcode.toUpperCase()
+        );
+        if (copy) {
+          foundBook = b;
+          foundCopy = copy;
+          break;
+        }
+      }
+
+      if (!foundBook || !foundCopy) {
+        return { success: false, message: `No physical book copy found with barcode "${barcode}".` };
+      }
+      if (foundCopy.status !== 'Available') {
+        return {
+          success: false,
+          message: `Copy "${foundBook.title}" (${barcode}) is currently ${foundCopy.status} and cannot be issued.`
+        };
+      }
+      targetedPairs.push({ book: foundBook, copy: foundCopy });
+    }
+
+    // Update copies in books
+    const copyBarcodeSet = new Set(targetedPairs.map((p) => p.copy.barcode));
+    const updatedBooks = books.map((b) => {
+      const hasAnyCopy = b.copies.some((c) => copyBarcodeSet.has(c.barcode));
+      if (!hasAnyCopy) return b;
+      return {
+        ...b,
+        copies: b.copies.map((c) => (copyBarcodeSet.has(c.barcode) ? { ...c, status: 'Borrowed' as const } : c))
+      };
+    });
+    setBooks(updatedBooks);
+    StorageService.saveBooks(updatedBooks);
+
+    const newTransactions: CirculationTransaction[] = [];
+    targetedPairs.forEach((pair, idx) => {
+      const txNumber = String(transactions.length + idx + 1).padStart(5, '0');
+      const newTx: CirculationTransaction = {
+        id: `BRW-2026-${txNumber}`,
+        bookId: pair.book.id,
+        bookTitle: pair.book.title,
+        bookAuthor: pair.book.author,
+        accessionNumber: pair.copy.accessionNumber,
+        barcode: pair.copy.barcode,
+        memberId: member.memberId,
+        memberName: member.fullName,
+        borrowDate: new Date().toISOString().split('T')[0],
+        dueDate,
+        status: 'Active',
+        renewalCount: 0,
+        processedBy: currentUser.name
+      };
+      newTransactions.push(newTx);
+    });
+
+    const updatedTx = [...newTransactions, ...transactions];
+    setTransactions(updatedTx);
+    StorageService.saveTransactions(updatedTx);
+
+    const updatedMembers = members.map((m) =>
+      m.memberId === memberId ? { ...m, totalBorrows: m.totalBorrows + newTransactions.length } : m
+    );
+    setMembers(updatedMembers);
+    StorageService.saveMembers(updatedMembers);
+
+    targetedPairs.forEach((pair) => {
+      StorageService.addAuditLog(
+        'CIRCULATION_BORROW_RECORDED',
+        'Circulation',
+        `Issued "${pair.book.title}" (${pair.copy.barcode}) to ${member.fullName} (${member.memberId}). Due date: ${dueDate}`,
+        currentUser.name
+      );
+    });
+    setAuditLogs(StorageService.getAuditLogs());
+
+    // Sync to Laravel API backend
+    api.borrowBooks(member.memberId, uniqueBarcodes, dueDate, currentUser.name).catch((err) => {
+      console.info('Backend sync note:', err);
+    });
+
+    return {
+      success: true,
+      message: newTransactions.length === 1
+        ? `✓ Successfully borrowed "${newTransactions[0].bookTitle}". Due date: ${dueDate}`
+        : `✓ Successfully borrowed ${newTransactions.length} books. Due date: ${dueDate}`,
+      transactions: newTransactions,
+      transaction: newTransactions[0]
     };
   };
 
@@ -1702,11 +1869,19 @@ export function App() {
 
 
   const handleTriggerExport = (format: 'pdf' | 'csv') => {
-    if (format === 'pdf') {
-      window.print();
-    } else {
-      addToast('success', 'CSV Export Generated', 'balingasag_library_report_2026.csv ready');
-    }
+    showActionLoading({
+      title: format === 'pdf' ? 'Preparing PDF Report' : 'Compiling CSV Dataset',
+      message: format === 'pdf' ? 'Compiling print layout, charts, and circulation records...' : 'Formatting library records into standard CSV spreadsheet...'
+    });
+
+    setTimeout(() => {
+      hideActionLoading();
+      if (format === 'pdf') {
+        window.print();
+      } else {
+        addToast('success', 'CSV Export Generated', 'balingasag_library_report_2026.csv ready');
+      }
+    }, 700);
   };
 
   const unreadNotifsCount = notifications.filter((n) => {
@@ -1755,7 +1930,11 @@ export function App() {
     // Listen for browser back/forward between public routes
     const handlePublicPopState = () => {
       const path = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
-      setPublicRoute(path === 'login' ? 'login' : 'landing');
+      if (path === 'login') {
+        setPublicRoute('login');
+      } else {
+        setPublicRoute('landing');
+      }
     };
 
     // Attach listener (cleanup handled by React re-render when isLoggedIn changes)
@@ -1844,6 +2023,14 @@ export function App() {
             onDeleteSingle={handleDeleteSingleNotif}
             onClearAll={handleClearAllNotifs}
             onOpenNotifications={() => handleNavigate('notifications')}
+            onOpenProfile={() => {
+              setProfileActiveTab('profile');
+              handleNavigate('profile');
+            }}
+            onOpenAccountSettings={() => {
+              setProfileActiveTab('security');
+              handleNavigate('profile');
+            }}
             onLogout={handleRequestLogout}
           />
 
@@ -1859,11 +2046,13 @@ export function App() {
                   transactions={transactions}
                   users={users}
                   auditLogs={auditLogs}
+                  currentUser={currentUser}
+                  isLoading={isDataLoading}
                   onNavigate={handleNavigate}
                 />
               )}
 
-              {(currentUser.role === 'admin' || currentUser.role === 'volunteer') && (
+              {currentUser.role === 'admin' && (
                 <AdminDashboard
                   books={books}
                   members={members}
@@ -1872,10 +2061,25 @@ export function App() {
                   serviceRecords={serviceRecords}
                   userRole={currentUser.role}
                   currentUser={currentUser}
+                  isLoading={isDataLoading}
                   onNavigate={handleNavigate}
                   onOpenAddBook={() => setIsAddBookOpen(true)}
                   onOpenCreateMember={() => setIsCreateMemberOpen(true)}
                   onOpenScanner={() => setIsScannerOpen(true)}
+                />
+              )}
+
+              {currentUser.role === 'volunteer' && (
+                <AttendanceView
+                  attendance={attendance}
+                  members={members}
+                  userRole={currentUser.role}
+                  currentUser={currentUser}
+                  title="Operation Desk"
+                  subtitle="Attendance Records & History • Live Patron Monitoring & Daily Logs"
+                  defaultTab="records"
+                  onAttendanceProcessed={handleAttendanceProcessed}
+                  onSaveAttendanceEdit={handleSaveAttendanceEdit}
                 />
               )}
 
@@ -1887,6 +2091,7 @@ export function App() {
             <BookList
               books={books}
               userRole={currentUser.role}
+              isLoading={isDataLoading}
               onBookAdded={handleBookAdded}
               onAddCopy={handleAddPhysicalCopy}
               onReserveBook={handleReserveBook}
@@ -1907,6 +2112,7 @@ export function App() {
             <MemberList
               members={members}
               userRole={currentUser.role}
+              isLoading={isDataLoading}
               onMemberCreated={handleMemberCreated}
               onMemberUpdated={handleMemberUpdated}
               onMemberDeleted={handleMemberDeleted}
@@ -1933,7 +2139,9 @@ export function App() {
               attendance={attendance}
               members={members}
               userRole={currentUser.role}
+              currentUser={currentUser}
               currentMemberId={currentUser.memberId}
+              defaultTab="kiosk"
               onAttendanceProcessed={handleAttendanceProcessed}
               onSaveAttendanceEdit={handleSaveAttendanceEdit}
             />
@@ -1960,7 +2168,9 @@ export function App() {
               members={members}
               userRole={currentUser.role}
               currentMemberId={currentUser.memberId}
+              isLoading={isDataLoading}
               onBorrowBook={handleBorrowBook}
+              onBorrowBooksBatch={handleBorrowBooksBatch}
               onReturnBook={handleReturnBook}
               onRenewBook={handleRenewBook}
               onCancelReservation={handleCancelReservation}
@@ -1977,6 +2187,7 @@ export function App() {
               notifications={notifications}
               userRole={currentUser.role}
               currentMemberId={currentUser.memberId}
+              isLoading={isDataLoading}
               onMarkAllAsRead={handleMarkAllNotifsRead}
               onMarkSingleAsRead={handleMarkSingleNotifRead}
               onDeleteSingle={handleDeleteSingleNotif}
@@ -1993,6 +2204,7 @@ export function App() {
               services={serviceRecords}
               userRole={currentUser.role}
               currentMemberId={currentUser.memberId}
+              isLoading={isDataLoading}
             />
           )}
 
@@ -2004,6 +2216,7 @@ export function App() {
               attendance={attendance}
               transactions={transactions}
               serviceRecords={serviceRecords}
+              isLoading={isDataLoading}
               onTriggerExport={handleTriggerExport}
             />
           )}
@@ -2028,6 +2241,7 @@ export function App() {
           {/* 12. SUPER ADMIN: SYSTEM SETTINGS */}
           {currentDestination === 'system_settings' && currentUser.role === 'super_admin' && (
             <SystemSettingsView
+              isLoading={isDataLoading}
               onSaveSettingsNotice={() => {
                 const updated = StorageService.getSystemSettings();
                 setSystemSettings(updated);
@@ -2060,11 +2274,15 @@ export function App() {
             />
           )}
 
-          {/* 15. MEMBER: PROFILE & CARD */}
-          {currentDestination === 'profile' && currentUser.role === 'member' && (
-            <MemberProfileView
+          {/* 15. PROFILE & ACCOUNT SETTINGS (ALL ROLES) */}
+          {currentDestination === 'profile' && (
+            <ProfileSettingsView
               currentUser={currentUser}
               members={members}
+              activeTab={profileActiveTab}
+              onTabChange={setProfileActiveTab}
+              onUpdateProfile={handleSaveProfile}
+              onShowToast={addToast}
             />
           )}
 
@@ -2116,6 +2334,17 @@ export function App() {
         onConfirm={handleConfirmLogout}
         userName={currentUser.name}
       />
+
+      {/* Welcome Feedback Modal inside the Dashboard */}
+      {isLoggedIn && showWelcomeModal && (
+        <SignInFeedbackModal
+          status="welcome"
+          user={currentUser}
+          onWelcomeComplete={() => setShowWelcomeModal(false)}
+        />
+      )}
+
+
 
       {/* Toasts */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />

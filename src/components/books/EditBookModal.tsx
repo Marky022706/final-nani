@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Book } from '../../types';
 import { X, Sparkles, Save, BookOpen } from 'lucide-react';
+import { BookCoverSelector } from './BookCoverSelector';
 
 interface EditBookModalProps {
   book: Book | null;
@@ -31,6 +32,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   const [pages, setPages] = useState<number>(0);
   const [description, setDescription] = useState<string>('');
   const [subject, setSubject] = useState<string>('');
+  const [coverImage, setCoverImage] = useState<string>('');
 
   useEffect(() => {
     if (book && isOpen) {
@@ -49,6 +51,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
       setPages(book.pages || 0);
       setDescription(book.description || '');
       setSubject(book.subject || '');
+      setCoverImage(book.coverImage || '');
     }
   }, [book, isOpen]);
 
@@ -109,6 +112,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
       pages: Number(pages),
       description: description.trim(),
       subject: subject.trim(),
+      coverImage: coverImage.trim(),
       isArchived: availability === 'Archived' ? true : book.isArchived,
       copies: updatedCopies
     };
@@ -143,6 +147,14 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body">
+            {/* Book Cover Image Selection & Preview */}
+            <BookCoverSelector
+              value={coverImage}
+              onChange={setCoverImage}
+              title={title}
+              author={author}
+            />
+
             {/* Title & Category */}
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
               <div className="form-group">

@@ -176,7 +176,7 @@ export const AdminVerificationModal: React.FC<AdminVerificationModalProps> = ({ 
             </div>
           </div>
 
-          {/* Item 3: Mission & Vision */}
+          {/* Item 3: Mission, Vision, Goals & Objectives */}
           <div
             style={{
               padding: '14px 16px',
@@ -192,23 +192,23 @@ export const AdminVerificationModal: React.FC<AdminVerificationModalProps> = ({ 
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#202820' }}>
-                  Library Mission & Vision
+                  Mission, Vision, Goals & Objectives
                 </span>
                 <span
                   style={{
                     fontSize: '11px',
                     fontWeight: 700,
-                    backgroundColor: '#E8F3E8',
-                    color: '#174D32',
+                    backgroundColor: '#DCFCE7',
+                    color: '#166534',
                     padding: '2px 8px',
                     borderRadius: '999px'
                   }}
                 >
-                  Draft Proposed Wording
+                  Officially Adopted
                 </span>
               </div>
               <p style={{ fontSize: '12px', color: '#667166', margin: '4px 0 0', lineHeight: 1.4 }}>
-                Currently displays draft wording aligned with NLP library objectives. Ready to be replaced immediately once approved by the Sangguniang Bayan or Library Board.
+                Fully aligned with the official municipal mandate of Balingasag, including the 5 Strategic Goals and 8 Actionable Objectives.
               </p>
             </div>
           </div>

@@ -764,6 +764,75 @@ h1, h2, h3, h4, h5, h6 {
   animation: spin-smooth 0.8s linear infinite;
 }
 
+/* Modal feedback animations (Sign-in Loading, Welcome, Bulk Upload Success) */
+@keyframes successCheckPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseGlowGreen {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(22, 101, 52, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(22, 101, 52, 0);
+  }
+}
+
+@keyframes modalContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlowGreen 2s ease-in-out infinite;
+}
+
+.animate-modal-fade-in {
+  animation: modalContentFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes welcomeBarProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-success-pop {
+  animation: successCheckPop 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlowGreen 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.animate-modal-fade-in {
+  animation: modalContentFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-welcome-progress {
+  animation: welcomeBarProgress 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* ── Landing Page Animations & Responsiveness ── */
 
 @keyframes ctaOrb {
@@ -855,3 +924,66 @@ h1, h2, h3, h4, h5, h6 {
     scroll-behavior: smooth;
   }
 }
+
+/* ==========================================================================
+   BPL Hybrid Loading System: Shimmer, Pulse, & Spin Animations
+   ========================================================================== */
+@keyframes bpl-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes bpl-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bpl-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bpl-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 0%,
+    #f1f5f9 45%,
+    #e8edf3 55%,
+    #e2e8f0 100%
+  );
+  background-size: 250% 100%;
+  animation: bpl-shimmer 1.9s ease-in-out infinite;
+}
+
+.bpl-skeleton-pulse {
+  background-color: #e2e8f0;
+  animation: bpl-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.bpl-spinner {
+  animation: bpl-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bpl-skeleton-shimmer,
+  .bpl-skeleton-pulse {
+    animation: none !important;
+    background: #e2e8f0 !important;
+  }
+  .bpl-spinner {
+    animation-duration: 2s !important;
+  }
+}
+

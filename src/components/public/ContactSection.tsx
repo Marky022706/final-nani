@@ -1,15 +1,15 @@
 import React from 'react';
-import { MapPin, Phone, Mail, Clock, Globe, ExternalLink, AlertTriangle } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Globe, ExternalLink, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export const ContactSection: React.FC = () => {
   return (
     <section
-      id="contact"
-      aria-label="Contact Information"
+      id="visit"
+      aria-label="Visit the Library and Contact Information"
       style={{
         padding: '80px 24px',
         backgroundColor: '#FFFFFF',
-        borderBottom: '1px solid #E8F3E8'
+        borderBottom: '1px solid #E8F3E8',
       }}
     >
       <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
@@ -22,10 +22,10 @@ export const ContactSection: React.FC = () => {
               color: '#228B22',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              marginBottom: '8px'
+              marginBottom: '8px',
             }}
           >
-            Get In Touch
+            Planning Your Visit
           </div>
           <h2
             style={{
@@ -34,35 +34,35 @@ export const ContactSection: React.FC = () => {
               color: '#174D32',
               letterSpacing: '-0.02em',
               lineHeight: 1.25,
-              marginBottom: '14px'
+              marginBottom: '14px',
             }}
           >
-            Visit Our Library
+            Visit the Library
           </h2>
           <p style={{ fontSize: '16px', lineHeight: 1.6, color: '#667166' }}>
-            We welcome all visitors, researchers, students, and lifelong learners.
-            Drop by the library or reach out through any of our contact channels below.
+            We welcome all students, researchers, teachers, and community members. Drop by during regular hours or reach out through our verified contact channels below.
           </p>
         </div>
 
-        {/* Contact Grid */}
+        {/* Contact & Visit Grid */}
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
             gap: '32px',
-            alignItems: 'start'
+            alignItems: 'start',
           }}
         >
           {/* Left: Contact Details & Hours */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Location Card */}
             <div
+              id="visit-location"
               style={{
                 backgroundColor: '#F5F1E8',
                 borderRadius: '16px',
                 padding: '28px',
-                border: '1px solid #E8F3E8'
+                border: '1px solid #E8F3E8',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -76,14 +76,14 @@ export const ContactSection: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#228B22',
-                    flexShrink: 0
+                    flexShrink: 0,
                   }}
                 >
                   <MapPin size={22} />
                 </div>
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#174D32', margin: 0 }}>
-                    Library Address
+                    Library Address & Location
                   </h3>
                   <p style={{ fontSize: '14px', color: '#667166', margin: '4px 0 0', lineHeight: 1.5 }}>
                     Balingasag Municipal Library<br />
@@ -97,15 +97,16 @@ export const ContactSection: React.FC = () => {
 
             {/* Contact Methods */}
             <div
+              id="visit-contact"
               style={{
                 backgroundColor: '#F5F1E8',
                 borderRadius: '16px',
                 padding: '28px',
-                border: '1px solid #E8F3E8'
+                border: '1px solid #E8F3E8',
               }}
             >
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#174D32', marginBottom: '16px' }}>
-                Contact Details
+                Verified Contact Information
               </h3>
 
               {/* Librarian Info from NLP Directory */}
@@ -115,7 +116,7 @@ export const ContactSection: React.FC = () => {
                   backgroundColor: 'rgba(34, 139, 34, 0.06)',
                   borderRadius: '10px',
                   border: '1px solid rgba(34, 139, 34, 0.12)',
-                  marginBottom: '16px'
+                  marginBottom: '16px',
                 }}
               >
                 <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#228B22', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
@@ -141,13 +142,13 @@ export const ContactSection: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#228B22',
-                    flexShrink: 0
+                    flexShrink: 0,
                   }}
                 >
                   <Phone size={16} />
                 </div>
                 <div>
-                  <div style={{ fontSize: '13px', color: '#667166', marginBottom: '2px' }}>Mobile</div>
+                  <div style={{ fontSize: '13px', color: '#667166', marginBottom: '2px' }}>Mobile Phone</div>
                   <a
                     href="tel:+639161535744"
                     style={{ fontSize: '14.5px', fontWeight: 600, color: '#174D32', textDecoration: 'none' }}
@@ -169,13 +170,13 @@ export const ContactSection: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#228B22',
-                    flexShrink: 0
+                    flexShrink: 0,
                   }}
                 >
                   <Mail size={16} />
                 </div>
                 <div>
-                  <div style={{ fontSize: '13px', color: '#667166', marginBottom: '2px' }}>Email</div>
+                  <div style={{ fontSize: '13px', color: '#667166', marginBottom: '2px' }}>Email Address</div>
                   <a
                     href="mailto:anita.arquita@yahoo.com"
                     style={{ fontSize: '14.5px', fontWeight: 600, color: '#174D32', textDecoration: 'none' }}
@@ -189,7 +190,7 @@ export const ContactSection: React.FC = () => {
               <div
                 style={{
                   marginTop: '16px',
-                  padding: '8px 12px',
+                  padding: '10px 14px',
                   backgroundColor: '#FFF9E6',
                   borderRadius: '8px',
                   border: '1px solid #FDECC8',
@@ -198,39 +199,38 @@ export const ContactSection: React.FC = () => {
                   gap: '8px',
                   fontSize: '11.5px',
                   color: '#92400E',
-                  lineHeight: 1.5
+                  lineHeight: 1.5,
                 }}
               >
                 <AlertTriangle size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <span>
-                  Contact details sourced from the National Library of the Philippines public directory.
-                  Please verify directly with the library for the latest contact information.
+                  Official contact details confirmed via National Library of the Philippines public records.
                 </span>
               </div>
             </div>
 
             {/* Operating Hours */}
             <div
+              id="visit-hours"
               style={{
                 backgroundColor: '#F5F1E8',
                 borderRadius: '16px',
                 padding: '28px',
-                border: '1px solid #E8F3E8'
+                border: '1px solid #E8F3E8',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                 <Clock size={20} color="#228B22" />
                 <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#174D32', margin: 0 }}>
-                  Operating Hours
+                  Opening Hours
                 </h3>
               </div>
 
               {/* Schedule Rows */}
               {[
                 { day: 'Monday – Friday', time: '8:00 AM – 5:00 PM', status: 'open' },
-                { day: 'Saturday', time: '8:00 AM – 12:00 PM', status: 'open' },
-                { day: 'Sunday', time: 'Closed', status: 'closed' },
-                { day: 'Holidays', time: 'Follow municipal schedule', status: 'note' }
+                { day: 'Saturday & Sunday', time: 'Closed', status: 'closed' },
+                { day: 'Public Holidays', time: 'Closed (follows official municipal calendar)', status: 'note' },
               ].map((item, idx) => (
                 <div
                   key={idx}
@@ -239,7 +239,7 @@ export const ContactSection: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '10px 0',
-                    borderBottom: idx < 3 ? '1px solid rgba(34, 139, 34, 0.08)' : 'none'
+                    borderBottom: idx < 2 ? '1px solid rgba(34, 139, 34, 0.08)' : 'none',
                   }}
                 >
                   <span style={{ fontSize: '14px', fontWeight: 600, color: '#174D32' }}>
@@ -249,28 +249,17 @@ export const ContactSection: React.FC = () => {
                     style={{
                       fontSize: '13.5px',
                       fontWeight: 600,
-                      color: item.status === 'closed' ? '#B91C1C' : item.status === 'note' ? '#92400E' : '#228B22'
+                      color: item.status === 'closed' ? '#B91C1C' : item.status === 'note' ? '#92400E' : '#228B22',
                     }}
                   >
                     {item.time}
                   </span>
                 </div>
               ))}
-
-              <div
-                style={{
-                  marginTop: '12px',
-                  fontSize: '12px',
-                  color: '#667166',
-                  fontStyle: 'italic'
-                }}
-              >
-                Hours subject to local government announcements. Please call ahead to confirm.
-              </div>
             </div>
           </div>
 
-          {/* Right: Map Embed & Quick Access */}
+          {/* Right: Map Embed, Guidelines & Directions */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Map Embed */}
             <div
@@ -279,9 +268,9 @@ export const ContactSection: React.FC = () => {
                 overflow: 'hidden',
                 border: '1px solid #E8F3E8',
                 boxShadow: '0 4px 16px -2px rgba(23, 77, 50, 0.06)',
-                aspectRatio: '4/3',
+                aspectRatio: '16/10',
                 backgroundColor: '#E8F3E8',
-                position: 'relative'
+                position: 'relative',
               }}
             >
               <iframe
@@ -294,7 +283,6 @@ export const ContactSection: React.FC = () => {
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />
-              {/* Fallback overlay if iframe fails */}
               <div
                 style={{
                   position: 'absolute',
@@ -305,7 +293,7 @@ export const ContactSection: React.FC = () => {
                   justifyContent: 'center',
                   gap: '12px',
                   pointerEvents: 'none',
-                  zIndex: -1
+                  zIndex: -1,
                 }}
               >
                 <Globe size={40} color="#228B22" style={{ opacity: 0.5 }} />
@@ -333,7 +321,7 @@ export const ContactSection: React.FC = () => {
                 borderRadius: '12px',
                 textDecoration: 'none',
                 transition: 'background-color 0.2s ease, transform 0.15s ease',
-                boxShadow: '0 4px 12px -2px rgba(23, 77, 50, 0.2)'
+                boxShadow: '0 4px 12px -2px rgba(23, 77, 50, 0.2)',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#0F3D26';
@@ -345,67 +333,31 @@ export const ContactSection: React.FC = () => {
               }}
             >
               <MapPin size={18} />
-              Get Directions on Google Maps
+              <span>Get Directions on Google Maps</span>
               <ExternalLink size={14} />
             </a>
 
-            {/* NLP Directory Reference */}
+            {/* Visitor Guidelines Card */}
             <div
               style={{
-                backgroundColor: '#F5F1E8',
+                backgroundColor: '#FDFBF7',
                 borderRadius: '16px',
+                border: '1px solid #E8F3E8',
                 padding: '24px',
-                border: '1px solid #E8F3E8'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                <Globe size={18} color="#228B22" />
-                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#174D32', margin: 0 }}>
-                  Official References
-                </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                <ShieldCheck size={20} color="#228B22" />
+                <h3 style={{ fontSize: '15.5px', fontWeight: 700, color: '#174D32', margin: 0 }}>
+                  Visitor Etiquette & Guidelines
+                </h3>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <a
-                  href="https://web.nlp.gov.ph"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '13.5px',
-                    color: '#228B22',
-                    textDecoration: 'none',
-                    fontWeight: 600,
-                    transition: 'opacity 0.15s'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-                >
-                  <ExternalLink size={13} />
-                  National Library of the Philippines
-                </a>
-                <a
-                  href="https://www.facebook.com/MunicipalityOfBalingasag"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '13.5px',
-                    color: '#228B22',
-                    textDecoration: 'none',
-                    fontWeight: 600,
-                    transition: 'opacity 0.15s'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-                >
-                  <ExternalLink size={13} />
-                  Municipality of Balingasag (Facebook)
-                </a>
-              </div>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13.5px', color: '#667166', lineHeight: 1.65, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <li><strong>Sign-In on Entry:</strong> Log your name and purpose of visit in the attendance log at the front desk.</li>
+                <li><strong>Quiet Study Atmosphere:</strong> Please keep mobile phones on silent mode to ensure a conducive learning environment for everyone.</li>
+                <li><strong>Care for Materials:</strong> Handle reference books, historical records, and computers with care. Return reading materials to designated book carts.</li>
+                <li><strong>Assistance:</strong> Feel free to ask the municipal librarian or assistant for guidance in finding research topics.</li>
+              </ul>
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
   Camera,
   ShieldCheck
 } from 'lucide-react';
+import { useActionLoading } from '../../context/ActionLoadingContext';
 
 interface CreateMemberModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
   onMemberCreated,
   existingCount
 }) => {
+  const { showActionLoading, hideActionLoading } = useActionLoading();
+
   // Step State: 1 = Profile & Identity, 2 = Contact & Membership, 3 = Account & QR Issuance
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
@@ -230,7 +233,18 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
     };
 
     // 3. Dispatch to App handler (Save profile, persist to MySQL, assign account & show success notification)
-    onMemberCreated(newMember, newUser, finalPassword);
+    showActionLoading({
+      title: 'Registering Member',
+      message: 'Creating patron profile and generating digital library membership card...'
+    });
+
+    try {
+      onMemberCreated(newMember, newUser, finalPassword);
+    } finally {
+      setTimeout(() => {
+        hideActionLoading();
+      }, 350);
+    }
   };
 
   const stepsList = [

@@ -11,7 +11,9 @@ import { CirculationScannerModal } from './CirculationScannerModal';
 import { LoanSlipModal } from './LoanSlipModal';
 import { IssueLoanWizardModal } from './IssueLoanWizardModal';
 import { useBreadcrumbs } from '../../context/BreadcrumbContext';
+import { CirculationSkeleton } from '../common/skeleton';
 import { StorageService } from '../../utils/storage';
+import { api } from '../../services/api';
 import {
   Repeat,
   BookOpen,
@@ -25,7 +27,11 @@ import {
   QrCode,
   Barcode,
   XCircle,
-  Sparkles
+  Layers,
+  ShieldCheck,
+  User as UserIcon,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface CirculationViewProps {
@@ -35,7 +41,9 @@ interface CirculationViewProps {
   members: Member[];
   userRole: UserRole;
   currentMemberId?: string;
+  isLoading?: boolean;
   onBorrowBook: (memberId: string, barcode: string, dueDate: string) => { success: boolean; message: string; transaction?: CirculationTransaction };
+  onBorrowBooksBatch?: (memberId: string, barcodes: string[], dueDate: string) => { success: boolean; message: string; transactions?: CirculationTransaction[]; transaction?: CirculationTransaction };
   onReturnBook: (barcode: string) => { success: boolean; message: string; transaction?: CirculationTransaction };
   onRenewBook: (transactionId: string) => { success: boolean; message: string };
   onCancelReservation: (reservationId: string) => void;
@@ -45,13 +53,380 @@ interface CirculationViewProps {
   onRejectReservation?: (reservationId: string) => void;
 }
 
+interface InstructionsCardProps {
+  lang: 'en' | 'ceb';
+  onToggleLang: () => void;
+}
+
+const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggleLang }) => {
+  return (
+    <div
+      className="card"
+      style={{
+        padding: '24px',
+        backgroundColor: 'var(--bg-subtle, #f8fafc)',
+        border: '1px solid var(--border-main)',
+        borderRadius: 'var(--radius-lg, 16px)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: '8px',
+              backgroundColor: 'rgba(30, 77, 56, 0.12)',
+              color: 'var(--brand-forest, #1E4D38)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <BookOpen size={18} />
+          </div>
+          <div>
+            <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {lang === 'en'
+                ? 'How to Borrow Books — Step-by-Step Instructions'
+                : 'Unsaon Paghulam ug Libro — Mga Lakang ug Giya'}
+            </h4>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              {lang === 'en'
+                ? 'Official Balingasag Public Library circulation process for issuing physical loans'
+                : 'Opisyal nga pamaagi sa Balingasag Public Library sa pagpagawas sa mga libro'}
+            </div>
+          </div>
+        </div>
+
+        {/* Language Switcher Badge Button */}
+        <button
+          type="button"
+          onClick={onToggleLang}
+          className="btn btn-ghost btn-sm"
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '3px 10px',
+            borderRadius: '999px',
+            border: '1px solid var(--border-main)',
+            backgroundColor: '#FFFFFF',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px'
+          }}
+          title="Switch language between English and Bisaya"
+        >
+          <span>🌐 {lang === 'en' ? 'English (Click for Bisaya)' : 'Bisaya (Click for English)'}</span>
+        </button>
+      </div>
+
+      {/* 3 Step Boxes */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+        {/* Step 1 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 01' : 'LAKANG 01'}
+            </span>
+            <QrCode size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Scan Member QR Code' : 'I-scan ang QR Code sa Miyembro'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Patron presents their digital or physical library card. The system validates that their account is Active, has zero overdue fines, and is within the 3-book loan limit.'
+              : 'Ipakita sa patron ang iyang digital o pisikal nga library ID. Susihoon sa sistema kung Active ang account, walay bayronon nga multa, ug wala milapas sa 3 ka libro nga limit.'}
+          </p>
+        </div>
+
+        {/* Step 2 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 02' : 'LAKANG 02'}
+            </span>
+            <Barcode size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Scan Book Physical Barcode' : 'I-scan ang Barcode sa Libro'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Locate the physical book on the library shelves. Scan the unique accession barcode on the title page or back cover to verify the copy is Available for lending.'
+              : 'Kuhaa ang libro gikan sa estante. I-scan ang accession barcode sa unahan o luyo nga bahin sa libro aron masiguro nga Available pa kini.'}
+          </p>
+        </div>
+
+        {/* Step 3 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 03' : 'LAKANG 03'}
+            </span>
+            <CheckCircle2 size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Confirm Loan & Issue Slip' : 'Kumpirmaha & Ihatag ang Slip'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Review standard 7-day lending period. Click "Confirm Borrow" to log the loan, deduct copy from available shelf inventory, and print/issue the official loan slip.'
+              : 'Susiha ang standard nga 7 ka adlaw nga due date. I-click ang Confirm Borrow aron ma-rekord ang transaksyon ug ma-print ang opisyal nga loan slip.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Policy Callout */}
+      <div
+        style={{
+          padding: '12px 16px',
+          borderRadius: '10px',
+          backgroundColor: 'rgba(30, 77, 56, 0.05)',
+          border: '1px solid rgba(30, 77, 56, 0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '12px',
+          color: '#1E4D38'
+        }}
+      >
+        <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+        <div style={{ lineHeight: 1.45 }}>
+          <strong>{lang === 'en' ? 'Borrowing Rules & Guidelines:' : 'Mga Lagda sa Paghulam:'}</strong>{' '}
+          {lang === 'en'
+            ? 'Maximum of 3 books per patron • Standard loan period is 7 calendar days • 1 renewal permitted before due date if no holds exist • Reference books & periodicals are for room-use only • Protect books from liquids and damages.'
+            : 'Hangtod sa 3 ka libro matag miyembro • 7 ka adlaw ang standard nga paghulam • Pwede ma-renew kausa kung walay nagpa-reserve • Ang mga reference books dili pwedeng ipagawas sa librarya • Ampingi ang libro batok sa tubig ug gisi.'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggleLang }) => {
+  return (
+    <div
+      className="card"
+      style={{
+        padding: '24px',
+        backgroundColor: 'var(--bg-subtle, #f8fafc)',
+        border: '1px solid var(--border-main)',
+        borderRadius: 'var(--radius-lg, 16px)',
+        marginTop: '24px'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: '8px',
+              backgroundColor: 'var(--success-bg)',
+              color: 'var(--success)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <CheckCircle2 size={18} />
+          </div>
+          <div>
+            <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+              {lang === 'en'
+                ? 'How to Return Books — Step-by-Step Instructions'
+                : 'Unsaon Pag-uli ug Libro — Mga Lakang ug Giya'}
+            </h4>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              {lang === 'en'
+                ? 'Official Balingasag Public Library circulation process for check-in and shelf restocking'
+                : 'Opisyal nga pamaagi sa Balingasag Public Library sa pagdawat ug pagbalik sa libro sa estante'}
+            </div>
+          </div>
+        </div>
+
+        {/* Language Switcher Badge Button */}
+        <button
+          type="button"
+          onClick={onToggleLang}
+          className="btn btn-ghost btn-sm"
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '3px 10px',
+            borderRadius: '999px',
+            border: '1px solid var(--border-main)',
+            backgroundColor: '#FFFFFF',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px'
+          }}
+          title="Switch language between English and Bisaya"
+        >
+          <span>🌐 {lang === 'en' ? 'English (Click for Bisaya)' : 'Bisaya (Click for English)'}</span>
+        </button>
+      </div>
+
+      {/* 3 Step Boxes */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+        {/* Step 1 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 01' : 'LAKANG 01'}
+            </span>
+            <Barcode size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Scan Book Barcode or Member QR' : 'I-scan ang Barcode o QR Code'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Scan the physical barcode on the returned book copy, or scan the member QR to view all active borrowed items issued under their account.'
+              : 'I-scan ang barcode sticker sa giuli nga libro, o i-scan ang QR code sa miyembro aron makita ang tanang libro nga gihulam ubos sa iyang account.'}
+          </p>
+        </div>
+
+        {/* Step 2 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 02' : 'LAKANG 02'}
+            </span>
+            <AlertCircle size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Inspect Condition & Verify Fines' : 'Susiha ang Libro & Multa'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Inspect cover, spine, and pages for damage. The automated calculation engine verifies return date and computes overdue fines at ₱5.00/day if late.'
+              : 'Susiha ang hapin ug mga panid sa libro. Awtomatikong kwentahon sa sistema kung aduna bay multa (₱5.00 matag adlaw) kung nilapas na sa takna.'}
+          </p>
+        </div>
+
+        {/* Step 3 */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+              {lang === 'en' ? 'STEP 03' : 'LAKANG 03'}
+            </span>
+            <CheckCircle2 size={16} color="var(--text-muted)" />
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+            {lang === 'en' ? 'Confirm Return & Restock' : 'Kumpirmaha ang Pag-uli'}
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {lang === 'en'
+              ? 'Click "Confirm Return & Release Copy to Shelf". Transaction updates to Returned, member loan quota is restored, and the physical book is restocked.'
+              : 'I-click ang Confirm Return aron ma-clear ang transaksyon, mabalik ang quota sa miyembro, ug maibalik ang libro sa sirkulasyon sa estante.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Policy Callout */}
+      <div
+        style={{
+          padding: '12px 16px',
+          borderRadius: '10px',
+          backgroundColor: 'rgba(30, 77, 56, 0.05)',
+          border: '1px solid rgba(30, 77, 56, 0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '12px',
+          color: '#1E4D38'
+        }}
+      >
+        <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+        <div style={{ lineHeight: 1.45 }}>
+          <strong>{lang === 'en' ? 'Return & Restocking Rules:' : 'Mga Lagda sa Pag-uli:'}</strong>{' '}
+          {lang === 'en'
+            ? 'Municipal fine rate: ₱5.00/day per overdue book (excluding Sundays & holidays) • Unsettled fines block new loans • Lost or severely damaged items must be replaced with the exact title or equivalent retail price assessed by the library.'
+            : 'Multa sa pagkalapas: ₱5.00 matag adlaw kada libro (walay labot Domingo ug holiday) • Ang wala nabayran nga multa mopugong sa sunod nga paghulam • Ang nawala o nadaot nga libro kinahanglan pulihan sa parehong edisyon o bayran sumala sa bili niini.'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const CirculationView: React.FC<CirculationViewProps> = ({
   transactions,
   reservations,
   books,
   members,
   userRole,
+  currentMemberId: _currentMemberId,
+  isLoading = false,
   onBorrowBook,
+  onBorrowBooksBatch,
   onReturnBook,
   onRenewBook,
   onCancelReservation,
@@ -118,10 +493,12 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
   const defaultDueDateStr = defaultDueDate.toISOString().split('T')[0];
 
   // Borrow Form State
-  const [borrowMemberId, setBorrowMemberId] = useState<string>(members[0]?.memberId || '');
+  const [borrowMemberId, setBorrowMemberId] = useState<string>('');
   const [borrowBarcode, setBorrowBarcode] = useState<string>('');
   const [borrowDueDate, setBorrowDueDate] = useState<string>(defaultDueDateStr);
   const [borrowStatusMessage, setBorrowStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showBorrowManual, setShowBorrowManual] = useState<boolean>(false);
+  const [instructionLang, setInstructionLang] = useState<'en' | 'ceb'>('en');
 
   // Return Form State
   const [returnBarcode, setReturnBarcode] = useState<string>('');
@@ -130,6 +507,10 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
 
   // Search in transactions table
   const [loansSearch, setLoansSearch] = useState<string>('');
+
+  if (isLoading) {
+    return <CirculationSkeleton />;
+  }
 
   // Collect available book copies for quick pick
   const availableCopies: { bookTitle: string; author: string; barcode: string; accession: string }[] = [];
@@ -239,23 +620,71 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
 
   const overdueInfo = computeOverdueInfo(matchedReturnLoan);
 
-  const handleScannerDetected = (code: string) => {
+  const cleanScannedCode = (raw: string): string => {
+    let text = (raw || '').trim();
+    if (text.startsWith('{') && text.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(text);
+        text = parsed.memberId || parsed.id || parsed.qrCodeData || parsed.barcode || parsed.code || text;
+      } catch {
+        // use raw
+      }
+    }
+    if (text.includes('/') && !text.includes(' ')) {
+      const parts = text.split('/');
+      const last = parts[parts.length - 1];
+      if (last) text = last;
+    }
+    return text.trim();
+  };
+
+  const handleScannerDetected = async (rawCode: string) => {
+    const code = cleanScannedCode(rawCode);
+    const upperCode = code.toUpperCase();
+
     if (scannerModal.targetAction === 'borrow_member') {
-      const found = members.find(
-        (m) => m.memberId.toUpperCase() === code.toUpperCase() || m.id.toUpperCase() === code.toUpperCase()
+      let found = members.find(
+        (m) =>
+          m.memberId.toUpperCase() === upperCode ||
+          (m.qrCodeData && m.qrCodeData.toUpperCase() === upperCode) ||
+          m.id.toUpperCase() === upperCode ||
+          m.fullName.toUpperCase().includes(upperCode)
       );
+
+      if (!found) {
+        try {
+          const remote = await api.getMemberByQr(code);
+          if (remote && remote.memberId) found = remote;
+        } catch {
+          // not found
+        }
+      }
+
       if (found) {
         setBorrowMemberId(found.memberId);
         setBorrowStatusMessage(null);
       } else {
-        setBorrowStatusMessage({ type: 'error', text: `Member "${code}" not found.` });
+        setBorrowStatusMessage({ type: 'error', text: `Member with code "${code}" not found.` });
       }
     } else if (scannerModal.targetAction === 'borrow_book') {
       setBorrowBarcode(code);
       setBorrowStatusMessage(null);
     } else if (scannerModal.targetAction === 'return_scan') {
-      setReturnBarcode(code);
-      setReturnStatusMessage(null);
+      // Check if scanned code matches a member QR
+      const foundMember = members.find(
+        (m) =>
+          m.memberId.toUpperCase() === upperCode ||
+          (m.qrCodeData && m.qrCodeData.toUpperCase() === upperCode) ||
+          m.id.toUpperCase() === upperCode
+      );
+
+      if (foundMember) {
+        setReturnBarcode(foundMember.memberId);
+        setReturnStatusMessage(null);
+      } else {
+        setReturnBarcode(code);
+        setReturnStatusMessage(null);
+      }
     }
   };
 
@@ -347,8 +776,8 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
               className="btn btn-primary btn-sm"
               style={{ gap: '6px', fontWeight: 700 }}
             >
-              <Sparkles size={15} />
-              <span>Step-by-Step Issue Loan Modal</span>
+              <BookOpen size={16} />
+              <span>Borrow Book</span>
             </button>
           </div>
         )}
@@ -393,13 +822,13 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
               onClick={() => setActiveTab('borrow')}
               className={`btn btn-ghost ${activeTab === 'borrow' ? 'active' : ''}`}
               style={{
-                borderBottom: activeTab === 'borrow' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                borderBottom: activeTab === 'borrow' ? '2px solid var(--primary-600, #1E4D38)' : '2px solid transparent',
                 borderRadius: '6px 6px 0 0',
                 fontWeight: activeTab === 'borrow' ? 600 : 500
               }}
             >
               <BookOpen size={16} />
-              <span>Issue Loan (Staff)</span>
+              <span>Borrow Book</span>
             </button>
 
             <button
@@ -616,395 +1045,449 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
 
       {/* TAB 1: BORROW WORKFLOW */}
       {activeTab === 'borrow' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', alignItems: 'start' }}>
-          {/* Main Borrow Workflow Card - Matching user specification diagram */}
-          <div className="card" style={{ padding: '24px', border: '1px solid var(--border-main)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', textTransform: 'uppercase' }}>
-                  Borrow Book
-                </h3>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Scan Member QR & Book Barcode to record official loan transaction
-                </div>
+        <div style={{ maxWidth: '750px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Main Borrow Card - Exact Match to Return Card */}
+          <div className="card" style={{ padding: '28px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--success-bg)',
+                  color: 'var(--success)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 12px'
+                }}
+              >
+                <BookOpen size={24} />
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsWizardModalOpen(true)}
-                  className="btn btn-primary btn-sm"
-                  style={{ gap: '6px', fontWeight: 700 }}
-                >
-                  <Sparkles size={14} />
-                  <span>Open Step-by-Step Modal Wizard</span>
-                </button>
-                <span className="badge badge-neutral" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Desk Circulation
-                </span>
-              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 700 }}>Borrow Book & Issue Loan</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '480px', margin: '4px auto 0' }}>
+                Scan the member QR or book physical barcode to verify borrowing eligibility, inspect physical shelf copies, and confirm loan.
+              </p>
             </div>
 
-            {/* SECTION 1: SCAN MEMBER QR */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: 0 }}>
-                  1. Scan Member QR Code
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setScannerModal({ isOpen: true, mode: 'member_qr', targetAction: 'borrow_member' })}
-                  className="btn btn-secondary btn-sm"
-                  style={{ gap: '6px', fontSize: '12px', padding: '4px 10px' }}
-                >
-                  <QrCode size={14} />
-                  <span>📷 Scan QR</span>
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <select
-                  className="form-select"
-                  value={borrowMemberId}
-                  onChange={(e) => {
-                    setBorrowMemberId(e.target.value);
-                    setBorrowStatusMessage(null);
-                  }}
-                  style={{ flex: 1 }}
-                >
-                  <option value="">-- Select or Scan Member --</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.memberId}>
-                      {m.fullName} ({m.memberId}) • {m.membershipType}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Member Card Details & Real-Time Eligibility Engine */}
-              {selectedMember ? (
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border-main)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--brand-forest)',
-                          color: '#ffffff',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          fontSize: '13px'
-                        }}
-                      >
-                        {selectedMember.fullName.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                          {selectedMember.fullName}
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          ID: <code>{selectedMember.memberId}</code> • {selectedMember.membershipType}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className={`badge ${isMemberEligible ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px', fontWeight: 600 }}>
-                        {isMemberEligible ? '✓ Eligible' : '❌ Ineligible'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Eligibility Checklist */}
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11.5px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isAccountActive ? 'var(--success)' : 'var(--danger)' }}>
-                      {isAccountActive ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                      <span>Account Active</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isWithinLimit ? 'var(--success)' : 'var(--danger)' }}>
-                      {isWithinLimit ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                      <span>Borrow Limit ({memberActiveLoans.length}/3 Loans)</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoOverdue ? 'var(--success)' : 'var(--danger)' }}>
-                      {hasNoOverdue ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                      <span>No Overdue Books</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoBlockedFines ? 'var(--success)' : 'var(--danger)' }}>
-                      {hasNoBlockedFines ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                      <span>No Blocked Fines</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', border: '1px dashed var(--border-main)', borderRadius: 'var(--radius-md)' }}>
-                  No member selected yet. Scan QR code or select from dropdown above.
-                </div>
-              )}
+            {/* Centered Scan Action Buttons */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '14px',
+                margin: '28px 0 20px',
+                flexWrap: 'wrap'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setScannerModal({ isOpen: true, mode: 'book_barcode', targetAction: 'borrow_book' })}
+                className="btn btn-primary"
+                style={{ gap: '8px', padding: '12px 26px', fontSize: '14px', fontWeight: 600 }}
+              >
+                <Barcode size={18} />
+                <span>Scan Barcode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScannerModal({ isOpen: true, mode: 'member_qr', targetAction: 'borrow_member' })}
+                className="btn btn-secondary"
+                style={{ gap: '8px', padding: '12px 26px', fontSize: '14px', fontWeight: 600 }}
+              >
+                <QrCode size={18} />
+                <span>Scan Member QR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsWizardModalOpen(true)}
+                className="btn btn-ghost"
+                style={{ gap: '8px', padding: '12px 20px', fontSize: '14px', fontWeight: 600, border: '1px dashed var(--border-main)' }}
+                title="Launch multi-book borrowing wizard"
+              >
+                <Layers size={18} />
+                <span>Full Borrow Wizard</span>
+              </button>
             </div>
 
-            {/* DIVIDER */}
-            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--border-main)' }} />
-
-            {/* SECTION 2: SCAN BOOK BARCODE */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label className="form-label" style={{ fontWeight: 700, marginBottom: 0 }}>
-                  2. Scan Book Barcode
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setScannerModal({ isOpen: true, mode: 'book_barcode', targetAction: 'borrow_book' })}
-                  className="btn btn-secondary btn-sm"
-                  style={{ gap: '6px', fontSize: '12px', padding: '4px 10px' }}
-                >
-                  <Barcode size={14} />
-                  <span>📷 Scan Barcode</span>
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Enter or scan physical copy barcode (e.g. BPL-000101)"
-                  value={borrowBarcode}
-                  onChange={(e) => {
-                    setBorrowBarcode(e.target.value);
-                    setBorrowStatusMessage(null);
-                  }}
-                  style={{ flex: 1, fontFamily: 'var(--font-mono)' }}
-                />
-              </div>
-
-              {/* Book Details & Availability Card */}
-              {selectedCopy && selectedBook ? (
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border-main)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                        {selectedBook.title}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        by {selectedBook.author} • ISBN: <code>{selectedBook.isbn}</code>
-                      </div>
-                    </div>
-                    <span
-                      className={`badge ${isCopyAvailable ? 'badge-success' : 'badge-danger'}`}
-                      style={{ fontSize: '11px', fontWeight: 600 }}
+            {/* Scanned Badges Indicator */}
+            {(borrowMemberId || borrowBarcode) && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '10px',
+                  marginBottom: '18px',
+                  flexWrap: 'wrap'
+                }}
+              >
+                {borrowMemberId && (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--accent-blue-light, rgba(2, 132, 199, 0.1))',
+                      color: 'var(--accent-blue, #0284C7)',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}
+                  >
+                    <UserIcon size={14} />
+                    <span>Patron: {selectedMember?.fullName || borrowMemberId}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBorrowMemberId('');
+                        setBorrowStatusMessage(null);
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: '4px', color: 'inherit' }}
+                      title="Clear patron"
                     >
-                      {isCopyAvailable ? '✓ Available' : `❌ ${selectedCopy.status}`}
-                    </span>
+                      <X size={13} />
+                    </button>
                   </div>
+                )}
 
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Accession No: </span>
-                      <code>{selectedCopy.accessionNumber}</code>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Barcode: </span>
-                      <code>{selectedCopy.barcode}</code>
-                    </div>
+                {borrowBarcode && (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--success-bg)',
+                      color: 'var(--success)',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}
+                  >
+                    <Barcode size={14} />
+                    <span>Copy: {borrowBarcode}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBorrowBarcode('');
+                        setBorrowStatusMessage(null);
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: '4px', color: 'inherit' }}
+                      title="Clear barcode"
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
+                )}
 
-                  {currentCopyBorrower && (
-                    <div style={{ fontSize: '11px', color: 'var(--danger)', backgroundColor: 'var(--danger-bg)', padding: '6px 10px', borderRadius: '4px' }}>
-                      Currently borrowed by <strong>{currentCopyBorrower.memberName}</strong> ({currentCopyBorrower.memberId}), due {currentCopyBorrower.dueDate}.
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', border: '1px dashed var(--border-main)', borderRadius: 'var(--radius-md)' }}>
-                  No book barcode scanned. Use camera scanner or pick an available shelf copy on the right.
-                </div>
-              )}
-            </div>
-
-            {/* DIVIDER */}
-            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--border-main)' }} />
-
-            {/* SECTION 3: BORROW DATES & CONFIRMATION */}
-            <form onSubmit={handleExecuteBorrow}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Borrow Date
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    className="form-input"
-                    value={todayDateStr}
-                    style={{ backgroundColor: 'var(--bg-page)', cursor: 'not-allowed' }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Due Date (7 Days Default)
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    className="form-input"
-                    value={borrowDueDate}
-                    onChange={(e) => setBorrowDueDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {borrowStatusMessage && (
-                <div
-                  style={{
-                    padding: '12px',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '13px',
-                    marginBottom: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    backgroundColor: borrowStatusMessage.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
-                    color: borrowStatusMessage.type === 'success' ? 'var(--success)' : 'var(--danger)',
-                    border: `1px solid ${borrowStatusMessage.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`
-                  }}
-                >
-                  {borrowStatusMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                  <span>{borrowStatusMessage.text}</span>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="button"
                   onClick={() => {
+                    setBorrowMemberId('');
                     setBorrowBarcode('');
                     setBorrowStatusMessage(null);
                   }}
-                  className="btn btn-secondary"
-                  style={{ flex: 1, justifyContent: 'center' }}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: '11px', padding: '2px 8px' }}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!selectedMember || !isMemberEligible || !selectedCopy || !isCopyAvailable}
-                  className="btn btn-primary"
-                  style={{ flex: 2, justifyContent: 'center' }}
-                >
-                  <Check size={16} />
-                  <span>Confirm Borrow</span>
+                  Clear All
                 </button>
               </div>
-            </form>
-          </div>
+            )}
 
-          {/* Right Column: Available Shelf Inventory & Member Quick-Picks */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Shelf copies */}
-            <div className="card" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 700 }}>Available Copies on Shelf</h4>
-                <span className="badge badge-success" style={{ fontSize: '11px' }}>{availableCopies.length} Ready</span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                Click any copy below to instantly load its barcode into the scanner:
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
-                {availableCopies.length === 0 ? (
-                  <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                    All copies are currently checked out.
-                  </div>
-                ) : (
-                  availableCopies.map((copy, idx) => (
+            {/* Matched Borrower and Book Verification Card */}
+            {(selectedMember || selectedCopy) ? (
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-main)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}
+              >
+                {/* 1. Patron Verification Section */}
+                {selectedMember ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: '50%',
+                            backgroundColor: 'var(--brand-forest, #1E4D38)',
+                            color: '#FFFFFF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '13px'
+                          }}
+                        >
+                          {selectedMember.fullName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                            {selectedMember.fullName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            Member ID: <code>{selectedMember.memberId}</code> • {selectedMember.membershipType}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`badge ${isMemberEligible ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px', fontWeight: 600 }}>
+                        {isMemberEligible ? '✓ Eligible to Borrow' : '❌ Ineligible'}
+                      </span>
+                    </div>
+
+                    {/* Eligibility Checklist */}
                     <div
-                      key={idx}
-                      onClick={() => {
-                        setBorrowBarcode(copy.barcode);
-                        setBorrowStatusMessage(null);
-                      }}
                       style={{
-                        padding: '10px 12px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-main)',
-                        backgroundColor: borrowBarcode === copy.barcode ? 'var(--accent-blue-light)' : 'var(--bg-subtle)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transition: 'all 0.15s ease'
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid var(--border-subtle)',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                        gap: '8px',
+                        fontSize: '11.5px'
                       }}
                     >
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--text-primary)' }}>{copy.bookTitle}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>by {copy.author}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isAccountActive ? 'var(--success)' : 'var(--danger)' }}>
+                        {isAccountActive ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                        <span>Account Active</span>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <code style={{ fontSize: '11.5px', fontWeight: 700 }}>{copy.barcode}</code>
-                        <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>{copy.accession}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isWithinLimit ? 'var(--success)' : 'var(--danger)' }}>
+                        {isWithinLimit ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                        <span>Limit ({memberActiveLoans.length}/3 Loans)</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoOverdue ? 'var(--success)' : 'var(--danger)' }}>
+                        {hasNoOverdue ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                        <span>No Overdues</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoBlockedFines ? 'var(--success)' : 'var(--danger)' }}>
+                        {hasNoBlockedFines ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                        <span>No Unpaid Fines</span>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Quick Member Switcher for Demo */}
-            <div className="card" style={{ padding: '20px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>Registered Patrons Quick-Select</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
-                {members.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setBorrowMemberId(m.memberId);
-                      setBorrowStatusMessage(null);
-                    }}
-                    className="btn btn-secondary btn-sm"
+                  </div>
+                ) : (
+                  <div
                     style={{
-                      justifyContent: 'space-between',
-                      backgroundColor: borrowMemberId === m.memberId ? 'var(--accent-blue-light)' : undefined,
-                      padding: '6px 10px',
-                      fontSize: '11.5px'
+                      padding: '14px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(2, 132, 199, 0.06)',
+                      border: '1px dashed rgba(2, 132, 199, 0.3)',
+                      textAlign: 'center',
+                      fontSize: '12.5px',
+                      color: 'var(--text-secondary)'
                     }}
                   >
-                    <span>{m.fullName} ({m.memberId})</span>
-                    <span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
-                      {m.status}
-                    </span>
-                  </button>
-                ))}
+                    👉 <strong>Scan Member QR</strong> above to link patron account to this loan.
+                  </div>
+                )}
+
+                {/* 2. Book Copy Verification Section */}
+                {selectedCopy && selectedBook ? (
+                  <div
+                    style={{
+                      borderTop: '1px solid var(--border-subtle)',
+                      paddingTop: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
+                          {selectedBook.title}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          by {selectedBook.author} • ISBN: <code>{selectedBook.isbn}</code>
+                        </div>
+                      </div>
+                      <span
+                        className={`badge ${isCopyAvailable ? 'badge-success' : 'badge-danger'}`}
+                        style={{ fontSize: '11px', fontWeight: 600 }}
+                      >
+                        {isCopyAvailable ? '✓ Copy Available on Shelf' : `❌ ${selectedCopy.status}`}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+                      <div>Accession: <code>{selectedCopy.accessionNumber}</code></div>
+                      <div>Barcode: <code>{selectedCopy.barcode}</code></div>
+                    </div>
+
+                    {currentCopyBorrower && (
+                      <div style={{ fontSize: '11px', color: 'var(--danger)', backgroundColor: 'var(--danger-bg)', padding: '6px 10px', borderRadius: '4px' }}>
+                        Currently checked out to <strong>{currentCopyBorrower.memberName}</strong> ({currentCopyBorrower.memberId}), due {currentCopyBorrower.dueDate}.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: '14px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(30, 77, 56, 0.06)',
+                      border: '1px dashed rgba(30, 77, 56, 0.3)',
+                      textAlign: 'center',
+                      fontSize: '12.5px',
+                      color: 'var(--text-secondary)'
+                    }}
+                  >
+                    👉 <strong>Scan Book Barcode</strong> above to select the physical copy from the shelf.
+                  </div>
+                )}
+
+                {/* 3. Due Date & Final Submit Button */}
+                {selectedMember && selectedCopy && (
+                  <form onSubmit={handleExecuteBorrow} style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          Borrow Date
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          className="form-input"
+                          value={todayDateStr}
+                          style={{ backgroundColor: 'var(--bg-page)', cursor: 'not-allowed' }}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          Due Date (7 Days Default)
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          className="form-input"
+                          value={borrowDueDate}
+                          onChange={(e) => setBorrowDueDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!selectedMember || !isMemberEligible || !selectedCopy || !isCopyAvailable}
+                      className="btn btn-primary"
+                      style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '14px', fontWeight: 700 }}
+                    >
+                      <Check size={16} />
+                      <span>Confirm Borrow & Issue Loan Slip</span>
+                    </button>
+                  </form>
+                )}
               </div>
+            ) : null}
+
+            {/* Manual Selection Fallback Drawer/Toggle */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowBorrowManual(!showBorrowManual)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600
+                }}
+              >
+                <span>{showBorrowManual ? 'Hide manual selectors' : 'Or select patron / shelf copy manually'}</span>
+                {showBorrowManual ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {showBorrowManual && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginTop: '14px', textAlign: 'left' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '11.5px', fontWeight: 600 }}>Select Patron:</label>
+                    <select
+                      className="form-select"
+                      value={borrowMemberId}
+                      onChange={(e) => {
+                        setBorrowMemberId(e.target.value);
+                        setBorrowStatusMessage(null);
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">-- Choose Patron --</option>
+                      {members.map((m) => (
+                        <option key={m.id} value={m.memberId}>
+                          {m.fullName} ({m.memberId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '11.5px', fontWeight: 600 }}>Select Shelf Copy:</label>
+                    <select
+                      className="form-select"
+                      value={borrowBarcode}
+                      onChange={(e) => {
+                        setBorrowBarcode(e.target.value);
+                        setBorrowStatusMessage(null);
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">-- Choose Shelf Copy --</option>
+                      {availableCopies.map((c, idx) => (
+                        <option key={idx} value={c.barcode}>
+                          {c.bookTitle} ({c.barcode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Status Feedback Message */}
+            {borrowStatusMessage && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: borrowStatusMessage.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
+                  color: borrowStatusMessage.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                  border: `1px solid ${borrowStatusMessage.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`
+                }}
+              >
+                {borrowStatusMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                <span>{borrowStatusMessage.text}</span>
+              </div>
+            )}
           </div>
+
+          {/* INSTRUCTIONS: HOW TO BORROW BOOKS */}
+          <BorrowInstructionsCard lang={instructionLang} onToggleLang={() => setInstructionLang(instructionLang === 'en' ? 'ceb' : 'en')} />
         </div>
       )}
 
       {/* TAB 2: RETURN WORKFLOW */}
       {activeTab === 'return' && (
-        <div style={{ maxWidth: '750px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '750px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="card" style={{ padding: '28px' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div
@@ -1216,6 +1699,9 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
               </div>
             )}
           </div>
+
+          {/* INSTRUCTIONS: HOW TO RETURN BOOKS */}
+          <ReturnInstructionsCard lang={instructionLang} onToggleLang={() => setInstructionLang(instructionLang === 'en' ? 'ceb' : 'en')} />
         </div>
       )}
 
@@ -1429,7 +1915,7 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
         transaction={loanSlipModal.transaction}
       />
 
-      {/* Step-by-Step Issue Loan Wizard Modal with Process Indicator */}
+      {/* Modern Redesigned Borrow Book Modal */}
       <IssueLoanWizardModal
         isOpen={isWizardModalOpen}
         onClose={() => setIsWizardModalOpen(false)}
@@ -1437,6 +1923,7 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
         books={books}
         transactions={transactions}
         onConfirmBorrow={onBorrowBook}
+        onConfirmBorrowBatch={onBorrowBooksBatch}
       />
     </div>
   );

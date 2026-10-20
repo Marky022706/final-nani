@@ -5,12 +5,16 @@ import { User, Settings, LogOut, ChevronDown, Mail, HelpCircle } from 'lucide-re
 interface UserProfileDropdownProps {
   currentUser: UserType;
   onNavigate: (destination: string) => void;
+  onOpenProfile?: () => void;
+  onOpenAccountSettings?: () => void;
   onRequestLogout: () => void;
 }
 
 export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
   currentUser,
   onNavigate,
+  onOpenProfile,
+  onOpenAccountSettings,
   onRequestLogout
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -140,10 +144,11 @@ export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
               type="button"
               role="menuitem"
               onClick={() => {
-                if (currentUser.role === 'member') {
+                setIsOpen(false);
+                if (onOpenProfile) {
+                  onOpenProfile();
+                } else if (currentUser.role === 'member') {
                   handleSelect('profile');
-                } else if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
-                  handleSelect('admin_mgmt');
                 } else {
                   handleSelect('dashboard');
                 }
@@ -159,10 +164,11 @@ export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
               type="button"
               role="menuitem"
               onClick={() => {
-                if (currentUser.role === 'super_admin') {
+                setIsOpen(false);
+                if (onOpenAccountSettings) {
+                  onOpenAccountSettings();
+                } else if (currentUser.role === 'super_admin') {
                   handleSelect('system_settings');
-                } else if (currentUser.role === 'member') {
-                  handleSelect('profile');
                 } else {
                   handleSelect('dashboard');
                 }

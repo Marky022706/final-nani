@@ -111,4 +111,86 @@ class AuthController extends Controller
     {
         return response()->json($request->user()->toPublicArray());
     }
+
+    /**
+     * Update the currently authenticated user's profile information.
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:50',
+            'department' => 'nullable|string|max:255',
+        ]);
+
+        $user->update($validated);
+
+        if ($user->member_id) {
+            $member = Member::where('member_id', $user->member_id)->first();
+            if ($member) {
+                $member->update([
+                    'full_name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'] ?? $member->phone,
+                ]);
+            }
+        }
+
+        try {
+            AuditLog::create([
+                'action' => 'USER_PROFILE_UPDATED',
+                'category' => 'Profile',
+                'details' => "{$user->name} updated their profile credentials.",
+                'performed_by' => $user->name,
+                'ip_address' => $request->ip(),
+            ]);
+        } catch (\Throwable $e) {
+            // Ignored
+        }
+
+        return response()->json([
+            'message' => 'Profile updated successfully.',
+            'user' => $user->toPublicArray(),
+        ]);
+    }
+
+    /**
+     * Change the currently authenticated user's password.
+     */
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $user = $request->user();
+        if (!$user || !Hash::check($request->input('current_password'), $user->password)) {
+            return response()->json([
+                'message' => 'The current password provided is incorrect.',
+            ], 422);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->input('new_password')),
+        ]);
+
+        try {
+            AuditLog::create([
+                'action' => 'USER_PASSWORD_CHANGED',
+                'category' => 'Security',
+                'details' => "{$user->name} ({$user->role}) changed their account password.",
+                'performed_by' => $user->name,
+                'ip_address' => $request->ip(),
+            ]);
+        } catch (\Throwable $e) {
+            // Ignored
+        }
+
+        return response()->json([
+            'message' => 'Password has been successfully changed.',
+        ]);
+    }
 }

@@ -137,11 +137,19 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
                         </button>
                         <button
                           onClick={() => handleDeleteBook(book)}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '5px 7px', color: 'var(--danger)' }}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            color: '#dc2626',
+                            backgroundColor: '#fef2f2',
+                            borderColor: '#fca5a5'
+                          }}
                           title="Permanently delete this book"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -205,11 +213,19 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
                         </button>
                         <button
                           onClick={() => handleDeleteMember(member)}
-                          className="btn btn-ghost btn-sm"
-                          style={{ padding: '5px 7px', color: 'var(--danger)' }}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            color: '#dc2626',
+                            backgroundColor: '#fef2f2',
+                            borderColor: '#fca5a5'
+                          }}
                           title="Permanently delete this member account"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>

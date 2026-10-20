@@ -111,10 +111,15 @@ export const BookSelectionToolbar: React.FC<BookSelectionToolbarProps> = ({
             onClick={onArchive}
             className="btn btn-secondary btn-sm"
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: '6px',
               fontSize: '12.5px',
               fontWeight: 600,
-              backgroundColor: '#ffffff'
+              backgroundColor: '#ffffff',
+              border: '1px solid var(--border-color, #cbd5e1)',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
             title={selectedCount === 1 ? 'Archive selected book' : `Archive ${selectedCount} books`}
           >
@@ -130,11 +135,16 @@ export const BookSelectionToolbar: React.FC<BookSelectionToolbarProps> = ({
             onClick={onRestore}
             className="btn btn-secondary btn-sm"
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: '6px',
               fontSize: '12.5px',
               fontWeight: 600,
               backgroundColor: '#ffffff',
-              color: 'var(--brand-forest)'
+              color: 'var(--brand-forest)',
+              border: '1px solid var(--border-color, #cbd5e1)',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
             title={selectedCount === 1 ? 'Restore book to active catalog' : `Restore ${selectedCount} books`}
           >
@@ -148,14 +158,18 @@ export const BookSelectionToolbar: React.FC<BookSelectionToolbarProps> = ({
           <button
             type="button"
             onClick={onDelete}
-            className="btn btn-ghost btn-sm"
+            className="btn btn-secondary btn-sm"
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               gap: '6px',
               fontSize: '12.5px',
               fontWeight: 600,
               color: 'var(--danger, #dc2626)',
               backgroundColor: '#fee2e2',
-              borderColor: '#fca5a5'
+              border: '1px solid #fca5a5',
+              boxShadow: '0 1px 2px rgba(220, 38, 38, 0.08)',
             }}
             title={selectedCount === 1 ? 'Permanently delete archived book' : `Permanently delete ${selectedCount} archived books`}
           >

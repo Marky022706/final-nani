@@ -1,11 +1,84 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogIn, ArrowRight, BookOpen, Sparkles } from 'lucide-react';
+import { StorageService } from '../../utils/storage';
+import { api } from '../../services/api';
 
 interface FinalCTASectionProps {
   onNavigateToLogin: () => void;
 }
 
 export const FinalCTASection: React.FC<FinalCTASectionProps> = ({ onNavigateToLogin }) => {
+  // Helper to calculate statistics dynamically from local cache
+  const calculateLocalStats = () => {
+    const books = StorageService.getBooks();
+    const members = StorageService.getMembers();
+
+    let availableCopies = 0;
+    if (Array.isArray(books) && books.length > 0) {
+      availableCopies = books
+        .filter((b) => !b.isArchived)
+        .reduce((sum, b) => {
+          if (b.copies && Array.isArray(b.copies) && b.copies.length > 0) {
+            return sum + b.copies.filter((c) => c.status === 'Available').length;
+          }
+          return sum + (b.availability === 'Available' || !b.availability ? 1 : 0);
+        }, 0);
+    }
+
+    let activeMembersCount = 0;
+    if (Array.isArray(members) && members.length > 0) {
+      activeMembersCount = members.filter((m) => m.status === 'active' && !m.isArchived).length;
+    }
+
+    const foundingYear = 1994;
+    const currentYear = new Date().getFullYear();
+    const yearsServing = Math.max(1, currentYear - foundingYear);
+
+    return {
+      booksAvailable: availableCopies,
+      activeMembers: activeMembersCount,
+      yearsServing,
+    };
+  };
+
+  const [stats, setStats] = useState(calculateLocalStats);
+
+  // Synchronize with backend public-stats and storage updates
+  useEffect(() => {
+    let isMounted = true;
+
+    // Fetch from backend
+    api
+      .getPublicStats()
+      .then((data) => {
+        if (isMounted && data) {
+          setStats((prev) => ({
+            booksAvailable: typeof data.books_available === 'number' ? data.books_available : prev.booksAvailable,
+            activeMembers: typeof data.active_members === 'number' ? data.active_members : prev.activeMembers,
+            yearsServing: typeof data.years_serving === 'number' ? data.years_serving : prev.yearsServing,
+          }));
+        }
+      })
+      .catch(() => {
+        // Fall back gracefully to local storage data
+      });
+
+    // Listen for storage changes across tabs or actions
+    const handleStorageChange = () => {
+      setStats(calculateLocalStats());
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  const formatStatValue = (val: number, fallback = '0+') => {
+    if (val <= 0) return fallback;
+    return `${val.toLocaleString()}+`;
+  };
   return (
     <section
       id="final-cta"
@@ -213,9 +286,9 @@ export const FinalCTASection: React.FC<FinalCTASectionProps> = ({ onNavigateToLo
           }}
         >
           {[
-            { value: '5,000+', label: 'Books Available' },
-            { value: '1,200+', label: 'Active Members' },
-            { value: '30+', label: 'Years Serving' }
+            { value: formatStatValue(stats.booksAvailable), label: 'Books Available' },
+            { value: formatStatValue(stats.activeMembers), label: 'Active Members' },
+            { value: `${stats.yearsServing}+`, label: 'Years Serving' }
           ].map((stat, idx) => (
             <div key={idx} style={{ textAlign: 'center' }}>
               <div

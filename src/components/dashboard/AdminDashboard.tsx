@@ -17,6 +17,7 @@ import {
   ArrowRight,
   CheckCircle2
 } from 'lucide-react';
+import { DashboardSkeleton } from '../common/skeleton';
 
 interface AdminDashboardProps {
   books: Book[];
@@ -26,6 +27,7 @@ interface AdminDashboardProps {
   serviceRecords: ServiceRecord[];
   userRole?: UserRole;
   currentUser?: User;
+  isLoading?: boolean;
   onNavigate: (dest: string) => void;
   onOpenAddBook: () => void;
   onOpenCreateMember: () => void;
@@ -40,11 +42,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   serviceRecords: _serviceRecords,
   userRole,
   currentUser,
+  isLoading = false,
   onNavigate,
   onOpenAddBook,
   onOpenCreateMember,
   onOpenScanner
 }) => {
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
   const totalPhysicalCopies = books.reduce((sum, b) => sum + b.copies.length, 0);
   const availableCopies = books.reduce(
     (sum, b) => sum + b.copies.filter((c) => c.status === 'Available').length,
@@ -73,9 +79,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Header */}
       <div className="page-header">
         <div>
-          <div className="page-title">Library Operations Dashboard</div>
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span>Welcome back, {currentUser?.name || 'Administrator'}!</span>
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                padding: '3px 10px',
+                borderRadius: '999px',
+                backgroundColor: userRole === 'volunteer' ? '#ecfdf5' : '#e8f3e8',
+                color: userRole === 'volunteer' ? '#047857' : '#166534',
+                border: '1px solid #bbf7d0',
+              }}
+            >
+              {userRole === 'volunteer' ? 'Staff Volunteer Desk' : 'Library Administrator'}
+            </span>
+          </div>
           <div className="page-subtitle">
-            Balingasag Public Library • Daily Circulation & Operational Overview
+            Balingasag Public Library • Daily Operations Overview & Circulation Desk
           </div>
         </div>
         <div className="page-actions">

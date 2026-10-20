@@ -79,10 +79,10 @@ User::updateOrCreate(
 );
 
 User::updateOrCreate(
-    ['email' => 'volunteer@balingasag.gov.ph'],
+    ['email' => 'admin1@balingasag.gov.ph'],
     [
-        'name' => 'Volunteer Staff',
-        'username' => 'volunteer',
+        'name' => 'Balong Long',
+        'username' => 'balonglong',
         'password' => Hash::make('admin123'),
         'role' => 'volunteer',
         'status' => 'active',

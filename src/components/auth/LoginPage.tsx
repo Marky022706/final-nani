@@ -3,6 +3,7 @@ import type { User } from '../../types';
 import { api } from '../../services/api';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, HelpCircle, X, ArrowRight, ArrowLeft, ShieldCheck, Check, Wrench, Loader2 } from 'lucide-react';
 import { FloatingQrBackground } from './FloatingQrBackground';
+import { useActionLoading } from '../../context/ActionLoadingContext';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
@@ -18,18 +19,55 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const { showActionLoading, hideActionLoading } = useActionLoading();
+
+  // Authentication Loading State ('idle' | 'loading')
+  const [authFeedbackStatus, setAuthFeedbackStatus] = useState<'idle' | 'loading'>('idle');
+
   // Credentials are verified server-side against the Laravel API; a
   // Sanctum token is issued and stored for all subsequent requests.
   const performLogin = async (loginIdentifier: string, loginPassword: string) => {
+    // Prevent duplicate concurrent submissions
+    if (isLoading || authFeedbackStatus !== 'idle') return;
+
     setErrorMessage(null);
     setIsLoading(true);
+    setAuthFeedbackStatus('loading');
+    showActionLoading({
+      title: 'Signing In',
+      message: 'Signing you in... Verifying your credentials with the library server',
+      useLogo: true
+    });
+
     try {
       const { user } = await api.login(loginIdentifier, loginPassword);
+
+      if (user.status === 'inactive') {
+        hideActionLoading();
+        setAuthFeedbackStatus('idle');
+        setIsLoading(false);
+        setErrorMessage('Your library account is currently inactive. Please contact the library administrator.');
+        return;
+      }
+
+      if (user.status === 'suspended') {
+        hideActionLoading();
+        setAuthFeedbackStatus('idle');
+        setIsLoading(false);
+        setErrorMessage('Your library account is currently suspended. Please contact the library administrator.');
+        return;
+      }
+
+      // Transition immediately into the dashboard so the welcome message is seen inside the dashboard
+      hideActionLoading();
+      setAuthFeedbackStatus('idle');
+      setIsLoading(false);
       onLogin(user);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Unable to sign in. Please try again.');
-    } finally {
+      hideActionLoading();
+      setAuthFeedbackStatus('idle');
       setIsLoading(false);
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to sign in. Please verify your credentials and try again.');
     }
   };
 
@@ -48,6 +86,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
   // one click away while developing. Stripped from production builds since
   // `import.meta.env.DEV` is false there and dead-code-eliminated.
   const handleDevQuickLogin = (devIdentifier: string, devPassword: string) => {
+    if (isLoading || authFeedbackStatus !== 'idle') return;
     setIdentifier(devIdentifier);
     setPassword(devPassword);
     performLogin(devIdentifier, devPassword);
@@ -238,6 +277,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                 id="login-identifier"
                 type="text"
                 required
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 autoComplete="username"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
@@ -246,7 +286,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                 style={{
                   paddingLeft: '38px',
                   height: '42px',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.7 : 1,
+                  cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'text'
                 }}
               />
             </div>
@@ -268,14 +310,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
               <button
                 type="button"
                 onClick={() => setIsForgotPasswordOpen(true)}
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 style={{
                   background: 'none',
                   border: 'none',
                   color: 'var(--brand-forest)',
                   fontSize: '12.5px',
                   fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: 0
+                  cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'pointer',
+                  padding: 0,
+                  opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.6 : 1
                 }}
               >
                 Forgot Password?
@@ -297,6 +341,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                 id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 required
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -306,11 +351,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                   paddingLeft: '38px',
                   paddingRight: '38px',
                   height: '42px',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.7 : 1,
+                  cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'text'
                 }}
               />
               <button
                 type="button"
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
@@ -320,7 +368,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                   background: 'none',
                   border: 'none',
                   color: '#94a3b8',
-                  cursor: 'pointer',
+                  cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'pointer',
                   padding: 0
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
@@ -346,19 +394,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                 gap: '8px',
                 fontSize: '13px',
                 color: '#475569',
-                cursor: 'pointer',
+                cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'pointer',
                 userSelect: 'none'
               }}
             >
               <input
                 type="checkbox"
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 style={{
                   accentColor: 'var(--brand-forest)',
                   width: '16px',
                   height: '16px',
-                  cursor: 'pointer'
+                  cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'pointer'
                 }}
               />
               <span>Remember Me</span>
@@ -368,7 +417,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
           {/* Login Button */}
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || authFeedbackStatus !== 'idle'}
             className="btn btn-primary"
             style={{
               width: '100%',
@@ -380,12 +429,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.9 : 1,
+              cursor: (isLoading || authFeedbackStatus !== 'idle') ? 'not-allowed' : 'pointer',
+              opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.8 : 1,
               transition: 'all 0.2s ease-in-out'
             }}
           >
-            {isLoading ? (
+            {isLoading || authFeedbackStatus === 'loading' ? (
               <>
                 <Loader2 size={18} className="animate-spin-smooth" />
                 <span>Verifying credentials...</span>
@@ -460,30 +509,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
               <button
                 type="button"
                 onClick={() => handleDevQuickLogin('superadmin@balingasag.gov.ph', 'admin123')}
-                disabled={isLoading}
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 className="btn btn-secondary btn-sm"
-                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px' }}
+                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px', opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.6 : 1 }}
               >
                 Superadmin
               </button>
               <button
                 type="button"
                 onClick={() => handleDevQuickLogin('admin.arquita@balingasag.gov.ph', 'admin123')}
-                disabled={isLoading}
+                disabled={isLoading || authFeedbackStatus !== 'idle'}
                 className="btn btn-secondary btn-sm"
-                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px' }}
+                style={{ flex: 1, justifyContent: 'center', fontSize: '11px', padding: '6px 8px', opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.6 : 1 }}
               >
                 Admin (Ms. Arquita)
               </button>
             </div>
             <button
               type="button"
-              onClick={() => handleDevQuickLogin('volunteer@balingasag.gov.ph', 'admin123')}
-              disabled={isLoading}
+              onClick={() => handleDevQuickLogin('admin1@balingasag.gov.ph', 'admin123')}
+              disabled={isLoading || authFeedbackStatus !== 'idle'}
               className="btn btn-secondary btn-sm"
-              style={{ width: '100%', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px', backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' }}
+              style={{ width: '100%', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px', backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46', opacity: (isLoading || authFeedbackStatus !== 'idle') ? 0.6 : 1 }}
             >
-              ★ Volunteer (Desk Relief)
+              ★ Volunteer Staff: Balong Long (admin1@balingasag.gov.ph)
             </button>
           </div>
           <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '8px', textAlign: 'center' }}>
@@ -491,6 +540,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
           </div>
         </div>
       )}
+
+
 
       {/* Forgot Password Modal */}
       {isForgotPasswordOpen && (

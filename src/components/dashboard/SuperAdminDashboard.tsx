@@ -20,6 +20,7 @@ import {
   Settings
 } from 'lucide-react';
 import { StorageService } from '../../utils/storage';
+import { DashboardSkeleton } from '../common/skeleton';
 
 interface SuperAdminDashboardProps {
   books: Book[];
@@ -28,6 +29,8 @@ interface SuperAdminDashboardProps {
   transactions: CirculationTransaction[];
   users: User[];
   auditLogs: AuditLog[];
+  currentUser?: User;
+  isLoading?: boolean;
   onNavigate: (dest: string) => void;
 }
 
@@ -35,8 +38,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   members,
   users,
   auditLogs,
+  currentUser,
+  isLoading = false,
   onNavigate
 }) => {
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
   const settings = StorageService.getSystemSettings();
   const backups = StorageService.getBackups();
   const latestBackup = backups[0];
@@ -67,7 +75,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* Superadmin Header with Direct Governance Actions */}
       <div className="page-header">
         <div>
-          <div className="page-title">Superadmin Infrastructure & Governance</div>
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span>Welcome back, {currentUser?.name || 'Superadmin'}!</span>
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                padding: '3px 10px',
+                borderRadius: '999px',
+                backgroundColor: '#eff6ff',
+                color: '#1d4ed8',
+                border: '1px solid #bfdbfe',
+              }}
+            >
+              Super Administrator
+            </span>
+          </div>
           <div className="page-subtitle">
             Central governance of business logic variables, staff privileges, and data infrastructure integrity
           </div>

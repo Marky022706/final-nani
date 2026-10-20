@@ -11,11 +11,13 @@ import {
   X,
   ArrowRight
 } from 'lucide-react';
+import { NotificationsHistorySkeleton } from '../common/skeleton';
 
 interface NotificationsViewProps {
   notifications: NotificationItem[];
   userRole: UserRole;
   currentMemberId?: string;
+  isLoading?: boolean;
   onMarkAllAsRead: () => void;
   onMarkSingleAsRead: (id: string) => void;
   onDeleteSingle?: (id: string) => void;
@@ -27,6 +29,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
   notifications,
   userRole,
   currentMemberId,
+  isLoading = false,
   onMarkAllAsRead,
   onMarkSingleAsRead,
   onDeleteSingle,
@@ -68,6 +71,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
       return true;
     });
   }, [relevantNotifs, filterTab]);
+
+  if (isLoading) {
+    return <NotificationsHistorySkeleton />;
+  }
 
   const unreadCount = relevantNotifs.filter((n) => !n.read).length;
 

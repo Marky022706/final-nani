@@ -23,6 +23,8 @@ import {
   FileText,
   Table
 } from 'lucide-react';
+import { BulkUploadSuccessModal } from './BulkUploadSuccessModal';
+import { useActionLoading } from '../../context/ActionLoadingContext';
 
 interface BulkImportBooksModalProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
   onImportSuccess,
   onShowToast
 }) => {
+  const { showActionLoading, hideActionLoading } = useActionLoading();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isValidating, setIsValidating] = useState<boolean>(false);
@@ -54,8 +57,30 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
   const [importMode, setImportMode] = useState<'all_or_nothing' | 'skip_errors'>('all_or_nothing');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Success Modal State
+  const [successData, setSuccessData] = useState<{
+    fileName: string;
+    importedCount: number;
+    totalCopiesCreated: number;
+    summary: any;
+    importMode: 'all_or_nothing' | 'skip_errors';
+  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
+
+  const handleReset = () => {
+    setSelectedFile(null);
+    setValidatedRows([]);
+    setSummary(null);
+    setSchemaError(null);
+    setSubmitError(null);
+    setFilterTab('all');
+    setSuccessData(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Reset state on modal open/close
   useEffect(() => {
@@ -67,25 +92,13 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
   // Keyboard navigation (Esc key to close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isSubmitting) {
+      if (e.key === 'Escape' && isOpen && !isSubmitting && !successData) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
-
-  const handleReset = () => {
-    setSelectedFile(null);
-    setValidatedRows([]);
-    setSummary(null);
-    setSchemaError(null);
-    setSubmitError(null);
-    setFilterTab('all');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  }, [isOpen, isSubmitting, successData, onClose]);
 
   const processFile = async (file: File) => {
     setIsValidating(true);
@@ -164,11 +177,16 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
 
     setIsSubmitting(true);
     setSubmitError(null);
+    showActionLoading({
+      title: 'Bulk Book Import',
+      message: 'Uploading and processing records...'
+    });
 
     try {
       const response = await api.bulkImportBooks(selectedFile, importMode);
 
       if (response && response.success) {
+        hideActionLoading();
         if (onShowToast) {
           onShowToast(
             'success',
@@ -176,9 +194,19 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
             `Successfully cataloged ${response.imported_count} book(s) with ${response.total_copies_created} physical copies.`
           );
         }
+        // Immediately refresh the relevant data view with newly imported books
         onImportSuccess(response.books || [], response.message);
-        onClose();
+
+        // Show the professional Bulk Upload Success Modal
+        setSuccessData({
+          fileName: selectedFile.name,
+          importedCount: response.imported_count ?? response.books?.length ?? 0,
+          totalCopiesCreated: response.total_copies_created ?? 0,
+          summary: response.summary || summary,
+          importMode
+        });
       } else {
+        hideActionLoading();
         const errorMsg = response?.message || 'Server rejected the import transaction.';
         setSubmitError(errorMsg);
         if (onShowToast) {
@@ -186,6 +214,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
         }
       }
     } catch (err: any) {
+      hideActionLoading();
       const msg = err?.message || 'Failed to complete book import. Check server connection.';
       setSubmitError(msg);
       if (onShowToast) {
@@ -197,6 +226,28 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  // Display the dedicated Bulk Upload Success Modal when backend confirms success
+  if (successData) {
+    return (
+      <BulkUploadSuccessModal
+        isOpen={true}
+        onClose={() => {
+          handleReset();
+          onClose();
+        }}
+        onViewRecords={() => {
+          handleReset();
+          onClose();
+        }}
+        fileName={successData.fileName}
+        importedCount={successData.importedCount}
+        totalCopiesCreated={successData.totalCopiesCreated}
+        summary={successData.summary}
+        importMode={successData.importMode}
+      />
+    );
+  }
 
   return (
     <div

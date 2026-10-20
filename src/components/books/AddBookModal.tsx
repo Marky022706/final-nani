@@ -3,6 +3,8 @@ import type { Book, PhysicalCopy } from '../../types';
 import { StorageService } from '../../utils/storage';
 import { BarcodeSvg } from '../../utils/barcode';
 import { X, Sparkles, AlertCircle, CheckCircle2, BookOpen } from 'lucide-react';
+import { useActionLoading } from '../../context/ActionLoadingContext';
+import { BookCoverSelector } from './BookCoverSelector';
 
 interface AddBookModalProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
   onBookAdded,
   existingBooksCount
 }) => {
+  const { showActionLoading, hideActionLoading } = useActionLoading();
   const [isbnInput, setIsbnInput] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
   const [lookupMessage, setLookupMessage] = useState<{
@@ -44,6 +47,7 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
     `BPL-ACC-${String(existingBooksCount + 1).padStart(4, '0')}`
   );
   const [availability, setAvailability] = useState<string>('Available');
+  const [coverImage, setCoverImage] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -81,6 +85,9 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
         setSubject(d.subject || '');
         setKeywords(d.keywords ? d.keywords.join(', ') : '');
         setClassification(d.classification || '');
+        if (d.coverImage) {
+          setCoverImage(d.coverImage);
+        }
 
         setLookupMessage({
           type: 'success',
@@ -182,12 +189,23 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
       accessionNumber: finalAccession,
       format: format,
       availability: availability,
-      coverImage: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+      coverImage: coverImage.trim() || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
       copies
     };
 
-    onBookAdded(newBook);
-    onClose();
+    showActionLoading({
+      title: 'Cataloging Book',
+      message: 'Saving book details and generating physical accession copies...'
+    });
+
+    try {
+      onBookAdded(newBook);
+      onClose();
+    } finally {
+      setTimeout(() => {
+        hideActionLoading();
+      }, 350);
+    }
   };
 
   const previewAccession = `BPL-${String(100 + (existingBooksCount + 1) * 10).padStart(6, '0')}`;
@@ -299,6 +317,14 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Book Cover Image Selection & Preview */}
+            <BookCoverSelector
+              value={coverImage}
+              onChange={setCoverImage}
+              title={title}
+              author={author}
+            />
 
             {/* Bibliographic Form */}
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>

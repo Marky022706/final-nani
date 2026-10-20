@@ -188,8 +188,8 @@ export const DEFAULT_USERS: User[] = [
   },
   {
     id: 'usr-volunteer',
-    name: 'Volunteer Staff',
-    email: 'volunteer@balingasag.gov.ph',
+    name: 'Balong Long',
+    email: 'admin1@balingasag.gov.ph',
     role: 'volunteer',
     department: 'Volunteer Desk Relief Operations',
     phone: '+63 930 444 5566',
@@ -209,7 +209,15 @@ export const DEFAULT_USERS: User[] = [
 export const StorageService = {
   // Current logged in user (cached from the last authenticated /api/me response)
   getCurrentUser(): User | null {
-    return getStored<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    const user = getStored<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    if (user && (user.id === 'usr-volunteer' || user.email === 'volunteer@balingasag.gov.ph' || user.role === 'volunteer')) {
+      if (user.email === 'volunteer@balingasag.gov.ph' || user.name === 'Volunteer Staff') {
+        const updatedUser = { ...user, name: 'Balong Long', email: 'admin1@balingasag.gov.ph' };
+        setStored(STORAGE_KEYS.CURRENT_USER, updatedUser);
+        return updatedUser;
+      }
+    }
+    return user;
   },
 
   setCurrentUser(user: User): void {
@@ -226,7 +234,23 @@ export const StorageService = {
 
   // Administrative accounts cache (real accounts are sourced from the backend)
   getUsers(): User[] {
-    return getStored<User[]>(STORAGE_KEYS.USERS, DEFAULT_USERS);
+    const users = getStored<User[]>(STORAGE_KEYS.USERS, DEFAULT_USERS);
+    // Ensure volunteer record has updated name and email
+    let modified = false;
+    const migrated = users.map((u) => {
+      if (u.id === 'usr-volunteer' || u.role === 'volunteer') {
+        if (u.name === 'Volunteer Staff' || u.email === 'volunteer@balingasag.gov.ph') {
+          modified = true;
+          return { ...u, name: 'Balong Long', email: 'admin1@balingasag.gov.ph' };
+        }
+      }
+      return u;
+    });
+    if (modified) {
+      setStored(STORAGE_KEYS.USERS, migrated);
+      return migrated;
+    }
+    return users;
   },
 
   saveUsers(users: User[]): void {

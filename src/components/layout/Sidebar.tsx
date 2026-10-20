@@ -63,8 +63,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       // Catalog & Archive
       if (!privs || privs.inventoryManagement !== false) {
-        items.push({ id: 'books', label: 'Books', icon: BookOpen });
-        items.push({ id: 'archive', label: 'Archive', icon: Archive });
+        items.push({ id: 'books', label: 'Books Management', icon: BookOpen });
+        items.push({ id: 'archive', label: 'Archive Books & Members', icon: Archive });
       }
 
       // Circulation & Desk
@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (!privs || privs.memberManagement !== false) {
         items.push({ id: 'members', label: 'Manage Members', icon: UserCheck });
       }
-      items.push({ id: 'admin_mgmt', label: 'User & Access Management', icon: Users });
+      items.push({ id: 'admin_mgmt', label: 'User Management', icon: Users });
 
       // Reports & Logs
       if (!privs || privs.reportsExport !== false) {
@@ -93,11 +93,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (currentRole === 'volunteer') {
       const privs = currentUser?.privileges;
       const items: NavItem[] = [
-        { id: 'dashboard', label: 'Operations Desk', icon: LayoutDashboard }
+        { id: 'dashboard', label: 'Operation Desk', icon: LayoutDashboard }
       ];
 
       if (!privs || privs.servicesManagement !== false) {
-        items.push({ id: 'attendance', label: 'Attendance', icon: Clock });
+        items.push({ id: 'attendance', label: 'Attendance Kiosk', icon: Clock });
       }
       if (!privs || privs.circulationDesk !== false) {
         items.push({ id: 'circulation', label: 'Circulation & Loans', icon: Repeat });

@@ -15,15 +15,18 @@ import {
 } from 'lucide-react';
 import type { SystemSettings, MemberTierPolicy, DatabaseBackupRecord } from '../../types';
 import { StorageService } from '../../utils/storage';
+import { ProfileSettingsSkeleton } from '../common/skeleton';
 
 interface SystemSettingsViewProps {
   onSaveSettingsNotice: () => void;
   onMaintenanceModeChanged?: (active: boolean) => void;
+  isLoading?: boolean;
 }
 
 export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
   onSaveSettingsNotice,
-  onMaintenanceModeChanged
+  onMaintenanceModeChanged,
+  isLoading = false
 }) => {
   // Load initial settings
   const [settings, setSettings] = useState<SystemSettings>(() => StorageService.getSystemSettings());
@@ -38,6 +41,10 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
 
   // Editing tier policy modal / inline
   const [editingTier, setEditingTier] = useState<MemberTierPolicy | null>(null);
+
+  if (isLoading) {
+    return <ProfileSettingsSkeleton />;
+  }
 
   // Handle general field changes
   const updateSetting = <K extends keyof SystemSettings>(key: K, value: SystemSettings[K]) => {

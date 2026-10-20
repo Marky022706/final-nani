@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import type { Book, PhysicalCopy, UserRole } from '../../types';
 import { BarcodeSvg } from '../../utils/barcode';
-import { X, Printer, Plus, Bookmark, Layers, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { X, Printer, Plus, Bookmark, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { BookCover } from './BookCover';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -83,23 +84,21 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
               style={{
                 borderRadius: 'var(--radius-md)',
                 overflow: 'hidden',
-                backgroundColor: 'var(--bg-subtle)',
+                backgroundColor: '#0f2d1f',
                 border: '1px solid var(--border-main)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '240px'
+                height: '260px'
               }}
             >
-              {book.coverImage && book.coverImage.trim() !== '' ? (
-                <img
-                  src={book.coverImage}
-                  alt={book.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : (
-                <Layers size={40} color="var(--text-subtle)" />
-              )}
+              <BookCover
+                coverImage={book.coverImage}
+                title={book.title}
+                author={book.author}
+                size="detail"
+              />
             </div>
 
             <div>
@@ -302,8 +301,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     if (onToggleArchive) onToggleArchive(book.id);
                     onClose();
                   }}
-                  className="btn btn-ghost"
-                  style={{ gap: '6px', color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)' }}
+                  className="btn btn-secondary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: book.isArchived ? 'var(--brand-forest)' : 'var(--text-secondary)',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid var(--border-color, #cbd5e1)',
+                  }}
                   title={book.isArchived ? 'Restore book to active catalog' : 'Archive book from circulation'}
                 >
                   {book.isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
@@ -316,8 +322,15 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                     if (onDeleteBook) onDeleteBook(book.id);
                     onClose();
                   }}
-                  className="btn btn-ghost"
-                  style={{ gap: '6px', color: 'var(--danger)' }}
+                  className="btn btn-secondary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: '#dc2626',
+                    backgroundColor: '#fef2f2',
+                    border: '1px solid #fecaca',
+                  }}
                   title="Permanently remove book"
                 >
                   <Trash2 size={15} />

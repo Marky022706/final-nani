@@ -155,6 +155,7 @@ class BookImportTest extends TestCase
                 'title' => 'Domain-Driven Design: Tackling Complexity in the Heart of Software',
                 'author' => 'Eric Evans',
                 'quantity' => '3',
+                'accession_number' => 'BPL-ACC-9999',
             ],
         ];
 

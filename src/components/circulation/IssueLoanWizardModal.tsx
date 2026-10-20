@@ -1,34 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import type { Member, Book, PhysicalCopy, CirculationTransaction } from '../../types';
+import React, { useState, useEffect, useRef } from 'react';
+import type { Member, Book, PhysicalCopy, CirculationTransaction, User } from '../../types';
 import {
   X,
   QrCode,
   Barcode,
   CheckCircle2,
   AlertCircle,
-  XCircle,
   ArrowRight,
   ArrowLeft,
   BookOpen,
   Printer,
   RotateCcw,
-  Check
+  Check,
+  Camera,
+  Search,
+  Trash2,
+  Plus,
+  ShieldCheck,
+  Calendar,
+  User as UserIcon,
+  ChevronRight,
+  RefreshCw,
+  Phone,
+  Mail,
+  Layers
 } from 'lucide-react';
 import { CameraScanner } from '../common/CameraScanner';
 import { playSuccessBeep, playErrorTone } from '../../utils/sound';
 import { StorageService } from '../../utils/storage';
+import { useActionLoading } from '../../context/ActionLoadingContext';
 
-interface IssueLoanWizardModalProps {
+export interface IssueLoanWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
   books: Book[];
   transactions: CirculationTransaction[];
+  currentUser?: User;
   onConfirmBorrow: (
     memberId: string,
     barcode: string,
     dueDate: string
   ) => { success: boolean; message: string; transaction?: CirculationTransaction };
+  onConfirmBorrowBatch?: (
+    memberId: string,
+    barcodes: string[],
+    dueDate: string
+  ) => { success: boolean; message: string; transactions?: CirculationTransaction[]; transaction?: CirculationTransaction };
+}
+
+export interface ScannedBookItem {
+  book: Book;
+  copy: PhysicalCopy;
+  scannedAt: string;
 }
 
 export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
@@ -37,33 +61,68 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   members,
   books,
   transactions,
-  onConfirmBorrow
+  currentUser,
+  onConfirmBorrow,
+  onConfirmBorrowBatch
 }) => {
-  // Wizard Step: 1 = Scan Member, 2 = Scan Book, 3 = Complete / Success
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const { showActionLoading, hideActionLoading } = useActionLoading();
 
-  // Step 1 State: Member
-  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+  // Wizard Steps: 1 = Scan Member, 2 = Scan Books, 3 = Review, 4 = Confirm / Success
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Step 2 State: Book & Copy
-  const [selectedBarcode, setSelectedBarcode] = useState<string>('');
+  // System Settings & Policies
+  const systemSettings = StorageService.getSystemSettings();
 
   // Dates
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultDue = new Date();
-  defaultDue.setDate(defaultDue.getDate() + 7);
+  defaultDue.setDate(defaultDue.getDate() + (systemSettings.standardLoanPeriodDays || 7));
   const defaultDueStr = defaultDue.toISOString().split('T')[0];
   const [dueDate, setDueDate] = useState<string>(defaultDueStr);
 
-  // Step 3 State: Created Transaction
-  const [issuedTransaction, setIssuedTransaction] = useState<CirculationTransaction | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Scanner & Input State
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [showManualInput, setShowManualInput] = useState<boolean>(false);
+  const [memberManualCode, setMemberManualCode] = useState<string>('');
+  const [bookManualCode, setBookManualCode] = useState<string>('');
 
-  // Transient "Successful!" confirmation modal shown right after a scan is
-  // accepted, before the wizard auto-advances to the next step.
+  // Step 1: Member State
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [memberStatusState, setMemberStatusState] = useState<'waiting' | 'scanning' | 'verifying' | 'ready'>('waiting');
+
+  // Step 2: Book State
+  const [scannedBooks, setScannedBooks] = useState<ScannedBookItem[]>([]);
+  const [lastScannedBook, setLastScannedBook] = useState<{ book: Book; copy: PhysicalCopy } | null>(null);
+
+  // Feedback, Alerts & Transient Notices
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
-  // Clean scanned code helper (handles JSON payloads, URLs, whitespace)
+  // Step 4: Completed Transactions
+  const [completedTransactions, setCompletedTransactions] = useState<CirculationTransaction[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Manual input focus ref
+  const memberInputRef = useRef<HTMLInputElement>(null);
+  const bookInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate member borrowing allowance
+  const memberActiveLoans = selectedMember
+    ? transactions.filter((t) => t.memberId === selectedMember.memberId && (t.status === 'Active' || t.status === 'Overdue'))
+    : [];
+
+  const memberTier = selectedMember
+    ? systemSettings.tierPolicies.find((p) => p.tierName.toLowerCase() === (selectedMember.membershipType || '').toLowerCase()) ||
+      systemSettings.tierPolicies[0]
+    : systemSettings.tierPolicies[0];
+
+  const maxAllowedLoans = memberTier?.maxLoanLimit ?? 3;
+  const currentBorrowsCount = memberActiveLoans.length;
+  const remainingAllowance = Math.max(0, maxAllowedLoans - currentBorrowsCount);
+  const slotsLeftInTransaction = Math.max(0, remainingAllowance - scannedBooks.length);
+
+  // Normalize scanned string
   const cleanScannedCode = (raw: string): string => {
     let text = (raw || '').trim();
     if (text.startsWith('{') && text.endsWith('}')) {
@@ -82,81 +141,55 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     return text.trim();
   };
 
-  // Shared lookups (used by both live camera scans and manual entry, so both
-  // paths resolve a code to a record identically).
+  // Find Member
   const findMemberByCode = (raw: string): Member | null => {
-    const term = cleanScannedCode(raw);
+    const term = cleanScannedCode(raw).toUpperCase();
     if (!term) return null;
     return (
       members.find(
         (m) =>
-          m.memberId.toUpperCase() === term.toUpperCase() ||
-          (m.qrCodeData && m.qrCodeData.toUpperCase() === term.toUpperCase()) ||
-          m.fullName.toUpperCase().includes(term.toUpperCase())
+          m.memberId.toUpperCase() === term ||
+          (m.qrCodeData && m.qrCodeData.toUpperCase() === term) ||
+          m.fullName.toUpperCase().includes(term) ||
+          (m.email && m.email.toUpperCase() === term)
       ) || null
     );
   };
 
+  // Find Book Copy
   const findCopyByCode = (raw: string): { book: Book; copy: PhysicalCopy } | null => {
-    const term = cleanScannedCode(raw);
+    const term = cleanScannedCode(raw).toUpperCase();
     if (!term) return null;
     for (const b of books) {
       const copy = b.copies.find(
-        (c) => c.barcode.toUpperCase() === term.toUpperCase() || c.accessionNumber.toUpperCase() === term.toUpperCase()
+        (c) => c.barcode.toUpperCase() === term || c.accessionNumber.toUpperCase() === term
       );
       if (copy) return { book: b, copy };
     }
     return null;
   };
 
-  // Derive Member & Eligibility for Step 1
-  const selectedMember = members.find((m) => m.memberId === selectedMemberId);
-  const memberActiveLoans = transactions.filter(
-    (t) => t.memberId === selectedMemberId && (t.status === 'Active' || t.status === 'Overdue')
-  );
-  const memberOverdueLoans = transactions.filter(
-    (t) => t.memberId === selectedMemberId && t.status === 'Overdue'
-  );
-
-  const systemSettings = StorageService.getSystemSettings();
-  const selectedMemberTier = systemSettings.tierPolicies.find(
-    (p) => p.tierName.toLowerCase() === (selectedMember?.membershipType || '').toLowerCase()
-  ) || systemSettings.tierPolicies[0];
-  const maxAllowedLoans = selectedMemberTier?.maxLoanLimit ?? 3;
-
-  const isAccountActive = selectedMember?.status === 'active';
-  const isWithinLimit = memberActiveLoans.length < maxAllowedLoans;
-  const hasNoOverdue = memberOverdueLoans.length === 0;
-  const hasNoBlockedFines = true;
-  const isMemberEligible = !!selectedMember && isAccountActive && isWithinLimit && hasNoOverdue && hasNoBlockedFines;
-
-  // Derive Book & Copy for Step 2
-  const foundCopy = selectedBarcode.trim() ? findCopyByCode(selectedBarcode) : null;
-  const selectedBook = foundCopy?.book ?? null;
-  const selectedCopy = foundCopy?.copy ?? null;
-
-  const isCopyAvailable = selectedCopy?.status === 'Available';
-  const currentCopyBorrower = selectedCopy && !isCopyAvailable
-    ? transactions.find(
-        (t) => t.barcode === selectedCopy?.barcode && (t.status === 'Active' || t.status === 'Overdue')
-      )
-    : null;
-
-  // Reset wizard when opened
+  // Reset wizard when modal is opened
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1);
-      setSelectedMemberId(members[0]?.memberId || '');
-      setSelectedBarcode('');
-      setIssuedTransaction(null);
+      setSelectedMember(null);
+      setScannedBooks([]);
+      setLastScannedBook(null);
+      setCompletedTransactions([]);
       setErrorMessage(null);
+      setWarningMessage(null);
       setSuccessNotice(null);
+      setIsCameraActive(false);
+      setShowManualInput(false);
+      setMemberManualCode('');
+      setBookManualCode('');
+      setMemberStatusState('waiting');
       setDueDate(defaultDueStr);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, defaultDueStr]);
 
-  // Dynamically synchronize loan duration with Superadmin tier policy
+  // Adjust due date when member is verified
   useEffect(() => {
     if (selectedMember) {
       const tier = systemSettings.tierPolicies.find(
@@ -167,803 +200,2045 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       targetDue.setDate(targetDue.getDate() + days);
       setDueDate(targetDue.toISOString().split('T')[0]);
     }
-  }, [selectedMemberId, selectedMember, systemSettings]);
+  }, [selectedMember, systemSettings]);
+
+  // Focus manual input field when toggled
+  useEffect(() => {
+    if (showManualInput) {
+      if (currentStep === 1) {
+        setTimeout(() => memberInputRef.current?.focus(), 100);
+      } else if (currentStep === 2) {
+        setTimeout(() => bookInputRef.current?.focus(), 100);
+      }
+    }
+  }, [showManualInput, currentStep]);
+
+  // Auto-switch camera mode on step change
+  useEffect(() => {
+    if (currentStep === 1 || currentStep === 2) {
+      setIsCameraActive(false);
+      setErrorMessage(null);
+      setWarningMessage(null);
+    } else {
+      setIsCameraActive(false);
+    }
+  }, [currentStep]);
 
   if (!isOpen) return null;
 
-  // Commit the loan using explicitly-provided records (safe to call from a
-  // delayed auto-advance without depending on state having already updated).
-  const commitBorrow = (member: Member, book: Book, copy: PhysicalCopy) => {
-    const res = onConfirmBorrow(member.memberId, copy.barcode, dueDate);
-    if (res.success && res.transaction) {
-      setIssuedTransaction(res.transaction);
-      setCurrentStep(3);
-    } else if (res.success) {
-      // Fallback transaction object
-      const fallbackTx: CirculationTransaction = {
-        id: `BRW-2026-${Date.now().toString().slice(-5)}`,
-        bookId: book.id,
-        bookTitle: book.title,
-        bookAuthor: book.author,
-        accessionNumber: copy.accessionNumber,
-        barcode: copy.barcode,
-        memberId: member.memberId,
-        memberName: member.fullName,
-        borrowDate: todayStr,
-        dueDate: dueDate,
-        status: 'Active',
-        renewalCount: 0,
-        processedBy: 'Admin'
-      };
-      setIssuedTransaction(fallbackTx);
-      setCurrentStep(3);
-    } else {
+  // ==========================================
+  // STEP 1: MEMBER VERIFICATION LOGIC
+  // ==========================================
+  const verifyMember = (member: Member) => {
+    setMemberStatusState('verifying');
+    setErrorMessage(null);
+    setWarningMessage(null);
+
+    // Validate account status
+    if (member.status === 'inactive' || member.status === 'suspended') {
       playErrorTone();
-      setErrorMessage(res.message);
+      setMemberStatusState('waiting');
+      setErrorMessage(
+        `Member account "${member.fullName}" (${member.memberId}) is ${member.status.toUpperCase()}. Circulation borrowing is restricted.`
+      );
+      return;
     }
+
+    // Validate active overdue loans
+    const overdues = transactions.filter((t) => t.memberId === member.memberId && t.status === 'Overdue');
+    if (overdues.length > 0) {
+      playErrorTone();
+      setMemberStatusState('waiting');
+      setErrorMessage(
+        `${member.fullName} has ${overdues.length} overdue book(s) that must be returned or settled before borrowing additional titles.`
+      );
+      return;
+    }
+
+    // Validate active loan count
+    const active = transactions.filter(
+      (t) => t.memberId === member.memberId && (t.status === 'Active' || t.status === 'Overdue')
+    );
+    const tier = systemSettings.tierPolicies.find(
+      (p) => p.tierName.toLowerCase() === (member.membershipType || '').toLowerCase()
+    ) || systemSettings.tierPolicies[0];
+    const limit = tier?.maxLoanLimit ?? 3;
+
+    if (active.length >= limit) {
+      playErrorTone();
+      setMemberStatusState('waiting');
+      setErrorMessage(
+        `${member.fullName} has already reached the maximum borrowing limit (${active.length} of ${limit} books).`
+      );
+      return;
+    }
+
+    // Eligible!
+    playSuccessBeep();
+    setSelectedMember(member);
+    setMemberStatusState('ready');
+    setIsCameraActive(false);
+    setSuccessNotice(`Member verified: ${member.fullName}`);
+    setTimeout(() => setSuccessNotice(null), 1800);
   };
 
-  // Handler for Step 1: live camera scan of the member's card/QR - resolves independently of
-  // component state so it can decide immediately (no stale-state risk),
-  // beeps, and auto-advances to the book scan when the member is eligible.
-  const handleMemberCameraScan = (detectedCode: string) => {
+  const handleMemberScan = (detectedCode: string) => {
     const term = cleanScannedCode(detectedCode);
     if (!term) return;
 
     const found = findMemberByCode(term);
     if (!found) {
       playErrorTone();
-      setSelectedMemberId(term);
-      setErrorMessage(`Scanned code "${term}" does not match any registered member.`);
+      setMemberStatusState('waiting');
+      setErrorMessage(`Scanned QR code "${term}" does not match any registered library member.`);
       return;
     }
 
-    const activeLoans = transactions.filter(
-      (t) => t.memberId === found.memberId && (t.status === 'Active' || t.status === 'Overdue')
-    );
-    const overdueLoans = transactions.filter((t) => t.memberId === found.memberId && t.status === 'Overdue');
-    const eligible = found.status === 'active' && activeLoans.length < 3 && overdueLoans.length === 0;
-
-    setSelectedMemberId(found.memberId);
-
-    if (!eligible) {
-      playErrorTone();
-      setErrorMessage(`${found.fullName} is not currently eligible to borrow. Please review account status.`);
-      return;
-    }
-
-    playSuccessBeep();
-    setErrorMessage(null);
-
-    // Let the eligibility card render and stay on screen long enough to be
-    // read first, then show the "Successful!" confirmation, then advance.
-    setTimeout(() => {
-      setSuccessNotice(`${found.fullName} verified — eligible to borrow.`);
-      setTimeout(() => {
-        setSuccessNotice(null);
-        setCurrentStep(2);
-      }, 700);
-    }, 1100);
+    verifyMember(found);
   };
 
-  const handleProceedToStep2 = () => {
-    if (!selectedMember || !isMemberEligible) {
-      setErrorMessage('Selected member is ineligible for new loans.');
-      return;
-    }
-    setErrorMessage(null);
-    setCurrentStep(2);
-  };
-
-  // Handlers for Step 2
-  const handleSelectBarcode = (barcode: string) => {
-    const term = cleanScannedCode(barcode);
-    setSelectedBarcode(term);
-    setErrorMessage(null);
-  };
-
-  const handleBookSearchSubmit = (e: React.FormEvent) => {
+  const handleMemberManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const term = cleanScannedCode(selectedBarcode);
-    if (!term) return;
-    if (findCopyByCode(term)) {
-      playSuccessBeep();
-      setErrorMessage(null);
-    } else {
+    if (!memberManualCode.trim()) return;
+    const found = findMemberByCode(memberManualCode);
+    if (!found) {
       playErrorTone();
-      setErrorMessage(`No physical book found matching barcode "${term}".`);
+      setErrorMessage(`No member record found matching "${memberManualCode.trim()}".`);
+      return;
     }
+    verifyMember(found);
+    setMemberManualCode('');
   };
 
-  // Live camera scan of the book barcode - resolves fresh (not from
-  // possibly-stale state), beeps, and auto-completes the loan when the
-  // copy is available.
-  const handleBookCameraScan = (detectedCode: string) => {
-    const term = cleanScannedCode(detectedCode);
-    if (!term) return;
+  // ==========================================
+  // STEP 2: BOOK SCANNING & MULTI-BOOK LOGIC
+  // ==========================================
+  const handleAddBookCopy = (book: Book, copy: PhysicalCopy) => {
+    setErrorMessage(null);
+    setWarningMessage(null);
 
-    const result = findCopyByCode(term);
-    if (!result || result.copy.status !== 'Available') {
+    // 1. Check if copy is already added to this transaction
+    const alreadyInList = scannedBooks.some((item) => item.copy.barcode.toUpperCase() === copy.barcode.toUpperCase());
+    if (alreadyInList) {
       playErrorTone();
-      setSelectedBarcode(term);
+      setWarningMessage(`Book copy "${copy.barcode}" is already in your pending borrowing list.`);
+      return;
+    }
+
+    // 2. Check if another copy of the exact same book title is already in list (policy: 1 copy per title per transaction)
+    const sameTitleInList = scannedBooks.some((item) => item.book.id === book.id);
+    if (sameTitleInList) {
+      playErrorTone();
+      setWarningMessage(`A copy of "${book.title}" is already in your borrowing list. Duplicate titles per loan are restricted.`);
+      return;
+    }
+
+    // 3. Check copy availability status
+    if (copy.status !== 'Available') {
+      playErrorTone();
       setErrorMessage(
-        !result
-          ? `No physical book found matching barcode "${term}".`
-          : `Copy ${result.copy.barcode} is currently ${result.copy.status} and cannot be issued.`
+        `Copy "${copy.barcode}" is marked as "${copy.status}" and cannot be borrowed. Only "Available" copies can be issued.`
       );
       return;
     }
 
-    if (!selectedMember || !isMemberEligible) {
+    // 4. Check patron allowance limit
+    if (slotsLeftInTransaction <= 0) {
       playErrorTone();
-      setErrorMessage('Member is not eligible to borrow.');
+      setErrorMessage(
+        `Borrowing limit reached (${scannedBooks.length} books in this transaction + ${currentBorrowsCount} active loans = ${maxAllowedLoans} maximum allowed).`
+      );
       return;
     }
 
+    // Add book!
     playSuccessBeep();
-    setSelectedBarcode(result.copy.barcode);
+    const newItem: ScannedBookItem = {
+      book,
+      copy,
+      scannedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setScannedBooks((prev) => [...prev, newItem]);
+    setLastScannedBook({ book, copy });
+    setSuccessNotice(`Added: "${book.title}"`);
+    setTimeout(() => setSuccessNotice(null), 1600);
+  };
+
+  const handleBookScan = (detectedCode: string) => {
+    const term = cleanScannedCode(detectedCode);
+    if (!term) return;
+
+    const result = findCopyByCode(term);
+    if (!result) {
+      playErrorTone();
+      setErrorMessage(`Barcode "${term}" not found in library physical inventory.`);
+      return;
+    }
+
+    handleAddBookCopy(result.book, result.copy);
+  };
+
+  const handleBookManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bookManualCode.trim()) return;
+
+    const result = findCopyByCode(bookManualCode);
+    if (!result) {
+      playErrorTone();
+      setErrorMessage(`No physical book found matching barcode or accession number "${bookManualCode.trim()}".`);
+      return;
+    }
+
+    handleAddBookCopy(result.book, result.copy);
+    setBookManualCode('');
+  };
+
+  const handleRemoveScannedBook = (barcode: string) => {
+    setScannedBooks((prev) => prev.filter((item) => item.copy.barcode !== barcode));
+    if (lastScannedBook?.copy.barcode === barcode) {
+      setLastScannedBook(null);
+    }
+    setWarningMessage(null);
+    setErrorMessage(null);
+  };
+
+  // ==========================================
+  // STEP 4: CONFIRM & EXECUTE BORROWING
+  // ==========================================
+  const handleExecuteBorrowing = async () => {
+    if (!selectedMember) {
+      setErrorMessage('Member verification is required.');
+      return;
+    }
+    if (scannedBooks.length === 0) {
+      setErrorMessage('Please scan at least one book before confirming.');
+      return;
+    }
+
+    setIsSubmitting(true);
     setErrorMessage(null);
 
-    const member = selectedMember;
-    const { book, copy } = result;
+    // Trigger modal loading animation with library logo
+    showActionLoading({
+      title: 'Issuing Library Books',
+      message: `Recording ${scannedBooks.length} loan transaction(s) for ${selectedMember.fullName}...`,
+      useLogo: true
+    });
 
-    // Let the book details card render and stay on screen long enough to be
-    // read first, then show the "Successful!" confirmation, then commit the loan.
-    setTimeout(() => {
-      setSuccessNotice(`${book.title} verified — issuing loan.`);
+    try {
+      const barcodes = scannedBooks.map((item) => item.copy.barcode);
+
+      if (onConfirmBorrowBatch) {
+        // Prefer batch handler if available
+        const res = onConfirmBorrowBatch(selectedMember.memberId, barcodes, dueDate);
+        if (res.success && res.transactions && res.transactions.length > 0) {
+          setCompletedTransactions(res.transactions);
+          playSuccessBeep();
+          setCurrentStep(4);
+        } else if (res.success && res.transaction) {
+          setCompletedTransactions([res.transaction]);
+          playSuccessBeep();
+          setCurrentStep(4);
+        } else {
+          playErrorTone();
+          setErrorMessage(res.message || 'Failed to complete borrowing transaction.');
+        }
+      } else {
+        // Call per-book sequential handler
+        const createdTxList: CirculationTransaction[] = [];
+        let anyFailed = false;
+        let failMessage = '';
+
+        for (const item of scannedBooks) {
+          const res = onConfirmBorrow(selectedMember.memberId, item.copy.barcode, dueDate);
+          if (res.success && res.transaction) {
+            createdTxList.push(res.transaction);
+          } else if (res.success) {
+            createdTxList.push({
+              id: `BRW-2026-${Date.now().toString().slice(-5)}`,
+              bookId: item.book.id,
+              bookTitle: item.book.title,
+              bookAuthor: item.book.author,
+              accessionNumber: item.copy.accessionNumber,
+              barcode: item.copy.barcode,
+              memberId: selectedMember.memberId,
+              memberName: selectedMember.fullName,
+              borrowDate: todayStr,
+              dueDate: dueDate,
+              status: 'Active',
+              renewalCount: 0,
+              processedBy: currentUser?.name || 'Staff Desk'
+            });
+          } else {
+            anyFailed = true;
+            failMessage = res.message;
+            break;
+          }
+        }
+
+        if (anyFailed) {
+          playErrorTone();
+          setErrorMessage(failMessage || 'An error occurred while issuing books.');
+        } else {
+          setCompletedTransactions(createdTxList);
+          playSuccessBeep();
+          setCurrentStep(4);
+        }
+      }
+    } catch (err: unknown) {
+      playErrorTone();
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to finalize borrowing transaction.');
+    } finally {
       setTimeout(() => {
-        setSuccessNotice(null);
-        commitBorrow(member, book, copy);
-      }, 700);
-    }, 1100);
+        hideActionLoading();
+        setIsSubmitting(false);
+      }, 350);
+    }
   };
 
-  const handleConfirmBorrow = () => {
-    if (!selectedMember || !isMemberEligible) {
-      setErrorMessage('Member is not eligible to borrow.');
-      return;
-    }
-    if (!selectedCopy || !isCopyAvailable || !selectedBook) {
-      setErrorMessage('Book copy is not available on shelf.');
-      return;
-    }
-    commitBorrow(selectedMember, selectedBook, selectedCopy);
-  };
-
-  const handleResetWizard = () => {
+  // Reset entire transaction wizard
+  const handleResetForNextPatron = () => {
     setCurrentStep(1);
-    setSelectedBarcode('');
-    setIssuedTransaction(null);
+    setSelectedMember(null);
+    setScannedBooks([]);
+    setLastScannedBook(null);
+    setCompletedTransactions([]);
     setErrorMessage(null);
+    setWarningMessage(null);
+    setIsCameraActive(false);
+    setShowManualInput(false);
+    setMemberManualCode('');
+    setBookManualCode('');
+    setMemberStatusState('waiting');
+    setDueDate(defaultDueStr);
   };
+
+  // Stepper Items
+  const stepsConfig = [
+    { num: 1, label: 'Scan Member' },
+    { num: 2, label: 'Scan Books' },
+    { num: 3, label: 'Review' },
+    { num: 4, label: 'Confirm' }
+  ];
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.70)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        zIndex: 1500,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        overflowY: 'auto'
+      }}
+      onClick={onClose}
+    >
       <div
-        className="modal-content"
-        onClick={(e) => e.stopPropagation()}
+        className="modal-dialog animate-modal-fade-in"
         style={{
-          maxWidth: '680px',
-          width: '95%',
-          maxHeight: '90vh',
+          width: '100%',
+          maxWidth: '780px',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '20px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(22, 101, 52, 0.08)',
           display: 'flex',
           flexDirection: 'column',
-          position: 'relative'
+          maxHeight: '92vh',
+          position: 'relative',
+          overflow: 'hidden',
+          fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* "Successful!" confirmation - shown briefly after the step's details card
-            has already been visible, right before the wizard auto-advances. */}
+        {/* Top Decorative Forest Bar */}
+        <div
+          style={{
+            height: '4px',
+            backgroundColor: '#166534',
+            background: 'linear-gradient(90deg, #166534 0%, #22c55e 50%, #166534 100%)'
+          }}
+        />
+
+        {/* Transient Floating Success Notice */}
         {successNotice && (
           <div
             style={{
               position: 'absolute',
-              inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.55)',
+              top: '80px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 60,
+              backgroundColor: '#166534',
+              color: '#FFFFFF',
+              padding: '10px 20px',
+              borderRadius: '9999px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 50,
-              borderRadius: 'var(--radius-xl)',
-              animation: 'fadeIn 0.15s ease'
+              gap: '8px',
+              boxShadow: '0 10px 25px -4px rgba(22, 101, 52, 0.4)',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              animation: 'fadeIn 0.2s ease-out'
             }}
           >
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: 'var(--radius-lg)',
-                padding: '28px 40px',
-                textAlign: 'center',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-                animation: 'modalScaleUp 0.25s ease',
-                maxWidth: '320px'
-              }}
-            >
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--success-bg)',
-                  color: 'var(--success)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 12px'
-                }}
-              >
-                <CheckCircle2 size={30} />
-              </div>
-              <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)' }}>Successful!</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>{successNotice}</div>
-            </div>
+            <Check size={18} strokeWidth={3} />
+            <span>{successNotice}</span>
           </div>
         )}
 
-        {/* Modal Header */}
-        <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', padding: '18px 24px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BookOpen size={20} color="var(--brand-forest)" />
-              <h3 className="modal-title" style={{ fontSize: '18px', fontWeight: 800 }}>
-                Issue Loan Wizard
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Step-by-step circulation borrowing process with real-time verification
-            </p>
-          </div>
-          <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: 4 }}>
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* STEP PROCESS INDICATOR */}
+        {/* ==================================================== */}
+        {/* MODAL HEADER: Breadcrumb, Title, Stepper, Close      */}
+        {/* ==================================================== */}
         <div
           style={{
-            padding: '16px 24px',
-            backgroundColor: 'var(--bg-subtle)',
-            borderBottom: '1px solid var(--border-main)'
+            padding: '20px 28px 16px',
+            borderBottom: '1px solid #E2E8F0',
+            backgroundColor: '#FFFFFF'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-            {/* Connecting Track */}
+          {/* Top row: Breadcrumb + Close Button */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+              <span style={{ color: '#64748B', fontWeight: 500 }}>Circulation</span>
+              <ChevronRight size={13} color="#94A3B8" />
+              <span style={{ color: '#166534', fontWeight: 700 }}>Borrow Book</span>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close Borrow Book Modal"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#64748B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#F1F5F9';
+                e.currentTarget.style.color = '#0F172A';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#64748B';
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Title & Short Description */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h2
+                style={{
+                  fontSize: '22px',
+                  fontWeight: 800,
+                  color: '#0F172A',
+                  letterSpacing: '-0.02em',
+                  margin: 0
+                }}
+              >
+                Borrow Book
+              </h2>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#166534',
+                  backgroundColor: '#DCFCE7',
+                  border: '1px solid #BBF7D0',
+                  padding: '3px 8px',
+                  borderRadius: '9999px',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Circulation Desk
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: '13px',
+                color: '#64748B',
+                margin: '4px 0 0',
+                lineHeight: 1.4
+              }}
+            >
+              Scan member credentials, register book copy barcodes, review borrowing terms, and confirm official library loans.
+            </p>
+          </div>
+
+          {/* HORIZONTAL STEPPER */}
+          <div style={{ position: 'relative', marginTop: '6px' }}>
+            {/* Background connecting track */}
             <div
               style={{
                 position: 'absolute',
-                top: '18px',
-                left: '40px',
-                right: '40px',
-                height: '3px',
-                backgroundColor: 'var(--border-main)',
+                top: '16px',
+                left: '32px',
+                right: '32px',
+                height: '2px',
+                backgroundColor: '#E2E8F0',
                 zIndex: 0
               }}
+            />
+            {/* Active connecting track */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '16px',
+                left: '32px',
+                width: `${((currentStep - 1) / 3) * 100}%`,
+                maxWidth: 'calc(100% - 64px)',
+                height: '2px',
+                backgroundColor: '#166534',
+                transition: 'width 0.3s ease',
+                zIndex: 0
+              }}
+            />
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                position: 'relative',
+                zIndex: 1
+              }}
             >
-              <div
-                style={{
-                  height: '100%',
-                  width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%',
-                  backgroundColor: 'var(--brand-forest)',
-                  transition: 'width 0.3s ease'
-                }}
-              />
-            </div>
-
-            {/* Step 1 Indicator */}
-            <div style={{ zIndex: 1, textAlign: 'center', minWidth: '90px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  margin: '0 auto 6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  backgroundColor:
-                    currentStep > 1
-                      ? 'var(--brand-forest)'
-                      : currentStep === 1
-                      ? 'var(--brand-forest)'
-                      : 'var(--bg-surface)',
-                  color: currentStep >= 1 ? '#ffffff' : 'var(--text-muted)',
-                  border: currentStep === 1 ? '3px solid #a7f3d0' : '2px solid var(--border-main)',
-                  boxShadow: currentStep === 1 ? '0 0 0 4px rgba(6, 78, 59, 0.15)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {currentStep > 1 ? <Check size={18} /> : <QrCode size={18} />}
-              </div>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: currentStep === 1 ? 700 : 500,
-                  color: currentStep === 1 ? 'var(--brand-forest)' : 'var(--text-secondary)'
-                }}
-              >
-                1. Member QR
-              </span>
-            </div>
-
-            {/* Step 2 Indicator */}
-            <div style={{ zIndex: 1, textAlign: 'center', minWidth: '90px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  margin: '0 auto 6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  backgroundColor:
-                    currentStep > 2
-                      ? 'var(--brand-forest)'
-                      : currentStep === 2
-                      ? 'var(--brand-forest)'
-                      : 'var(--bg-surface)',
-                  color: currentStep >= 2 ? '#ffffff' : 'var(--text-muted)',
-                  border: currentStep === 2 ? '3px solid #a7f3d0' : '2px solid var(--border-main)',
-                  boxShadow: currentStep === 2 ? '0 0 0 4px rgba(6, 78, 59, 0.15)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {currentStep > 2 ? <Check size={18} /> : <Barcode size={18} />}
-              </div>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: currentStep === 2 ? 700 : 500,
-                  color: currentStep === 2 ? 'var(--brand-forest)' : 'var(--text-secondary)'
-                }}
-              >
-                2. Book Barcode
-              </span>
-            </div>
-
-            {/* Step 3 Indicator */}
-            <div style={{ zIndex: 1, textAlign: 'center', minWidth: '90px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  margin: '0 auto 6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  backgroundColor: currentStep === 3 ? 'var(--success)' : 'var(--bg-surface)',
-                  color: currentStep === 3 ? '#ffffff' : 'var(--text-muted)',
-                  border: currentStep === 3 ? '3px solid #bbf7d0' : '2px solid var(--border-main)',
-                  boxShadow: currentStep === 3 ? '0 0 0 4px rgba(5, 150, 105, 0.2)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <CheckCircle2 size={18} />
-              </div>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: currentStep === 3 ? 700 : 500,
-                  color: currentStep === 3 ? 'var(--success)' : 'var(--text-secondary)'
-                }}
-              >
-                3. Complete
-              </span>
+              {stepsConfig.map((s) => {
+                const isCompleted = currentStep > s.num;
+                const isCurrent = currentStep === s.num;
+                return (
+                  <div
+                    key={s.num}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: isCompleted ? 'pointer' : 'default'
+                    }}
+                    onClick={() => {
+                      if (isCompleted && s.num < 4) {
+                        setCurrentStep(s.num as 1 | 2 | 3);
+                      }
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        backgroundColor: isCompleted ? '#166534' : isCurrent ? '#FFFFFF' : '#F8FAFC',
+                        color: isCompleted ? '#FFFFFF' : isCurrent ? '#166534' : '#94A3B8',
+                        border: isCompleted
+                          ? '2px solid #166534'
+                          : isCurrent
+                          ? '2px solid #166534'
+                          : '2px solid #E2E8F0',
+                        boxShadow: isCurrent ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {isCompleted ? <Check size={16} strokeWidth={3} /> : s.num}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: isCurrent ? 700 : 500,
+                        color: isCurrent ? '#166534' : isCompleted ? '#0F172A' : '#94A3B8',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="modal-body" style={{ padding: '24px', overflowY: 'auto' }}>
-          {errorMessage && (
-            <div
+        {/* ==================================================== */}
+        {/* ERROR / WARNING ALERTS                               */}
+        {/* ==================================================== */}
+        {errorMessage && (
+          <div
+            style={{
+              margin: '16px 28px 0',
+              padding: '12px 16px',
+              borderRadius: '12px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+              color: '#991B1B',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px'
+            }}
+          >
+            <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <div style={{ flex: 1, lineHeight: 1.45 }}>{errorMessage}</div>
+            <button
+              onClick={() => setErrorMessage(null)}
               style={{
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--danger-bg)',
-                color: 'var(--danger)',
-                border: '1px solid var(--danger-border)',
-                marginBottom: '18px',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                border: 'none',
+                background: 'transparent',
+                color: '#991B1B',
+                cursor: 'pointer',
+                padding: '2px'
               }}
             >
-              <AlertCircle size={16} />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
-          {/* STEP 1: SCAN MEMBER QR & ELIGIBILITY CHECK */}
+        {warningMessage && (
+          <div
+            style={{
+              margin: '16px 28px 0',
+              padding: '12px 16px',
+              borderRadius: '12px',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              color: '#92400E',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px'
+            }}
+          >
+            <AlertCircle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <div style={{ flex: 1, lineHeight: 1.45 }}>{warningMessage}</div>
+            <button
+              onClick={() => setWarningMessage(null)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#92400E',
+                cursor: 'pointer',
+                padding: '2px'
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* MODAL BODY CONTENT                                   */}
+        {/* ==================================================== */}
+        <div
+          style={{
+            padding: '24px 28px',
+            overflowY: 'auto',
+            flex: 1,
+            backgroundColor: '#F8FAFC'
+          }}
+        >
+          {/* ==================================================== */}
+          {/* STEP 1: SCAN MEMBER QR CODE                          */}
+          {/* ==================================================== */}
           {currentStep === 1 && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h4 style={{ fontSize: '15px', fontWeight: 700 }}>
-                  Step 1: Scan Member Library Card / QR Code
-                </h4>
-                <span className="badge badge-info" style={{ fontSize: '11px' }}>
-                  Awaiting Member Scan
-                </span>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Scanning Panel */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                {/* Panel Title & Instructions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      backgroundColor: '#DCFCE7',
+                      color: '#166534',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    <QrCode size={24} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      Scan Member QR Code
+                    </h3>
+                    <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0' }}>
+                      Use the camera to scan the member’s library QR code or enter the code manually.
+                    </p>
+                  </div>
+                </div>
 
-              {/* Real Camera QR Scanner - a successful, eligible match auto-advances to Step 2 */}
-              <CameraScanner
-                scannerId="loan-wizard-step1-camera"
-                mode="qr"
-                isActive={isOpen && currentStep === 1}
-                label="Camera active • Align patron library card QR code in viewfinder"
-                onScan={handleMemberCameraScan}
-              />
+                {/* Primary & Secondary Action Buttons */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCameraActive(!isCameraActive);
+                      if (!isCameraActive) {
+                        setMemberStatusState('scanning');
+                      } else {
+                        setMemberStatusState(selectedMember ? 'ready' : 'waiting');
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      height: '40px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: isCameraActive ? '#14532D' : '#166534',
+                      color: '#FFFFFF',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(22, 101, 52, 0.2)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Camera size={16} />
+                    <span>{isCameraActive ? 'Stop Scanner' : 'Start Scanner'}</span>
+                  </button>
 
-              {/* Member Details & Real-Time Eligibility Card */}
-              {selectedMember && (
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border-main)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '16px',
-                    marginBottom: '20px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div
+                  <button
+                    type="button"
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    style={{
+                      height: '40px',
+                      padding: '0 18px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: showManualInput ? '#F1F5F9' : '#FFFFFF',
+                      color: '#334155',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Search size={15} />
+                    <span>Manual Input</span>
+                  </button>
+                </div>
+
+                {/* Camera Scanner Viewport when active */}
+                {isCameraActive && (
+                  <div
+                    style={{
+                      marginBottom: '18px',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      border: '2px solid #166534',
+                      backgroundColor: '#0F172A',
+                      position: 'relative'
+                    }}
+                  >
+                    <CameraScanner
+                      onScan={handleMemberScan}
+                      scannerId="member-qr-scanner"
+                      isActive={isCameraActive}
+                      mode="qr"
+                      label="Point camera directly at patron's library QR code"
+                    />
+                  </div>
+                )}
+
+                {/* Manual Input Fallback Bar */}
+                {showManualInput && (
+                  <form onSubmit={handleMemberManualSubmit} style={{ marginBottom: '18px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <Search
+                          size={16}
+                          color="#94A3B8"
+                          style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                        />
+                        <input
+                          ref={memberInputRef}
+                          type="text"
+                          value={memberManualCode}
+                          onChange={(e) => setMemberManualCode(e.target.value)}
+                          placeholder="Enter Member ID (e.g. MEM-2026-00001) or Full Name..."
+                          style={{
+                            width: '100%',
+                            height: '42px',
+                            paddingLeft: '38px',
+                            paddingRight: '12px',
+                            borderRadius: '10px',
+                            border: '1px solid #CBD5E1',
+                            fontSize: '13.5px',
+                            color: '#0F172A',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="submit"
                         style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--brand-forest)',
-                          color: '#ffffff',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700
+                          height: '42px',
+                          padding: '0 18px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          backgroundColor: '#166534',
+                          color: '#FFFFFF',
+                          fontSize: '13.5px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
                         }}
                       >
-                        {selectedMember.fullName.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                          {selectedMember.fullName}
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          ID: <code>{selectedMember.memberId}</code> • {selectedMember.membershipType}
-                        </div>
-                      </div>
+                        Verify
+                      </button>
                     </div>
+                  </form>
+                )}
 
-                    <span className={`badge ${isMemberEligible ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
-                      {isMemberEligible ? '✓ Eligible to Borrow' : '❌ Ineligible to Borrow'}
+                {/* TRANSACTION STATUS PANEL */}
+                <div
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: '12px',
+                    border: '1px solid #E2E8F0',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B', fontWeight: 500 }}>Scanner Status:</span>
+                    {memberStatusState === 'waiting' && (
+                      <span style={{ fontWeight: 600, color: '#64748B' }}>Waiting for member scan or input</span>
+                    )}
+                    {memberStatusState === 'scanning' && (
+                      <span style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: '#22c55e',
+                            animation: 'pulse 1.5s infinite'
+                          }}
+                        />
+                        Camera active — scanning QR code...
+                      </span>
+                    )}
+                    {memberStatusState === 'verifying' && (
+                      <span style={{ fontWeight: 600, color: '#D97706' }}>Verifying member credentials...</span>
+                    )}
+                    {memberStatusState === 'ready' && (
+                      <span style={{ fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <CheckCircle2 size={15} color="#166534" />
+                        Ready to continue
+                      </span>
+                    )}
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      backgroundColor:
+                        memberStatusState === 'ready'
+                          ? '#DCFCE7'
+                          : memberStatusState === 'scanning'
+                          ? '#E0F2FE'
+                          : '#F1F5F9',
+                      color:
+                        memberStatusState === 'ready'
+                          ? '#166534'
+                          : memberStatusState === 'scanning'
+                          ? '#0284C7'
+                          : '#64748B'
+                    }}
+                  >
+                    {memberStatusState.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* MEMBER VERIFICATION CARD (Shown after successful scan) */}
+              {selectedMember && (
+                <div
+                  className="animate-modal-fade-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    border: '1px solid #BBF7D0',
+                    padding: '22px',
+                    boxShadow: '0 4px 12px rgba(22, 101, 52, 0.08)',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Verified Header Banner */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      borderBottom: '1px solid #F1F5F9',
+                      paddingBottom: '14px',
+                      marginBottom: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontWeight: 700, fontSize: '13.5px' }}>
+                      <CheckCircle2 size={18} />
+                      <span>Member Verified & Eligible to Borrow</span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        backgroundColor: '#DCFCE7',
+                        color: '#166534',
+                        padding: '3px 10px',
+                        borderRadius: '9999px',
+                        border: '1px solid #BBF7D0'
+                      }}
+                    >
+                      {selectedMember.status.toUpperCase()} ACCOUNT
                     </span>
                   </div>
 
-                  {/* 4-Point Eligibility Checklist */}
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isAccountActive ? 'var(--success)' : 'var(--danger)' }}>
-                      {isAccountActive ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                      <span>Account Active ({selectedMember.status})</span>
+                  <div style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
+                    {/* Avatar / Photo */}
+                    <div
+                      style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '14px',
+                        backgroundColor: '#F0FDF4',
+                        border: '2px solid #BBF7D0',
+                        color: '#166534',
+                        fontSize: '22px',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      {selectedMember.photoUrl ? (
+                        <img
+                          src={selectedMember.photoUrl}
+                          alt={selectedMember.fullName}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+                        />
+                      ) : (
+                        selectedMember.fullName
+                          .split(' ')
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase()
+                      )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isWithinLimit ? 'var(--success)' : 'var(--danger)' }}>
-                      {isWithinLimit ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                      <span>Borrow Limit ({memberActiveLoans.length}/3 Allowed)</span>
+
+                    {/* Member Details */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                        <h4 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                          {selectedMember.fullName}
+                        </h4>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', fontFamily: 'monospace' }}>
+                          {selectedMember.memberId}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '6px', fontSize: '12.5px', color: '#64748B' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <ShieldCheck size={14} color="#166534" />
+                          <span>{selectedMember.membershipType || 'Standard Member'}</span>
+                        </div>
+                        {selectedMember.email && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Mail size={14} color="#64748B" />
+                            <span>{selectedMember.email}</span>
+                          </div>
+                        )}
+                        {selectedMember.phone && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Phone size={14} color="#64748B" />
+                            <span>{selectedMember.phone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quota & Borrowing Count Meter */}
+                      <div style={{ marginTop: '14px', backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>Current Borrowing Quota:</span>
+                          <span style={{ fontWeight: 700, color: '#166534' }}>
+                            {currentBorrowsCount} of {maxAllowedLoans} books active ({remainingAllowance} slot{remainingAllowance !== 1 ? 's' : ''} available)
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            height: '6px',
+                            backgroundColor: '#E2E8F0',
+                            borderRadius: '9999px',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${(currentBorrowsCount / maxAllowedLoans) * 100}%`,
+                              backgroundColor: currentBorrowsCount >= maxAllowedLoans ? '#DC2626' : '#166534',
+                              borderRadius: '9999px'
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoOverdue ? 'var(--success)' : 'var(--danger)' }}>
-                      {hasNoOverdue ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                      <span>No Overdue Loans ({memberOverdueLoans.length})</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* STEP 2: SCAN BOOK BARCODE                            */}
+          {/* ==================================================== */}
+          {currentStep === 2 && selectedMember && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Member Summary Ribbon */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
+                  padding: '12px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      backgroundColor: '#DCFCE7',
+                      color: '#166534',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: '12px'
+                    }}
+                  >
+                    <UserIcon size={16} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#64748B', display: 'block', fontWeight: 600 }}>Borrowing Patron</span>
+                    <strong style={{ fontSize: '13.5px', color: '#0F172A' }}>{selectedMember.fullName}</strong>
+                    <span style={{ fontSize: '11px', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                      ({selectedMember.memberId})
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '9999px',
+                      backgroundColor: slotsLeftInTransaction > 0 ? '#DCFCE7' : '#FEE2E2',
+                      color: slotsLeftInTransaction > 0 ? '#166534' : '#991B1B',
+                      border: slotsLeftInTransaction > 0 ? '1px solid #BBF7D0' : '1px solid #FECACA'
+                    }}
+                  >
+                    {slotsLeftInTransaction} Slot{slotsLeftInTransaction !== 1 ? 's' : ''} Remaining
+                  </span>
+                </div>
+              </div>
+
+              {/* Book Scanner Panel */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      backgroundColor: '#DCFCE7',
+                      color: '#166534',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Barcode size={24} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      Scan Book Barcode
+                    </h3>
+                    <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0' }}>
+                      Scan the barcode label or accession number on the book copy to add it to this loan.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Primary & Fallback Actions */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsCameraActive(!isCameraActive)}
+                    style={{
+                      flex: 1,
+                      height: '40px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: isCameraActive ? '#14532D' : '#166534',
+                      color: '#FFFFFF',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Camera size={16} />
+                    <span>{isCameraActive ? 'Stop Scanner' : 'Start Scanner'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    style={{
+                      height: '40px',
+                      padding: '0 18px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: showManualInput ? '#F1F5F9' : '#FFFFFF',
+                      color: '#334155',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Search size={15} />
+                    <span>Manual Barcode</span>
+                  </button>
+                </div>
+
+                {/* Camera Viewport */}
+                {isCameraActive && (
+                  <div
+                    style={{
+                      marginBottom: '18px',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      border: '2px solid #166534',
+                      backgroundColor: '#0F172A'
+                    }}
+                  >
+                    <CameraScanner
+                      onScan={handleBookScan}
+                      scannerId="book-barcode-scanner"
+                      isActive={isCameraActive}
+                      mode="barcode"
+                      label="Point camera directly at book barcode or accession label"
+                    />
+                  </div>
+                )}
+
+                {/* Manual Barcode Input Fallback */}
+                {showManualInput && (
+                  <form onSubmit={handleBookManualSubmit} style={{ marginBottom: '18px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <Barcode
+                          size={18}
+                          color="#94A3B8"
+                          style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                        />
+                        <input
+                          ref={bookInputRef}
+                          type="text"
+                          value={bookManualCode}
+                          onChange={(e) => setBookManualCode(e.target.value)}
+                          placeholder="Enter Book Barcode or Accession # (e.g. BAL-00042)..."
+                          style={{
+                            width: '100%',
+                            height: '42px',
+                            paddingLeft: '38px',
+                            paddingRight: '12px',
+                            borderRadius: '10px',
+                            border: '1px solid #CBD5E1',
+                            fontSize: '13.5px',
+                            color: '#0F172A',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        style={{
+                          height: '42px',
+                          padding: '0 18px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          backgroundColor: '#166534',
+                          color: '#FFFFFF',
+                          fontSize: '13.5px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Add Book
+                      </button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasNoBlockedFines ? 'var(--success)' : 'var(--danger)' }}>
-                      {hasNoBlockedFines ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                      <span>Financial Standing Clear</span>
+                  </form>
+                )}
+              </div>
+
+              {/* Book Details Card (Most recently added/verified) */}
+              {lastScannedBook && (
+                <div
+                  className="animate-modal-fade-in"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '14px',
+                    border: '1px solid #E2E8F0',
+                    padding: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '64px',
+                      borderRadius: '6px',
+                      backgroundColor: '#F1F5F9',
+                      border: '1px solid #CBD5E1',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#94A3B8'
+                    }}
+                  >
+                    {lastScannedBook.book.coverImage ? (
+                      <img
+                        src={lastScannedBook.book.coverImage}
+                        alt={lastScannedBook.book.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <BookOpen size={20} />
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                        Just Scanned
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#DCFCE7',
+                          color: '#166534'
+                        }}
+                      >
+                        {lastScannedBook.copy.status}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#0F172A',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {lastScannedBook.book.title}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748B' }}>
+                      by {lastScannedBook.book.author} • Accession:{' '}
+                      <code style={{ fontWeight: 600 }}>{lastScannedBook.copy.accessionNumber}</code> • Barcode:{' '}
+                      <code style={{ fontWeight: 600 }}>{lastScannedBook.copy.barcode}</code>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 1 Actions */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={onClose} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleProceedToStep2}
-                  disabled={!selectedMember || !isMemberEligible}
-                  className="btn btn-primary"
-                  style={{ gap: '8px', padding: '8px 20px' }}
-                >
-                  <span>Proceed to Scan Book</span>
-                  <ArrowRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: SCAN BOOK BARCODE & AVAILABILITY CHECK */}
-          {currentStep === 2 && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h4 style={{ fontSize: '15px', fontWeight: 700 }}>
-                  Step 2: Scan Physical Book Barcode
-                </h4>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Borrower: <strong>{selectedMember?.fullName}</strong> (<code>{selectedMember?.memberId}</code>)
-                </div>
-              </div>
-
-              {/* Real Camera Barcode Scanner - a successful, available match auto-issues the loan */}
-              <CameraScanner
-                scannerId="loan-wizard-step2-camera"
-                mode="barcode"
-                isActive={isOpen && currentStep === 2}
-                label="Barcode scanner active • Align book barcode in viewfinder"
-                onScan={handleBookCameraScan}
-              />
-
-              {/* Manual Barcode Input */}
-              <form onSubmit={handleBookSearchSubmit} style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ fontSize: '12.5px', fontWeight: 600 }}>
-                  Or Enter Book Barcode Manually
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. BPL-000101 or ACC-000101"
-                    value={selectedBarcode}
-                    onChange={(e) => handleSelectBarcode(e.target.value)}
-                    style={{ flex: 1, fontFamily: 'var(--font-mono)' }}
-                    autoFocus
-                  />
-                </div>
-              </form>
-
-              {/* Book Details & Availability Card */}
-              {selectedCopy && selectedBook ? (
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-subtle)',
-                    border: '1px solid var(--border-main)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '16px',
-                    marginBottom: '18px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                    <div>
-                      <h5 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {selectedBook.title}
-                      </h5>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        by {selectedBook.author} • ISBN: <code>{selectedBook.isbn}</code>
-                      </div>
-                    </div>
-                    <span className={`badge ${isCopyAvailable ? 'badge-success' : 'badge-danger'}`}>
-                      {isCopyAvailable ? '✓ Available on Shelf' : `❌ ${selectedCopy.status}`}
-                    </span>
-                  </div>
-
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Accession No: </span>
-                      <code>{selectedCopy.accessionNumber}</code>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Barcode: </span>
-                      <code>{selectedCopy.barcode}</code>
-                    </div>
-                  </div>
-
-                  {currentCopyBorrower && (
-                    <div style={{ fontSize: '11.5px', color: 'var(--danger)', backgroundColor: 'var(--danger-bg)', padding: '8px 12px', borderRadius: '6px', marginTop: '10px' }}>
-                      ⚠️ Currently checked out to <strong>{currentCopyBorrower.memberName}</strong> ({currentCopyBorrower.memberId}). Due date: {currentCopyBorrower.dueDate}.
-                    </div>
-                  )}
-                </div>
-              ) : selectedBarcode ? (
-                <div style={{ padding: '12px', textAlign: 'center', color: 'var(--danger)', backgroundColor: 'var(--danger-bg)', borderRadius: 'var(--radius-md)', marginBottom: '18px', fontSize: '12.5px' }}>
-                  No physical book found matching barcode "{selectedBarcode}".
-                </div>
-              ) : null}
-
-              {/* Dates Setting */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Borrow Date
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    className="form-input"
-                    value={todayStr}
-                    style={{ backgroundColor: 'var(--bg-page)', cursor: 'not-allowed' }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Scheduled Due Date (+7 Days)
-                  </label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Step 2 Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep(1)}
-                  className="btn btn-secondary"
-                  style={{ gap: '6px' }}
-                >
-                  <ArrowLeft size={16} />
-                  <span>Back to Member</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmBorrow}
-                  disabled={!selectedCopy || !isCopyAvailable}
-                  className="btn btn-primary"
-                  style={{ gap: '8px', padding: '8px 24px' }}
-                >
-                  <Check size={16} />
-                  <span>Confirm & Issue Loan</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: SUCCESS & LOAN SLIP RECEIPT */}
-          {currentStep === 3 && issuedTransaction && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              {/* SCANNED BOOKS LIST */}
               <div
                 style={{
-                  width: '56px',
-                  height: '56px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '20px 24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Layers size={18} color="#166534" />
+                    <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      Books in Current Transaction ({scannedBooks.length})
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>
+                    Max {maxAllowedLoans} book{maxAllowedLoans !== 1 ? 's' : ''} allowed per patron
+                  </span>
+                </div>
+
+                {scannedBooks.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '32px 16px',
+                      textAlign: 'center',
+                      borderRadius: '12px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px dashed #CBD5E1',
+                      color: '#94A3B8'
+                    }}
+                  >
+                    <BookOpen size={28} style={{ margin: '0 auto 8px', display: 'block', opacity: 0.6 }} />
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#64748B' }}>No books scanned yet</div>
+                    <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                      Scan a book barcode using the camera above or type the accession number manually.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {scannedBooks.map((item, idx) => (
+                      <div
+                        key={item.copy.barcode}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 16px',
+                          borderRadius: '12px',
+                          backgroundColor: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
+                          gap: '12px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                          <span
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '50%',
+                              backgroundColor: '#E2E8F0',
+                              color: '#334155',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontSize: '13.5px',
+                                fontWeight: 700,
+                                color: '#0F172A',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}
+                            >
+                              {item.book.title}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#64748B', display: 'flex', gap: '10px' }}>
+                              <span>by {item.book.author}</span>
+                              <span>•</span>
+                              <span>
+                                Accession: <code>{item.copy.accessionNumber}</code>
+                              </span>
+                              <span>•</span>
+                              <span>
+                                Barcode: <code>{item.copy.barcode}</code>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: '#166534',
+                              backgroundColor: '#DCFCE7',
+                              padding: '2px 8px',
+                              borderRadius: '9999px',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Available
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveScannedBook(item.copy.barcode)}
+                            title="Remove book from transaction"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              border: 'none',
+                              backgroundColor: 'transparent',
+                              color: '#EF4444',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#FEE2E2';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* STEP 3: REVIEW BORROWING TRANSACTION                 */}
+          {/* ==================================================== */}
+          {currentStep === 3 && selectedMember && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Verified Member Summary Card */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '20px 24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  1. Borrowing Member
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div
+                      style={{
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '12px',
+                        backgroundColor: '#DCFCE7',
+                        color: '#166534',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 800,
+                        fontSize: '16px'
+                      }}
+                    >
+                      {selectedMember.fullName
+                        .split(' ')
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join('')}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                        {selectedMember.fullName}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#64748B' }}>
+                        ID: <code style={{ fontWeight: 600 }}>{selectedMember.memberId}</code> • Type: {selectedMember.membershipType || 'Standard'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      backgroundColor: '#DCFCE7',
+                      color: '#166534',
+                      padding: '4px 10px',
+                      borderRadius: '9999px',
+                      border: '1px solid #BBF7D0'
+                    }}
+                  >
+                    ACTIVE PATRON
+                  </span>
+                </div>
+              </div>
+
+              {/* Table of Selected Books */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '20px 24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                    2. Selected Books ({scannedBooks.length})
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#166534',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>Add More Books</span>
+                  </button>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, width: '32px' }}>#</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Book Title & Author</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Accession #</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Barcode</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Due Date</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'center' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scannedBooks.map((item, idx) => (
+                        <tr key={item.copy.barcode} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                          <td style={{ padding: '10px 12px', color: '#64748B', fontWeight: 600 }}>{idx + 1}</td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A' }}>{item.book.title}</div>
+                            <div style={{ fontSize: '11.5px', color: '#64748B' }}>{item.book.author}</div>
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <code style={{ fontWeight: 600, color: '#334155' }}>{item.copy.accessionNumber}</code>
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <code style={{ fontWeight: 600, color: '#334155' }}>{item.copy.barcode}</code>
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#166534', fontWeight: 700 }}>
+                            {dueDate}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveScannedBook(item.copy.barcode)}
+                              title="Remove"
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#EF4444',
+                                cursor: 'pointer',
+                                padding: '4px'
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Policy & Due Date Adjustment Card */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  padding: '20px 24px',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: '12px' }}>
+                  3. Circulation Schedule & Policy Terms
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                      Date of Issue
+                    </label>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={15} color="#166534" />
+                      <span>{todayStr} (Today)</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                      Return Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      min={todayStr}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#166534'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                      Librarian in Charge
+                    </label>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                      {currentUser?.name || 'Circulation Desk Staff'}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '16px',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    fontSize: '12px',
+                    color: '#64748B',
+                    lineHeight: 1.45
+                  }}
+                >
+                  <strong style={{ color: '#334155' }}>Municipal Circulation Policy:</strong> Standard loan duration is 7 days.
+                  Late returns will incur a standard overdue fine of ₱10.00/day. Patrons may renew books once prior to due date if no pending reservation holds exist.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* STEP 4: SUCCESS RECEIPT MODAL SCREEN                 */}
+          {/* ==================================================== */}
+          {currentStep === 4 && (
+            <div className="animate-modal-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Success Hero Badge */}
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
                   borderRadius: '50%',
-                  backgroundColor: 'var(--success-bg)',
-                  color: 'var(--success)',
+                  backgroundColor: '#DCFCE7',
+                  border: '3px solid #BBF7D0',
+                  color: '#166534',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto 16px',
-                  boxShadow: '0 0 0 6px rgba(5, 150, 105, 0.15)'
+                  marginBottom: '14px',
+                  boxShadow: '0 8px 16px rgba(22, 101, 52, 0.15)'
                 }}
               >
-                <CheckCircle2 size={32} />
+                <CheckCircle2 size={36} strokeWidth={2.5} />
               </div>
 
-              <h4 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                Loan Successfully Issued!
-              </h4>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                The borrowing transaction has been finalized and the physical copy is marked as Borrowed.
+              <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+                Borrowing Successful!
+              </h3>
+              <p style={{ fontSize: '13.5px', color: '#64748B', margin: '0 0 20px', textAlign: 'center', maxWidth: '420px' }}>
+                {completedTransactions.length} book{completedTransactions.length !== 1 ? 's have' : ' has'} been officially issued to{' '}
+                <strong style={{ color: '#0F172A' }}>{selectedMember?.fullName}</strong>.
               </p>
 
-              {/* Printable Official Loan Slip */}
+              {/* Printable Receipt Card */}
               <div
+                id="printable-borrow-receipt"
                 style={{
-                  border: '2px dashed var(--border-main)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '20px',
-                  backgroundColor: 'var(--bg-subtle)',
-                  textAlign: 'left',
-                  marginBottom: '24px'
+                  width: '100%',
+                  maxWidth: '540px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '16px',
+                  border: '2px dashed #CBD5E1',
+                  padding: '24px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  marginBottom: '20px'
                 }}
               >
-                <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-main)', paddingBottom: '10px', marginBottom: '12px' }}>
+                {/* Receipt Header with Library Logo */}
+                <div style={{ textAlign: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '14px', marginBottom: '16px' }}>
                   <img
                     src="/logo.png"
                     alt="Balingasag Municipal Library"
-                    style={{ width: 44, height: 44, margin: '0 auto 6px', display: 'block', borderRadius: '50%' }}
+                    style={{ width: '40px', height: '40px', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }}
                   />
-                  <div style={{ fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700 }}>
-                    Municipality of Balingasag
+                  <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748B', fontWeight: 700 }}>
+                    Municipality of Balingasag • Misamis Oriental
                   </div>
-                  <div style={{ fontSize: '14.5px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#166534' }}>
                     Balingasag Municipal Library
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    Official Circulation Loan Slip
+                  <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                    Official Circulation Loan Receipt
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px', marginBottom: '12px' }}>
+                {/* Receipt Metadata Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12.5px', marginBottom: '16px' }}>
                   <div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block' }}>Transaction ID</span>
-                    <code style={{ fontWeight: 700 }}>{issuedTransaction.id}</code>
+                    <span style={{ color: '#64748B', display: 'block', fontSize: '11px' }}>Member / Borrower</span>
+                    <strong style={{ color: '#0F172A', fontSize: '13px' }}>{selectedMember?.fullName}</strong>
+                    <div style={{ color: '#64748B', fontSize: '11px', fontFamily: 'monospace' }}>{selectedMember?.memberId}</div>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block' }}>Date Issued</span>
-                    <strong>{issuedTransaction.borrowDate}</strong>
+                    <span style={{ color: '#64748B', display: 'block', fontSize: '11px' }}>Date Borrowed</span>
+                    <strong style={{ color: '#0F172A', fontSize: '13px' }}>{todayStr}</strong>
+                    <div style={{ color: '#166534', fontSize: '11.5px', fontWeight: 700 }}>Due: {dueDate}</div>
                   </div>
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginBottom: '10px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Patron
-                  </span>
-                  <div style={{ fontWeight: 700, fontSize: '13.5px' }}>{issuedTransaction.memberName}</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                    Member ID: <code>{issuedTransaction.memberId}</code>
+                {/* Table of Issued Books */}
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '12px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '8px' }}>
+                    Issued Books
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {completedTransactions.map((tx, idx) => (
+                      <div
+                        key={tx.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '12.5px',
+                          padding: '6px 0',
+                          borderBottom: idx !== completedTransactions.length - 1 ? '1px dashed #F1F5F9' : 'none'
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0F172A' }}>{tx.bookTitle}</div>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>
+                            Ref: <code>{tx.id}</code> • Barcode: <code>{tx.barcode}</code>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534' }}>Due {tx.dueDate}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginBottom: '14px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Book Details
-                  </span>
-                  <div style={{ fontWeight: 700, fontSize: '13.5px' }}>{issuedTransaction.bookTitle}</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>by {issuedTransaction.bookAuthor}</div>
-                  <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <span>Accession: <code>{issuedTransaction.accessionNumber}</code></span>
-                    <span>Barcode: <code>{issuedTransaction.barcode}</code></span>
-                  </div>
-                </div>
-
-                {/* Due Date Banner */}
+                {/* Receipt Footer */}
                 <div
                   style={{
-                    backgroundColor: 'var(--accent-blue-light)',
-                    border: '1px solid var(--accent-blue-border)',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    textAlign: 'center'
+                    borderTop: '1px solid #E2E8F0',
+                    marginTop: '16px',
+                    paddingTop: '12px',
+                    textAlign: 'center',
+                    fontSize: '11px',
+                    color: '#94A3B8'
                   }}
                 >
-                  <div style={{ fontSize: '11px', color: 'var(--accent-blue)', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Scheduled Due Date
-                  </div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--brand-forest)' }}>
-                    {issuedTransaction.dueDate}
-                  </div>
+                  Issued by: {currentUser?.name || 'Staff Desk'} • Please preserve this slip until books are cleared.
                 </div>
               </div>
 
-              {/* Step 3 Actions */}
-              <div style={{ display: 'flex', gap: '10px' }}>
+              {/* Action Buttons for Step 4 */}
+              <div style={{ display: 'flex', gap: '12px', width: '100%', maxWidth: '540px' }}>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="btn btn-secondary"
-                  style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                  style={{
+                    flex: 1,
+                    height: '42px',
+                    borderRadius: '10px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    fontSize: '13.5px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: 'pointer'
+                  }}
                 >
-                  <Printer size={15} />
-                  <span>Print Loan Slip</span>
+                  <Printer size={16} />
+                  <span>Print Receipt</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={handleResetWizard}
-                  className="btn btn-secondary"
-                  style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                  onClick={handleResetForNextPatron}
+                  style={{
+                    flex: 1,
+                    height: '42px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    backgroundColor: '#166534',
+                    color: '#FFFFFF',
+                    fontSize: '13.5px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    cursor: 'pointer'
+                  }}
                 >
-                  <RotateCcw size={15} />
-                  <span>Issue Another Loan</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="btn btn-primary"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                >
-                  Done
+                  <RotateCcw size={16} />
+                  <span>Start Another Transaction</span>
                 </button>
               </div>
             </div>
           )}
         </div>
+
+        {/* ==================================================== */}
+        {/* MODAL FOOTER NAVIGATION (Steps 1, 2, 3)              */}
+        {/* ==================================================== */}
+        {currentStep < 4 && (
+          <div
+            style={{
+              padding: '16px 28px',
+              borderTop: '1px solid #E2E8F0',
+              backgroundColor: '#FFFFFF',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              {currentStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep((currentStep - 1) as 1 | 2 | 3)}
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <ArrowLeft size={15} />
+                  <span>Back</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#64748B',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {currentStep === 1 && (
+                <button
+                  type="button"
+                  disabled={!selectedMember || memberStatusState !== 'ready'}
+                  onClick={() => {
+                    if (selectedMember && memberStatusState === 'ready') {
+                      setCurrentStep(2);
+                    }
+                  }}
+                  style={{
+                    height: '38px',
+                    padding: '0 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: selectedMember && memberStatusState === 'ready' ? '#166534' : '#CBD5E1',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    cursor: selectedMember && memberStatusState === 'ready' ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>Proceed to Scan Books</span>
+                  <ArrowRight size={15} />
+                </button>
+              )}
+
+              {currentStep === 2 && (
+                <button
+                  type="button"
+                  disabled={scannedBooks.length === 0}
+                  onClick={() => {
+                    if (scannedBooks.length > 0) {
+                      setCurrentStep(3);
+                    }
+                  }}
+                  style={{
+                    height: '38px',
+                    padding: '0 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: scannedBooks.length > 0 ? '#166534' : '#CBD5E1',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    cursor: scannedBooks.length > 0 ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>Review Borrowing ({scannedBooks.length})</span>
+                  <ArrowRight size={15} />
+                </button>
+              )}
+
+              {currentStep === 3 && (
+                <button
+                  type="button"
+                  disabled={isSubmitting || scannedBooks.length === 0}
+                  onClick={handleExecuteBorrowing}
+                  style={{
+                    height: '40px',
+                    padding: '0 24px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: isSubmitting ? '#14532D' : '#166534',
+                    color: '#FFFFFF',
+                    fontSize: '13.5px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(22, 101, 52, 0.25)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw size={15} className="animate-spin" />
+                      <span>Confirming...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirm Borrowing</span>
+                      <Check size={16} strokeWidth={2.5} />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

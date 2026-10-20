@@ -716,6 +716,7 @@ class BookImportController extends Controller
                 'imported_count' => count($importedBooks),
                 'total_copies_created' => $totalCopiesCreated,
                 'books' => $importedBooks,
+                'summary' => $summary,
             ], 201);
         } catch (Exception $e) {
             DB::rollBack();

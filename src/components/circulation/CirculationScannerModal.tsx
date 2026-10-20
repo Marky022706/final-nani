@@ -16,7 +16,7 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
   isOpen,
   onClose,
   mode,
-  members: _members,
+  members,
   books: _books,
   onCodeDetected
 }) => {
@@ -109,16 +109,39 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
             </div>
           )}
 
+          {/* Quick Member / Book Simulator Chips */}
+          {mode === 'member_qr' && members && members.length > 0 && (
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Quick Patron Test Chips:
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {members.slice(0, 5).map((m) => (
+                  <button
+                    key={m.id || m.memberId}
+                    type="button"
+                    onClick={() => handleSimulateScan(m.memberId, m.fullName)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '11.5px', padding: '4px 8px' }}
+                  >
+                    <span>{m.fullName.split(' ')[0]}</span>
+                    <code style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({m.memberId})</code>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Manual Input Form */}
           <form onSubmit={handleManualSubmit} style={{ marginBottom: '8px' }}>
             <label className="form-label" style={{ fontSize: '12px' }}>
-              {mode === 'member_qr' ? 'Or enter Member ID / Name' : 'Or enter Barcode / Accession Number'}
+              {mode === 'member_qr' ? 'Or enter Member ID / QR code data' : 'Or enter Barcode / Accession Number'}
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
                 type="text"
                 className="form-input"
-                placeholder={mode === 'member_qr' ? 'e.g. MBR-000001 or Juan' : 'e.g. BPL-000101'}
+                placeholder={mode === 'member_qr' ? 'e.g. BPL-2026-0001 or MBR-000001' : 'e.g. BPL-000101'}
                 value={manualInput}
                 onChange={(e) => setManualInput(e.target.value)}
                 autoFocus

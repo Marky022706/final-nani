@@ -98,7 +98,7 @@ export const AboutSection: React.FC = () => {
           </div>
 
           {/* Text Story & Pillars */}
-          <div>
+          <div id="about-history">
             <h3
               style={{
                 fontSize: '22px',

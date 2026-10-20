@@ -2,16 +2,23 @@ import React from 'react';
 import type { Member, User } from '../../types';
 import { QrCodeSvg } from '../../utils/qr';
 import { Mail, Phone, MapPin, Printer, ShieldCheck } from 'lucide-react';
+import { ProfileSettingsSkeleton } from '../common/skeleton';
 
 interface MemberProfileViewProps {
   currentUser: User;
   members: Member[];
+  isLoading?: boolean;
 }
 
 export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   currentUser,
-  members
+  members,
+  isLoading = false
 }) => {
+  if (isLoading) {
+    return <ProfileSettingsSkeleton />;
+  }
+
   const member = members.find((m) => m.memberId === currentUser.memberId) || members[0];
 
   const handlePrintCard = () => {

@@ -19,6 +19,8 @@ interface HeaderProps {
   onClearAll?: () => void;
   onOpenNotifications?: () => void;
   onResetData?: () => void;
+  onOpenProfile?: () => void;
+  onOpenAccountSettings?: () => void;
   onLogout?: () => void;
 }
 
@@ -34,6 +36,8 @@ export const Header: React.FC<HeaderProps> = ({
   onDeleteSingle,
   onClearAll,
   onOpenNotifications: _onOpenNotifications,
+  onOpenProfile,
+  onOpenAccountSettings,
   onLogout
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
         <UserProfileDropdown
           currentUser={currentUser}
           onNavigate={onNavigate}
+          onOpenProfile={onOpenProfile}
+          onOpenAccountSettings={onOpenAccountSettings}
           onRequestLogout={onLogout || (() => {})}
         />
       </div>

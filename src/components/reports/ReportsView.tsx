@@ -11,6 +11,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { useBreadcrumbs } from '../../context/BreadcrumbContext';
+import { ReportsSkeleton } from '../common/skeleton';
 
 interface ReportsViewProps {
   books: Book[];
@@ -18,6 +19,7 @@ interface ReportsViewProps {
   attendance: AttendanceRecord[];
   transactions: CirculationTransaction[];
   serviceRecords: ServiceRecord[];
+  isLoading?: boolean;
   onTriggerExport: (format: 'pdf' | 'csv') => void;
 }
 
@@ -27,6 +29,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   attendance,
   transactions,
   serviceRecords,
+  isLoading = false,
   onTriggerExport
 }) => {
   const [selectedReportType, setSelectedReportType] = useState<'overview' | 'books' | 'attendance' | 'circulation' | 'services'>('overview');
@@ -52,6 +55,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       clearSubTrail();
     };
   }, [selectedReportType, setSubTrail, clearSubTrail]);
+
+  if (isLoading) {
+    return <ReportsSkeleton />;
+  }
 
   const totalCopies = books.reduce((sum, b) => sum + b.copies.length, 0);
   const activeMembers = members.filter((m) => m.status === 'active').length;

@@ -39,7 +39,7 @@ const DESTINATION_LABELS: Record<string, { label: string; icon?: React.ElementTy
   services: { label: 'Library Services' },
   my_books: { label: 'My Books' },
   reservations: { label: 'Reservations' },
-  profile: { label: 'Profile & Card' }
+  profile: { label: 'Profile & Settings', icon: User }
 };
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({

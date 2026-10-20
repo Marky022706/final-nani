@@ -227,6 +227,21 @@ export const api = {
     );
   },
 
+  async borrowBooks(
+    memberId: string,
+    barcodes: string[],
+    dueDate: string,
+    processedBy?: string
+  ): Promise<{ success: boolean; message: string; transaction?: CirculationTransaction; transactions?: CirculationTransaction[] }> {
+    return request<{ success: boolean; message: string; transaction?: CirculationTransaction; transactions?: CirculationTransaction[] }>(
+      '/circulation/borrow',
+      {
+        method: 'POST',
+        body: JSON.stringify({ member_id: memberId, barcodes, due_date: dueDate, processed_by: processedBy })
+      }
+    );
+  },
+
   async returnBook(
     barcode: string
   ): Promise<{ success: boolean; message: string; transaction?: CirculationTransaction; fine?: number }> {
@@ -434,6 +449,31 @@ export const api = {
     return request<ServiceRecord>('/service-records', {
       method: 'POST',
       body: JSON.stringify({ service_id: serviceId, member_id: memberId, notes })
+    });
+  },
+
+  // Public Library Statistics
+  async getPublicStats(): Promise<{
+    books_available: number;
+    active_members: number;
+    founding_year: number;
+    years_serving: number;
+  }> {
+    return request('/public-stats');
+  },
+
+  // User Profile & Account Settings
+  async updateProfile(data: { name: string; email: string; phone?: string; department?: string }): Promise<{ message: string; user: User }> {
+    return request<{ message: string; user: User }>('/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async changePassword(data: { current_password: string; new_password: string; new_password_confirmation: string }): Promise<{ message: string }> {
+    return request<{ message: string }>('/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
   }
 };
