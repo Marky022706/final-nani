@@ -14,6 +14,7 @@ import { Footer } from './Footer';
 import { AdminVerificationModal } from './AdminVerificationModal';
 import { HelpSupportModal } from './HelpSupportModal';
 import { ScrollFade } from './ScrollFade';
+import { ScrollToHomeButton } from './ScrollToHomeButton';
 
 interface LandingPageProps {
   onNavigateToLogin: () => void;
@@ -141,6 +142,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         onClose={() => setIsHelpOpen(false)}
         onNavigateToLogin={onNavigateToLogin}
       />
+
+      {/* Floating Bottom-Right Arrow to return to Home */}
+      <ScrollToHomeButton />
     </div>
   );
 };

@@ -40,6 +40,7 @@ interface BookListProps {
   onDeleteBooks?: (bookIds: string[]) => void | Promise<void>;
   onBooksImported?: (newBooks: Book[]) => void;
   onShowToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
+  onNavigateToCirculation?: (barcode?: string) => void;
 }
 
 export const BookList: React.FC<BookListProps> = ({
@@ -57,7 +58,8 @@ export const BookList: React.FC<BookListProps> = ({
   onRestoreBooks,
   onDeleteBooks,
   onBooksImported,
-  onShowToast
+  onShowToast,
+  onNavigateToCirculation
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -145,10 +147,6 @@ export const BookList: React.FC<BookListProps> = ({
     setSubTrail,
     clearSubTrail
   ]);
-
-  if (isLoading) {
-    return <BookCatalogSkeleton />;
-  }
 
   // Filtering
   const filteredBooks = books.filter((book) => {
@@ -388,6 +386,10 @@ export const BookList: React.FC<BookListProps> = ({
       setIsDialogSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return <BookCatalogSkeleton />;
+  }
 
   return (
     <div>
@@ -1017,6 +1019,7 @@ export const BookList: React.FC<BookListProps> = ({
         onEditBook={(book) => handleStartEdit(book)}
         onDeleteBook={onDeleteBook}
         onToggleArchive={onToggleArchive}
+        onNavigateToCirculation={onNavigateToCirculation}
       />
 
       {/* Add Book Modal */}

@@ -29,6 +29,7 @@ import { LogoutModal } from './components/auth/LogoutModal';
 import { authService } from './services/authService';
 import { BreadcrumbProvider } from './context/BreadcrumbContext';
 import { useActionLoading } from './context/ActionLoadingContext';
+import { usePageTransition, type PageTransitionOptions } from './context/PageTransitionContext';
 
 // Dashboards
 import { SuperAdminDashboard } from './components/dashboard/SuperAdminDashboard';
@@ -75,10 +76,11 @@ const GUEST_USER: User = {
 
 export function App() {
   const { showActionLoading, hideActionLoading } = useActionLoading();
+  const { startTransition } = usePageTransition();
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
 
   // State from Storage
-  const [currentUser, setCurrentUser] = useState<User>(GUEST_USER);
+  const [currentUser, setCurrentUser] = useState<User>(() => StorageService.getCurrentUser() || GUEST_USER);
   const [users, setUsers] = useState<User[]>(() => StorageService.getUsers());
   const [members, setMembers] = useState<Member[]>(() => StorageService.getMembers());
   const [books, setBooks] = useState<Book[]>(() => StorageService.getBooks());
@@ -117,16 +119,22 @@ export function App() {
     return VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard';
   };
 
-  // Navigation State with URL synchronization
+  // Navigation State with URL synchronization & Page Transition
   const [currentDestination, setCurrentDestination] = useState<string>(() => getInitialDestination());
 
-  const handleNavigate = (dest: string) => {
+  const handleNavigate = (dest: string, options?: PageTransitionOptions) => {
     const normalizedDest = dest === 'quick_links' ? 'help_support' : dest;
-    setCurrentDestination(normalizedDest);
-    const targetPath = normalizedDest === 'dashboard' ? '/' : `/${normalizedDest}`;
-    if (window.location.pathname !== targetPath) {
-      window.history.pushState({ dest: normalizedDest }, '', targetPath);
-    }
+    if (normalizedDest === currentDestination) return;
+
+    startTransition(normalizedDest, async () => {
+      setCurrentDestination(normalizedDest);
+      const targetPath = normalizedDest === 'dashboard' ? '/' : `/${normalizedDest}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ dest: normalizedDest }, '', targetPath);
+      }
+      // Allow browser animation frames to settle the layout
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }, options);
   };
 
   // Quick modals
@@ -135,12 +143,14 @@ export function App() {
   const [isCreateMemberOpen, setIsCreateMemberOpen] = useState<boolean>(false);
   const [selectedCardMember, setSelectedCardMember] = useState<Member | null>(null);
   const [profileActiveTab, setProfileActiveTab] = useState<ProfileTab>('profile');
+  const [targetCirculationBarcode, setTargetCirculationBarcode] = useState<string | null>(null);
 
   // Authentication State & Protection
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return authService.isAuthenticated() && Boolean(StorageService.getCurrentUser());
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
-  // True while an existing token (if any) is being verified against the API on boot.
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
 
@@ -213,7 +223,6 @@ export function App() {
 
     async function bootstrapAuth() {
       if (!authService.isAuthenticated()) {
-        setIsAuthChecking(false);
         return;
       }
       try {
@@ -237,9 +246,10 @@ export function App() {
         setIsLoggedIn(true);
       } catch {
         // Token missing/expired/revoked - fall back to the login screen.
-        if (!cancelled) setIsLoggedIn(false);
-      } finally {
-        if (!cancelled) setIsAuthChecking(false);
+        if (!cancelled) {
+          setIsLoggedIn(false);
+          authService.logout();
+        }
       }
     }
 
@@ -249,7 +259,7 @@ export function App() {
     };
   }, []);
 
-  // Route protection & Back Navigation Prevention
+  // Route protection & Back Navigation Prevention with Page Transition
   useEffect(() => {
     const handlePopState = () => {
       const authenticated = authService.isAuthenticated();
@@ -259,16 +269,18 @@ export function App() {
         return;
       }
       const raw = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
-      if (!raw || raw === '') {
-        setCurrentDestination('dashboard');
-      } else {
-        setCurrentDestination(VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard');
+      const nextDest = !raw || raw === '' ? 'dashboard' : (VALID_DESTINATIONS.includes(raw) ? raw : 'dashboard');
+      if (nextDest !== currentDestination) {
+        startTransition(nextDest, async () => {
+          setCurrentDestination(nextDest);
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        });
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [currentDestination, startTransition]);
 
   // Enforce role boundaries and granular staff privileges
   useEffect(() => {
@@ -687,13 +699,20 @@ export function App() {
           : { circulationDesk: true, inventoryManagement: true, memberManagement: true, servicesManagement: true, reportsExport: true, auditView: true }
       )
     };
-    setCurrentUser(userWithPrivs);
-    StorageService.setCurrentUser(userWithPrivs);
-    authService.login(userWithPrivs, true);
-    setIsLoggedIn(true);
-    setShowWelcomeModal(true);
-    handleNavigate(getInitialDestination());
-    addToast('success', `Welcome, ${userWithPrivs.name}`, `Signed in as ${userWithPrivs.role.replace('_', ' ')}`);
+    const targetDest = getInitialDestination();
+    startTransition(targetDest, () => {
+      setCurrentUser(userWithPrivs);
+      StorageService.setCurrentUser(userWithPrivs);
+      authService.login(userWithPrivs, true);
+      setIsLoggedIn(true);
+      setShowWelcomeModal(false);
+      setCurrentDestination(targetDest);
+      const targetPath = targetDest === 'dashboard' ? '/' : `/${targetDest}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ dest: targetDest }, '', targetPath);
+      }
+      addToast('success', `Welcome, ${userWithPrivs.name}`, `Signed in as ${userWithPrivs.role.replace('_', ' ')}`);
+    });
   };
 
   const handleRequestLogout = () => {
@@ -705,14 +724,20 @@ export function App() {
   };
 
   const handleConfirmLogout = () => {
-    authService.logout().catch(() => {
-      // Best effort server-side token revocation - local session is cleared regardless.
+    startTransition('landing', () => {
+      authService.logout().catch(() => {
+        // Best effort server-side token revocation - local session is cleared regardless.
+      });
+      setIsLogoutModalOpen(false);
+      setIsLoggedIn(false);
+      setCurrentUser(GUEST_USER);
+      setCurrentDestination('dashboard');
+      setPublicRoute('landing');
+      if (window.location.pathname !== '/') {
+        window.history.pushState({ publicRoute: 'landing' }, '', '/');
+      }
+      addToast('success', 'Logged Out', 'You have been logged out successfully.');
     });
-    setIsLogoutModalOpen(false);
-    setIsLoggedIn(false);
-    setCurrentUser(GUEST_USER);
-    handleNavigate('dashboard');
-    addToast('success', 'Logged Out', 'You have been logged out successfully.');
   };
 
   // 2. Members Operations
@@ -761,6 +786,21 @@ export function App() {
         err?.message || 'Could not save member to Laragon MySQL. Saved locally in browser.'
       );
     }
+  };
+
+  const handleMembersBulkImported = (importedMembers: Member[]) => {
+    const importedIds = new Set(importedMembers.map((m) => m.memberId || m.id));
+    const nextMembers = [...importedMembers, ...members.filter((m) => !importedIds.has(m.memberId) && !importedIds.has(m.id))];
+    setMembers(nextMembers);
+    StorageService.saveMembers(nextMembers);
+
+    StorageService.addAuditLog(
+      'MEMBER_BULK_IMPORT',
+      'Members',
+      `Bulk imported ${importedMembers.length} member accounts with credentials`,
+      currentUser.name
+    );
+    setAuditLogs(StorageService.getAuditLogs());
   };
 
   const handleMemberUpdated = (updatedMember: Member) => {
@@ -1891,49 +1931,34 @@ export function App() {
     return !n.read;
   }).length;
 
-  // Verifying a stored session token against the backend before deciding
-  // whether to show the dashboard or the login screen.
-  if (isAuthChecking) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          width: '100vw',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#166534',
-          color: '#ffffff',
-          fontSize: '14px',
-          fontWeight: 600
-        }}
-      >
-        Loading Balingasag Municipal Library…
-      </div>
-    );
-  }
 
-  // Render public pages when not authenticated
+
+  // Render public pages when not authenticated with Page Transitions
   if (!isLoggedIn) {
     const navigateToLogin = () => {
-      setPublicRoute('login');
-      window.history.pushState({ publicRoute: 'login' }, '', '/login');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      startTransition('login', () => {
+        setPublicRoute('login');
+        window.history.pushState({ publicRoute: 'login' }, '', '/login');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     };
 
     const navigateToLanding = () => {
-      setPublicRoute('landing');
-      window.history.pushState({ publicRoute: 'landing' }, '', '/');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      startTransition('landing', () => {
+        setPublicRoute('landing');
+        window.history.pushState({ publicRoute: 'landing' }, '', '/');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     };
 
     // Listen for browser back/forward between public routes
     const handlePublicPopState = () => {
       const path = window.location.pathname.replace(/^\/+/, '').trim().toLowerCase();
-      if (path === 'login') {
-        setPublicRoute('login');
-      } else {
-        setPublicRoute('landing');
+      const nextRoute = path === 'login' ? 'login' : 'landing';
+      if (nextRoute !== publicRoute) {
+        startTransition(nextRoute, () => {
+          setPublicRoute(nextRoute);
+        });
       }
     };
 
@@ -1971,6 +1996,8 @@ export function App() {
           onNavigate={handleNavigate}
           unreadNotifsCount={unreadNotifsCount}
           currentUser={currentUser}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Main Viewport */}
@@ -2032,6 +2059,7 @@ export function App() {
               handleNavigate('profile');
             }}
             onLogout={handleRequestLogout}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           />
 
         <main key={currentDestination} className="content-viewport page-content-enter">
@@ -2078,6 +2106,7 @@ export function App() {
                   title="Operation Desk"
                   subtitle="Attendance Records & History • Live Patron Monitoring & Daily Logs"
                   defaultTab="records"
+                  showKiosk={false}
                   onAttendanceProcessed={handleAttendanceProcessed}
                   onSaveAttendanceEdit={handleSaveAttendanceEdit}
                 />
@@ -2104,6 +2133,10 @@ export function App() {
               onDeleteBooks={handleBulkDeleteBooks}
               onBooksImported={handleBooksBulkImported}
               onShowToast={addToast}
+              onNavigateToCirculation={(barcode) => {
+                setTargetCirculationBarcode(barcode || null);
+                handleNavigate('circulation');
+              }}
             />
           )}
 
@@ -2118,6 +2151,8 @@ export function App() {
               onMemberDeleted={handleMemberDeleted}
               onToggleStatus={handleToggleMemberStatus}
               onToggleArchive={handleToggleArchiveMember}
+              onMembersImported={handleMembersBulkImported}
+              onShowToast={addToast}
             />
           )}
 
@@ -2178,6 +2213,8 @@ export function App() {
               onRejectBorrow={handleRejectBorrow}
               onApproveReservation={handleApproveReservation}
               onRejectReservation={handleRejectReservation}
+              initialBarcode={targetCirculationBarcode}
+              onClearInitialBarcode={() => setTargetCirculationBarcode(null)}
             />
           )}
 

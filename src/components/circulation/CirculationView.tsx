@@ -14,6 +14,7 @@ import { useBreadcrumbs } from '../../context/BreadcrumbContext';
 import { CirculationSkeleton } from '../common/skeleton';
 import { StorageService } from '../../utils/storage';
 import { api } from '../../services/api';
+import { playSuccessBeep } from '../../utils/sound';
 import {
   Repeat,
   BookOpen,
@@ -31,7 +32,8 @@ import {
   ShieldCheck,
   User as UserIcon,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RotateCcw
 } from 'lucide-react';
 
 interface CirculationViewProps {
@@ -51,6 +53,8 @@ interface CirculationViewProps {
   onRejectBorrow?: (transactionId: string, reason?: string) => void;
   onApproveReservation?: (reservationId: string) => void;
   onRejectReservation?: (reservationId: string) => void;
+  initialBarcode?: string | null;
+  onClearInitialBarcode?: () => void;
 }
 
 interface InstructionsCardProps {
@@ -69,29 +73,30 @@ const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         borderRadius: 'var(--radius-lg, 16px)'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: '8px',
-              backgroundColor: 'rgba(30, 77, 56, 0.12)',
-              color: 'var(--brand-forest, #1E4D38)',
+              width: 38,
+              height: 38,
+              borderRadius: '10px',
+              backgroundColor: 'var(--success-bg)',
+              color: 'var(--success)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
-            <BookOpen size={18} />
+            <BookOpen size={20} />
           </div>
           <div>
-            <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               {lang === 'en'
                 ? 'How to Borrow Books — Step-by-Step Instructions'
                 : 'Unsaon Paghulam ug Libro — Mga Lakang ug Giya'}
             </h4>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               {lang === 'en'
                 ? 'Official Balingasag Public Library circulation process for issuing physical loans'
                 : 'Opisyal nga pamaagi sa Balingasag Public Library sa pagpagawas sa mga libro'}
@@ -105,47 +110,74 @@ const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
           onClick={onToggleLang}
           className="btn btn-ghost btn-sm"
           style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '3px 10px',
+            fontSize: '12px',
+            fontWeight: 600,
+            padding: '5px 12px',
             borderRadius: '999px',
             border: '1px solid var(--border-main)',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '5px'
+            gap: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
           }}
           title="Switch language between English and Bisaya"
         >
-          <span>🌐 {lang === 'en' ? 'English (Click for Bisaya)' : 'Bisaya (Click for English)'}</span>
+          <span>🌐 {lang === 'en' ? 'English (Switch to Bisaya)' : 'Bisaya (Switch to English)'}</span>
         </button>
       </div>
 
       {/* 3 Step Boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {/* Step 1 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--brand-forest)',
+                backgroundColor: 'var(--light-green)',
+                border: '1px solid var(--light-green-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 01' : 'LAKANG 01'}
             </span>
-            <QrCode size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              <QrCode size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Scan Member QR Code' : 'I-scan ang QR Code sa Miyembro'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Patron presents their digital or physical library card. The system validates that their account is Active, has zero overdue fines, and is within the 3-book loan limit.'
               : 'Ipakita sa patron ang iyang digital o pisikal nga library ID. Susihoon sa sistema kung Active ang account, walay bayronon nga multa, ug wala milapas sa 3 ka libro nga limit.'}
@@ -155,26 +187,50 @@ const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         {/* Step 2 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--brand-forest)',
+                backgroundColor: 'var(--light-green)',
+                border: '1px solid var(--light-green-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 02' : 'LAKANG 02'}
             </span>
-            <Barcode size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--brand-forest)'
+              }}
+            >
+              <Barcode size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Scan Book Physical Barcode' : 'I-scan ang Barcode sa Libro'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Locate the physical book on the library shelves. Scan the unique accession barcode on the title page or back cover to verify the copy is Available for lending.'
               : 'Kuhaa ang libro gikan sa estante. I-scan ang accession barcode sa unahan o luyo nga bahin sa libro aron masiguro nga Available pa kini.'}
@@ -184,26 +240,50 @@ const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         {/* Step 3 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1E4D38', backgroundColor: 'rgba(30, 77, 56, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--success)',
+                backgroundColor: 'var(--success-bg)',
+                border: '1px solid var(--success-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 03' : 'LAKANG 03'}
             </span>
-            <CheckCircle2 size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--success)'
+              }}
+            >
+              <CheckCircle2 size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Confirm Loan & Issue Slip' : 'Kumpirmaha & Ihatag ang Slip'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Review standard 7-day lending period. Click "Confirm Borrow" to log the loan, deduct copy from available shelf inventory, and print/issue the official loan slip.'
               : 'Susiha ang standard nga 7 ka adlaw nga due date. I-click ang Confirm Borrow aron ma-rekord ang transaksyon ug ma-print ang opisyal nga loan slip.'}
@@ -211,26 +291,70 @@ const BorrowInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         </div>
       </div>
 
-      {/* Policy Callout */}
+      {/* Policy Callout - Structured & Readable */}
       <div
         style={{
-          padding: '12px 16px',
-          borderRadius: '10px',
-          backgroundColor: 'rgba(30, 77, 56, 0.05)',
-          border: '1px solid rgba(30, 77, 56, 0.15)',
+          padding: '16px 20px',
+          borderRadius: '12px',
+          backgroundColor: 'var(--bg-surface, #FFFFFF)',
+          border: '1px solid var(--border-main)',
           display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          fontSize: '12px',
-          color: '#1E4D38'
+          flexDirection: 'column',
+          gap: '10px'
         }}
       >
-        <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-        <div style={{ lineHeight: 1.45 }}>
-          <strong>{lang === 'en' ? 'Borrowing Rules & Guidelines:' : 'Mga Lagda sa Paghulam:'}</strong>{' '}
-          {lang === 'en'
-            ? 'Maximum of 3 books per patron • Standard loan period is 7 calendar days • 1 renewal permitted before due date if no holds exist • Reference books & periodicals are for room-use only • Protect books from liquids and damages.'
-            : 'Hangtod sa 3 ka libro matag miyembro • 7 ka adlaw ang standard nga paghulam • Pwede ma-renew kausa kung walay nagpa-reserve • Ang mga reference books dili pwedeng ipagawas sa librarya • Ampingi ang libro batok sa tubig ug gisi.'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-forest)', fontWeight: 700, fontSize: '13px' }}>
+          <ShieldCheck size={18} style={{ color: 'var(--primary-green)' }} />
+          <span>{lang === 'en' ? 'Borrowing Rules & Guidelines' : 'Mga Lagda sa Paghulam'}</span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '1px 8px',
+              borderRadius: '999px',
+              backgroundColor: 'var(--light-green)',
+              color: 'var(--brand-forest)',
+              border: '1px solid var(--light-green-border)'
+            }}
+          >
+            {lang === 'en' ? 'Municipal Policy' : 'Opisyal nga Lagda'}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', fontSize: '12.5px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--primary-green)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Loan limit: ' : 'Limitasyon sa paghulam: '}
+              </strong>
+              {lang === 'en' ? 'Maximum of 3 books per patron' : 'Hangtod sa 3 ka libro matag miyembro'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--primary-green)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Loan period: ' : 'Gidugayon: '}
+              </strong>
+              {lang === 'en'
+                ? 'Standard loan period is 7 calendar days (1 renewal permitted if no holds exist)'
+                : '7 ka adlaw ang standard nga paghulam (pwede ma-renew kausa kung walay hold)'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--primary-green)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Material care: ' : 'Pag-amping: '}
+              </strong>
+              {lang === 'en'
+                ? 'Reference books are room-use only; protect items from liquids and damage'
+                : 'Ang reference books sa library lang; ampingi batok sa tubig ug kadaot'}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -249,13 +373,14 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         marginTop: '24px'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: '8px',
+              width: 38,
+              height: 38,
+              borderRadius: '10px',
               backgroundColor: 'var(--success-bg)',
               color: 'var(--success)',
               display: 'flex',
@@ -263,15 +388,15 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
               justifyContent: 'center'
             }}
           >
-            <CheckCircle2 size={18} />
+            <RotateCcw size={20} />
           </div>
           <div>
-            <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               {lang === 'en'
                 ? 'How to Return Books — Step-by-Step Instructions'
                 : 'Unsaon Pag-uli ug Libro — Mga Lakang ug Giya'}
             </h4>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               {lang === 'en'
                 ? 'Official Balingasag Public Library circulation process for check-in and shelf restocking'
                 : 'Opisyal nga pamaagi sa Balingasag Public Library sa pagdawat ug pagbalik sa libro sa estante'}
@@ -285,47 +410,74 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
           onClick={onToggleLang}
           className="btn btn-ghost btn-sm"
           style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '3px 10px',
+            fontSize: '12px',
+            fontWeight: 600,
+            padding: '5px 12px',
             borderRadius: '999px',
             border: '1px solid var(--border-main)',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '5px'
+            gap: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
           }}
           title="Switch language between English and Bisaya"
         >
-          <span>🌐 {lang === 'en' ? 'English (Click for Bisaya)' : 'Bisaya (Click for English)'}</span>
+          <span>🌐 {lang === 'en' ? 'English (Switch to Bisaya)' : 'Bisaya (Switch to English)'}</span>
         </button>
       </div>
 
       {/* 3 Step Boxes */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {/* Step 1 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--brand-forest)',
+                backgroundColor: 'var(--light-green)',
+                border: '1px solid var(--light-green-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 01' : 'LAKANG 01'}
             </span>
-            <Barcode size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              <Barcode size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Scan Book Barcode or Member QR' : 'I-scan ang Barcode o QR Code'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Scan the physical barcode on the returned book copy, or scan the member QR to view all active borrowed items issued under their account.'
               : 'I-scan ang barcode sticker sa giuli nga libro, o i-scan ang QR code sa miyembro aron makita ang tanang libro nga gihulam ubos sa iyang account.'}
@@ -335,26 +487,50 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         {/* Step 2 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--warning)',
+                backgroundColor: 'var(--warning-bg)',
+                border: '1px solid var(--warning-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 02' : 'LAKANG 02'}
             </span>
-            <AlertCircle size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--warning)'
+              }}
+            >
+              <AlertCircle size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Inspect Condition & Verify Fines' : 'Susiha ang Libro & Multa'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Inspect cover, spine, and pages for damage. The automated calculation engine verifies return date and computes overdue fines at ₱5.00/day if late.'
               : 'Susiha ang hapin ug mga panid sa libro. Awtomatikong kwentahon sa sistema kung aduna bay multa (₱5.00 matag adlaw) kung nilapas na sa takna.'}
@@ -364,26 +540,50 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         {/* Step 3 */}
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#FFFFFF',
+            padding: '20px',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)',
             borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--border-main)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            gap: '10px',
+            boxShadow: 'var(--shadow-xs)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--success)', backgroundColor: 'var(--success-bg)', padding: '2px 8px', borderRadius: '6px' }}>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: 'var(--success)',
+                backgroundColor: 'var(--success-bg)',
+                border: '1px solid var(--success-border)',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                letterSpacing: '0.04em'
+              }}
+            >
               {lang === 'en' ? 'STEP 03' : 'LAKANG 03'}
             </span>
-            <CheckCircle2 size={16} color="var(--text-muted)" />
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--success)'
+              }}
+            >
+              <CheckCircle2 size={16} />
+            </div>
           </div>
-          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+          <div style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
             {lang === 'en' ? 'Confirm Return & Restock' : 'Kumpirmaha ang Pag-uli'}
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+          <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
             {lang === 'en'
               ? 'Click "Confirm Return & Release Copy to Shelf". Transaction updates to Returned, member loan quota is restored, and the physical book is restocked.'
               : 'I-click ang Confirm Return aron ma-clear ang transaksyon, mabalik ang quota sa miyembro, ug maibalik ang libro sa sirkulasyon sa estante.'}
@@ -391,26 +591,72 @@ const ReturnInstructionsCard: React.FC<InstructionsCardProps> = ({ lang, onToggl
         </div>
       </div>
 
-      {/* Policy Callout */}
+      {/* Policy Callout - Structured & Readable */}
       <div
         style={{
-          padding: '12px 16px',
-          borderRadius: '10px',
-          backgroundColor: 'rgba(30, 77, 56, 0.05)',
-          border: '1px solid rgba(30, 77, 56, 0.15)',
+          padding: '16px 20px',
+          borderRadius: '12px',
+          backgroundColor: 'var(--bg-surface, #FFFFFF)',
+          border: '1px solid var(--border-main)',
           display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          fontSize: '12px',
-          color: '#1E4D38'
+          flexDirection: 'column',
+          gap: '10px'
         }}
       >
-        <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-        <div style={{ lineHeight: 1.45 }}>
-          <strong>{lang === 'en' ? 'Return & Restocking Rules:' : 'Mga Lagda sa Pag-uli:'}</strong>{' '}
-          {lang === 'en'
-            ? 'Municipal fine rate: ₱5.00/day per overdue book (excluding Sundays & holidays) • Unsettled fines block new loans • Lost or severely damaged items must be replaced with the exact title or equivalent retail price assessed by the library.'
-            : 'Multa sa pagkalapas: ₱5.00 matag adlaw kada libro (walay labot Domingo ug holiday) • Ang wala nabayran nga multa mopugong sa sunod nga paghulam • Ang nawala o nadaot nga libro kinahanglan pulihan sa parehong edisyon o bayran sumala sa bili niini.'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-forest)', fontWeight: 700, fontSize: '13px' }}>
+          <ShieldCheck size={18} style={{ color: 'var(--primary-green)' }} />
+          <span>{lang === 'en' ? 'Return & Restocking Rules' : 'Mga Lagda sa Pag-uli'}</span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '1px 8px',
+              borderRadius: '999px',
+              backgroundColor: 'var(--light-green)',
+              color: 'var(--brand-forest)',
+              border: '1px solid var(--light-green-border)'
+            }}
+          >
+            {lang === 'en' ? 'Municipal Policy' : 'Opisyal nga Lagda'}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', fontSize: '12.5px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--primary-green)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Municipal fine rate: ' : 'Taripa sa multa: '}
+              </strong>
+              {lang === 'en'
+                ? '₱5.00/day per overdue book (excluding Sundays & holidays)'
+                : '₱5.00 matag adlaw kada libro (walay labot Domingo ug holiday)'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--warning)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Borrowing restriction: ' : 'Restriksyon sa paghulam: '}
+              </strong>
+              {lang === 'en'
+                ? 'Unsettled fines block new loans until resolved'
+                : 'Ang wala nabayran nga multa mopugong sa sunod nga paghulam'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--danger)', fontWeight: 800, marginTop: '1px' }}>•</span>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {lang === 'en' ? 'Lost or damaged items: ' : 'Nawala o nadaot nga libro: '}
+              </strong>
+              {lang === 'en'
+                ? 'Must be replaced with exact title or equivalent retail price assessed by the library'
+                : 'Kinahanglan pulihan sa parehong edisyon o bayran sumala sa bili niini'}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -433,7 +679,9 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
   onApproveBorrow,
   onRejectBorrow,
   onApproveReservation,
-  onRejectReservation
+  onRejectReservation,
+  initialBarcode,
+  onClearInitialBarcode
 }) => {
   const pendingBorrows = transactions.filter((t) => t.status === 'Pending Approval');
   const pendingReservations = reservations.filter((r) => r.status === 'Pending Approval');
@@ -507,10 +755,6 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
 
   // Search in transactions table
   const [loansSearch, setLoansSearch] = useState<string>('');
-
-  if (isLoading) {
-    return <CirculationSkeleton />;
-  }
 
   // Collect available book copies for quick pick
   const availableCopies: { bookTitle: string; author: string; barcode: string; accession: string }[] = [];
@@ -638,39 +882,81 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
     return text.trim();
   };
 
+  // Auto-fill and route when tested or navigated with initialBarcode
+  React.useEffect(() => {
+    if (initialBarcode) {
+      const upper = initialBarcode.trim().toUpperCase();
+      const isBorrowed = transactions.some(
+        (t) =>
+          (t.barcode.toUpperCase() === upper || t.accessionNumber.toUpperCase() === upper) &&
+          (t.status === 'Active' || t.status === 'Overdue')
+      );
+      if (isBorrowed) {
+        setActiveTab('return');
+        setReturnBarcode(initialBarcode.trim());
+        setReturnStatusMessage({ type: 'success', text: `Loaded borrowed physical copy "${initialBarcode}" for check-in.` });
+      } else {
+        setActiveTab('borrow');
+        setBorrowBarcode(initialBarcode.trim());
+        setBorrowStatusMessage({ type: 'success', text: `Scanned physical barcode "${initialBarcode}" ready to be issued.` });
+      }
+      if (onClearInitialBarcode) {
+        onClearInitialBarcode();
+      }
+    }
+  }, [initialBarcode, transactions, onClearInitialBarcode]);
+
   const handleScannerDetected = async (rawCode: string) => {
     const code = cleanScannedCode(rawCode);
     const upperCode = code.toUpperCase();
 
-    if (scannerModal.targetAction === 'borrow_member') {
-      let found = members.find(
-        (m) =>
-          m.memberId.toUpperCase() === upperCode ||
-          (m.qrCodeData && m.qrCodeData.toUpperCase() === upperCode) ||
-          m.id.toUpperCase() === upperCode ||
-          m.fullName.toUpperCase().includes(upperCode)
-      );
+    if (scannerModal.isOpen) {
+      if (scannerModal.targetAction === 'borrow_member') {
+        let found = members.find(
+          (m) =>
+            m.memberId.toUpperCase() === upperCode ||
+            (m.qrCodeData && m.qrCodeData.toUpperCase() === upperCode) ||
+            m.id.toUpperCase() === upperCode ||
+            m.fullName.toUpperCase().includes(upperCode)
+        );
 
-      if (!found) {
-        try {
-          const remote = await api.getMemberByQr(code);
-          if (remote && remote.memberId) found = remote;
-        } catch {
-          // not found
+        if (!found) {
+          try {
+            const remote = await api.getMemberByQr(code);
+            if (remote && remote.memberId) found = remote;
+          } catch {
+            // not found
+          }
+        }
+
+        if (found) {
+          setBorrowMemberId(found.memberId);
+          setBorrowStatusMessage(null);
+        } else {
+          setBorrowStatusMessage({ type: 'error', text: `Member with code "${code}" not found.` });
+        }
+      } else if (scannerModal.targetAction === 'borrow_book') {
+        setBorrowBarcode(code);
+        setBorrowStatusMessage(null);
+      } else if (scannerModal.targetAction === 'return_scan') {
+        // Check if scanned code matches a member QR
+        const foundMember = members.find(
+          (m) =>
+            m.memberId.toUpperCase() === upperCode ||
+            (m.qrCodeData && m.qrCodeData.toUpperCase() === upperCode) ||
+            m.id.toUpperCase() === upperCode
+        );
+
+        if (foundMember) {
+          setReturnBarcode(foundMember.memberId);
+          setReturnStatusMessage(null);
+        } else {
+          setReturnBarcode(code);
+          setReturnStatusMessage(null);
         }
       }
-
-      if (found) {
-        setBorrowMemberId(found.memberId);
-        setBorrowStatusMessage(null);
-      } else {
-        setBorrowStatusMessage({ type: 'error', text: `Member with code "${code}" not found.` });
-      }
-    } else if (scannerModal.targetAction === 'borrow_book') {
-      setBorrowBarcode(code);
-      setBorrowStatusMessage(null);
-    } else if (scannerModal.targetAction === 'return_scan') {
-      // Check if scanned code matches a member QR
+    } else {
+      // Direct / USB Hardware Wedge Barcode Scan (Zero-keystroke mode)
       const foundMember = members.find(
         (m) =>
           m.memberId.toUpperCase() === upperCode ||
@@ -679,14 +965,72 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
       );
 
       if (foundMember) {
-        setReturnBarcode(foundMember.memberId);
-        setReturnStatusMessage(null);
-      } else {
-        setReturnBarcode(code);
-        setReturnStatusMessage(null);
+        if (activeTab === 'return') {
+          setReturnBarcode(foundMember.memberId);
+          setReturnStatusMessage({ type: 'success', text: `Patron "${foundMember.fullName}" identified (${foundMember.memberId}). Showing loans.` });
+        } else {
+          setActiveTab('borrow');
+          setBorrowMemberId(foundMember.memberId);
+          setBorrowStatusMessage({ type: 'success', text: `Patron "${foundMember.fullName}" verified.` });
+        }
+        playSuccessBeep();
+        return;
       }
+
+      // Check if scanned code matches an active borrowed copy
+      const activeLoan = transactions.find(
+        (t) =>
+          (t.barcode.toUpperCase() === upperCode || t.accessionNumber.toUpperCase() === upperCode) &&
+          (t.status === 'Active' || t.status === 'Overdue')
+      );
+
+      if (activeLoan || activeTab === 'return') {
+        setActiveTab('return');
+        setReturnBarcode(code);
+        setReturnStatusMessage({ type: 'success', text: `Identified returned book: "${activeLoan ? activeLoan.bookTitle : code}"` });
+      } else {
+        setActiveTab('borrow');
+        setBorrowBarcode(code);
+        setBorrowStatusMessage({ type: 'success', text: `Scanned book barcode: "${code}". Ready to issue loan.` });
+      }
+      playSuccessBeep();
     }
   };
+
+  // Hardware Barcode Scanner Listener (USB / Bluetooth Wedge Mode)
+  React.useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isInput = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable
+      );
+
+      const now = Date.now();
+      if (now - lastKeyTime > 80) {
+        buffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 3 && !isInput) {
+          e.preventDefault();
+          const scanned = buffer.trim();
+          buffer = '';
+          handleScannerDetected(scanned);
+        }
+      } else if (e.key.length === 1) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [members, books, transactions, activeTab, scannerModal.isOpen]);
 
   const handleExecuteBorrow = (e: React.FormEvent) => {
     e.preventDefault();
@@ -759,6 +1103,10 @@ export const CirculationView: React.FC<CirculationViewProps> = ({
       memberId.toLowerCase().includes(q)
     );
   });
+
+  if (isLoading) {
+    return <CirculationSkeleton />;
+  }
 
   return (
     <div>

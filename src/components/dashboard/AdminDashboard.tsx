@@ -11,13 +11,14 @@ import type {
 import {
   BookOpen,
   Clock,
-  Repeat,
   Plus,
   QrCode,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Users
 } from 'lucide-react';
 import { DashboardSkeleton } from '../common/skeleton';
+import { DashboardAnalyticsSection } from './DashboardAnalyticsSection';
 
 interface AdminDashboardProps {
   books: Book[];
@@ -60,7 +61,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     (sum, b) => sum + b.copies.filter((c) => c.status === 'Borrowed').length,
     0
   );
-  const overdueTransactions = transactions.filter((t) => t.status === 'Overdue');
 
   const todayStr = '2026-08-31';
   const todayVisits = attendance.filter((a) => a.date === todayStr);
@@ -238,29 +238,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <button
           type="button"
-          onClick={() => onNavigate('circulation')}
+          onClick={() => onNavigate('members')}
           className="stat-card stat-card-interactive"
-          title="Shortcut to Circulation & Loans"
-          aria-label={`Overdue Loans: ${overdueTransactions.length}. Click to view circulation loans`}
+          title="Shortcut to Member Management"
+          aria-label={`Total Member: ${members.length}. Click to view members directory`}
         >
           <div className="stat-card-header">
-            <span className="stat-label">Overdue Loans</span>
-            <div className="stat-icon" style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}>
-              <Repeat size={18} />
+            <span className="stat-label">Total Member</span>
+            <div className="stat-icon" style={{ backgroundColor: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
+              <Users size={18} />
             </div>
           </div>
-          <div className="stat-value" style={{ color: overdueTransactions.length > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
-            {overdueTransactions.length}
-          </div>
+          <div className="stat-value">{members.length}</div>
           <div className="stat-footer">
             <span>{activeMembers.length} active registered patrons</span>
-            <span className="stat-card-hint" style={{ color: 'var(--danger)' }}>
-              <span>View Loans</span>
+            <span className="stat-card-hint" style={{ color: 'var(--accent-blue)' }}>
+              <span>View Members</span>
               <ArrowRight size={12} />
             </span>
           </div>
         </button>
       </div>
+
+      {/* Interactive Library Traffic & Activity Analytics (Bar and Line Graphs) */}
+      <DashboardAnalyticsSection userRole={userRole} />
 
       {/* Main Grid: Active Visitors & Category Distribution */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>

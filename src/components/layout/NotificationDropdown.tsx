@@ -190,8 +190,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
               {totalUnread > 0 && (
                 <span
                   style={{
-                    backgroundColor: '#dcfce7',
-                    color: '#166534',
+                    backgroundColor: 'var(--light-green, #dcfce7)',
+                    color: 'var(--deep-green, #166534)',
                     fontSize: '11px',
                     fontWeight: 700,
                     padding: '2px 7px',
@@ -211,7 +211,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   className="btn btn-ghost btn-xs"
                   style={{
                     fontSize: '11px',
-                    color: '#166534',
+                    color: 'var(--deep-green, #166534)',
                     fontWeight: 600,
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -256,8 +256,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
               alignItems: 'center',
               gap: '6px',
               padding: '8px 16px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid var(--border-subtle, #f1f5f9)'
+              backgroundColor: 'var(--bg-subtle, #f8fafc)',
+              borderBottom: '1px solid var(--border-main, #f1f5f9)'
             }}
           >
             <button
@@ -266,8 +266,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
               style={{
                 fontSize: '11.5px',
                 fontWeight: activeFilter === 'all' ? 700 : 500,
-                color: activeFilter === 'all' ? '#166534' : 'var(--text-muted)',
-                backgroundColor: activeFilter === 'all' ? '#ffffff' : 'transparent',
+                color: activeFilter === 'all' ? 'var(--deep-green, #166534)' : 'var(--text-muted)',
+                backgroundColor: activeFilter === 'all' ? 'var(--bg-surface, #ffffff)' : 'transparent',
                 border: activeFilter === 'all' ? '1px solid var(--border-main)' : '1px solid transparent',
                 borderRadius: '12px',
                 padding: '2px 10px',
@@ -283,8 +283,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
               style={{
                 fontSize: '11.5px',
                 fontWeight: activeFilter === 'unread' ? 700 : 500,
-                color: activeFilter === 'unread' ? '#166534' : 'var(--text-muted)',
-                backgroundColor: activeFilter === 'unread' ? '#ffffff' : 'transparent',
+                color: activeFilter === 'unread' ? 'var(--deep-green, #166534)' : 'var(--text-muted)',
+                backgroundColor: activeFilter === 'unread' ? 'var(--bg-surface, #ffffff)' : 'transparent',
                 border: activeFilter === 'unread' ? '1px solid var(--border-main)' : '1px solid transparent',
                 borderRadius: '12px',
                 padding: '2px 10px',
@@ -305,7 +305,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                     width: '42px',
                     height: '42px',
                     borderRadius: '50%',
-                    backgroundColor: '#f1f5f9',
+                    backgroundColor: 'var(--bg-subtle, #f1f5f9)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -367,7 +367,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                               type="button"
                               onClick={(e) => handleQuickMarkRead(e, notif.id)}
                               className="btn btn-ghost btn-xs"
-                              style={{ padding: '2px 5px', fontSize: '10.5px', color: '#166534', gap: '2px' }}
+                              style={{ padding: '2px 5px', fontSize: '10.5px', color: 'var(--deep-green, #166534)', gap: '2px' }}
                               title="Mark as read"
                             >
                               <Check size={11} />

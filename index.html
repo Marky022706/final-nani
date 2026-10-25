@@ -9,6 +9,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Balingasag Municipal Library Management System</title>
     <meta name="description" content="Municipal Library Management System for Balingasag, Misamis Oriental. Cataloging, Circulation, Attendance, and Digital Member Cards." />
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('bpl_theme_preference');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = saved === 'dark' || (saved !== 'light' && prefersDark) ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.style.colorScheme = 'light';
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

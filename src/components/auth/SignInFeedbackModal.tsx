@@ -15,16 +15,21 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
 }) => {
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasTriggeredRef = useRef<boolean>(false);
+  const onWelcomeCompleteRef = useRef(onWelcomeComplete);
 
-  // When in 'welcome' state, automatically trigger onWelcomeComplete after ~1.5s
+  useEffect(() => {
+    onWelcomeCompleteRef.current = onWelcomeComplete;
+  }, [onWelcomeComplete]);
+
+  // When in 'welcome' state, automatically trigger onWelcomeComplete after ~1.8s
   useEffect(() => {
     if (status === 'welcome' && !hasTriggeredRef.current) {
       completeTimerRef.current = setTimeout(() => {
         if (!hasTriggeredRef.current) {
           hasTriggeredRef.current = true;
-          onWelcomeComplete?.();
+          onWelcomeCompleteRef.current?.();
         }
-      }, 1500);
+      }, 1800);
     }
 
     return () => {
@@ -32,7 +37,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
         clearTimeout(completeTimerRef.current);
       }
     };
-  }, [status, onWelcomeComplete]);
+  }, [status]);
 
   // Reset trigger ref if status goes back to idle or loading
   useEffect(() => {
@@ -63,9 +68,9 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.70)',
-        backdropFilter: 'blur(5px)',
-        WebkitBackdropFilter: 'blur(5px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.72)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         zIndex: 2000,
         display: 'flex',
         alignItems: 'center',
@@ -82,11 +87,12 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
         className="modal-dialog animate-modal-fade-in"
         style={{
           width: '100%',
-          maxWidth: '420px',
-          backgroundColor: '#ffffff',
+          maxWidth: '430px',
+          backgroundColor: 'var(--bg-surface, #ffffff)',
+          color: 'var(--text-primary, #0f172a)',
           borderRadius: '16px',
           border: '1px solid var(--border-main, #e2e8f0)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(22, 101, 52, 0.08)',
           padding: '36px 30px',
           display: 'flex',
           flexDirection: 'column',
@@ -105,11 +111,11 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
             left: 0,
             right: 0,
             height: '4px',
-            backgroundColor: '#166534',
+            backgroundColor: 'var(--brand-forest, #166534)',
             background:
               status === 'loading'
                 ? 'linear-gradient(90deg, #166534, #22c55e, #166534)'
-                : '#166534'
+                : 'var(--brand-forest, #166534)'
           }}
         />
 
@@ -119,72 +125,117 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
             className="animate-modal-fade-in"
             style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
           >
-            {/* Elegant Forest Green Loading Indicator with Library Logo */}
+            {/* Logo with Animated Orbital Spinner */}
             <div
               style={{
                 position: 'relative',
-                width: '76px',
-                height: '76px',
-                marginBottom: '22px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                width: '88px',
+                height: '88px',
+                marginBottom: '18px'
               }}
             >
-              {/* Outer pulsing ring */}
+              {/* Outer rotating gradient accent ring */}
               <div
-                className="animate-pulse-glow"
                 style={{
                   position: 'absolute',
                   inset: 0,
                   borderRadius: '50%',
-                  backgroundColor: 'rgba(22, 101, 52, 0.08)'
+                  border: '3px solid transparent',
+                  borderTopColor: '#16a34a',
+                  borderRightColor: '#22c55e',
+                  borderBottomColor: 'rgba(34, 197, 94, 0.2)',
+                  animation: 'spin 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite'
                 }}
+                aria-hidden="true"
               />
 
-              {/* Rotating outer spinner ring */}
+              {/* Ambient green breathing pulse glow */}
               <div
-                className="animate-spin-smooth"
                 style={{
                   position: 'absolute',
-                  inset: '-3px',
+                  inset: '6px',
                   borderRadius: '50%',
-                  border: '3px solid transparent',
-                  borderTopColor: '#166534',
-                  borderRightColor: '#22c55e'
+                  backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                  filter: 'blur(8px)',
+                  animation: 'pulseGlowGreen 2s infinite ease-in-out'
                 }}
+                aria-hidden="true"
               />
 
-              {/* Inner Logo Badge */}
+              {/* Centered Logo Badge */}
               <div
                 style={{
-                  width: '64px',
-                  height: '64px',
+                  position: 'relative',
+                  width: '68px',
+                  height: '68px',
                   borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  boxShadow: '0 4px 12px rgba(22, 101, 52, 0.15)',
+                  backgroundColor: 'var(--bg-surface, #ffffff)',
+                  border: '2px solid rgba(22, 101, 52, 0.15)',
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '4px',
-                  zIndex: 2
+                  padding: '7px',
+                  overflow: 'hidden'
                 }}
               >
                 <img
                   src="/logo.png"
-                  alt="Balingasag Library Logo"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }}
+                  alt="Balingasag Seal"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.src.includes('balingasag-logo.png')) {
+                      target.src = '/balingasag-logo.png';
+                    }
+                  }}
                 />
               </div>
             </div>
 
-            {/* Heading & Supporting Text per specification */}
+            {/* Municipality Tag */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: 'var(--light-green, #f0fdf4)',
+                border: '1px solid var(--light-green-border, #bbf7d0)',
+                fontSize: '10.5px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: 'var(--brand-forest, #166534)',
+                marginBottom: '10px'
+              }}
+            >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e'
+                }}
+              />
+              Municipality of Balingasag
+            </div>
+
+            {/* Heading & Supporting Text */}
             <h2
               id="signin-feedback-title"
               style={{
                 fontSize: '20px',
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--text-primary, #0f172a)',
                 letterSpacing: '-0.02em',
                 marginBottom: '8px'
               }}
@@ -195,7 +246,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
               id="signin-feedback-desc"
               style={{
                 fontSize: '13.5px',
-                color: '#475569',
+                color: 'var(--text-secondary, #475569)',
                 lineHeight: 1.5,
                 margin: '0 0 24px'
               }}
@@ -208,7 +259,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
               style={{
                 width: '100%',
                 height: '4px',
-                backgroundColor: '#f1f5f9',
+                backgroundColor: 'var(--bg-subtle, #f1f5f9)',
                 borderRadius: '9999px',
                 overflow: 'hidden',
                 position: 'relative',
@@ -226,11 +277,11 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                 gap: '6px',
                 padding: '6px 14px',
                 borderRadius: '9999px',
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                backgroundColor: 'var(--bg-subtle, #f8fafc)',
+                border: '1px solid var(--border-main, #e2e8f0)',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#64748b'
+                color: 'var(--text-secondary, #64748b)'
               }}
             >
               <ShieldCheck size={14} color="#166534" />
@@ -250,13 +301,13 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                 width: '76px',
                 height: '76px',
                 borderRadius: '50%',
-                backgroundColor: '#dcfce7',
-                border: '3px solid #bbf7d0',
+                backgroundColor: 'var(--light-green, #dcfce7)',
+                border: '3px solid var(--light-green-border, #bbf7d0)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#166534',
-                marginBottom: '20px',
+                color: 'var(--brand-forest, #166534)',
+                marginBottom: '18px',
                 boxShadow: '0 10px 25px -4px rgba(22, 101, 52, 0.25)'
               }}
             >
@@ -269,7 +320,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
               style={{
                 fontSize: '22px',
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--text-primary, #0f172a)',
                 letterSpacing: '-0.02em',
                 marginBottom: '6px'
               }}
@@ -280,9 +331,9 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
             {/* Personalized greeting */}
             <div
               style={{
-                fontSize: '16px',
+                fontSize: '16.5px',
                 fontWeight: 700,
-                color: '#166534',
+                color: 'var(--brand-forest, #166534)',
                 marginBottom: '10px'
               }}
             >
@@ -297,12 +348,12 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                 gap: '6px',
                 padding: '4px 12px',
                 borderRadius: '9999px',
-                backgroundColor: '#f0fdf4',
-                border: '1px solid #bbf7d0',
+                backgroundColor: 'var(--light-green, #f0fdf4)',
+                border: '1px solid var(--light-green-border, #bbf7d0)',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#166534',
-                marginBottom: '16px'
+                color: 'var(--brand-forest, #166534)',
+                marginBottom: '14px'
               }}
             >
               <span
@@ -321,9 +372,9 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
               id="signin-feedback-desc"
               style={{
                 fontSize: '13.5px',
-                color: '#475569',
+                color: 'var(--text-secondary, #475569)',
                 lineHeight: 1.5,
-                margin: '0 0 22px',
+                margin: '0 0 18px',
                 padding: '0 8px'
               }}
             >
@@ -331,7 +382,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
             </p>
 
             {/* Preparing workspace transition bar */}
-            <div style={{ width: '100%', marginBottom: '14px' }}>
+            <div style={{ width: '100%', marginBottom: '18px' }}>
               <div
                 style={{
                   display: 'flex',
@@ -340,7 +391,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                   gap: '8px',
                   fontSize: '12.5px',
                   fontWeight: 600,
-                  color: '#166534',
+                  color: 'var(--brand-forest, #166534)',
                   marginBottom: '8px'
                 }}
               >
@@ -351,7 +402,7 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                 style={{
                   width: '100%',
                   height: '4px',
-                  backgroundColor: '#dcfce7',
+                  backgroundColor: 'var(--light-green, #dcfce7)',
                   borderRadius: '9999px',
                   overflow: 'hidden'
                 }}
@@ -360,39 +411,40 @@ export const SignInFeedbackModal: React.FC<SignInFeedbackModalProps> = ({
                   className="animate-welcome-progress"
                   style={{
                     height: '100%',
-                    backgroundColor: '#166534',
+                    backgroundColor: 'var(--brand-forest, #166534)',
                     borderRadius: '9999px'
                   }}
                 />
               </div>
             </div>
 
-            {/* Manual continue fallback if user clicks */}
+            {/* Continue to Dashboard Button */}
             <button
               type="button"
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '10px 18px',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer'
+              }}
               onClick={() => {
                 if (completeTimerRef.current) {
                   clearTimeout(completeTimerRef.current);
                 }
                 if (!hasTriggeredRef.current) {
                   hasTriggeredRef.current = true;
-                  onWelcomeComplete?.();
+                  onWelcomeCompleteRef.current?.();
                 }
               }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#64748b',
-                fontSize: '11.5px',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                padding: '4px 8px',
-                transition: 'color 0.15s ease'
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#166534')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
             >
-              Click here to proceed immediately
+              <span>Continue to Dashboard</span>
             </button>
           </div>
         )}

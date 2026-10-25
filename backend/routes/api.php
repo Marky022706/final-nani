@@ -6,11 +6,13 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\BookImportController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\MemberImportController;
 use App\Http\Controllers\CirculationController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\LibraryServiceController;
 use App\Http\Controllers\SystemController;
+use App\Http\Controllers\AnalyticsController;
 
 // Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -43,6 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Members
     Route::get('/members', [MemberController::class, 'index']);
+    Route::get('/members/import/template', [MemberImportController::class, 'downloadTemplate']);
+    Route::post('/members/import/validate', [MemberImportController::class, 'validateImport']);
+    Route::post('/members/import', [MemberImportController::class, 'import']);
     Route::get('/members/{id}', [MemberController::class, 'show']);
     Route::get('/members/qr/{code}', [MemberController::class, 'getByQr']);
     Route::post('/members', [MemberController::class, 'store']);
@@ -81,4 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [SystemController::class, 'notifications']);
     Route::post('/notifications/{id}/read', [SystemController::class, 'markNotificationRead']);
     Route::post('/notifications/read-all', [SystemController::class, 'markAllNotificationsRead']);
+
+    // Library Analytics (Interactive Bar and Line Graph Metrics)
+    Route::get('/analytics/comparison', [AnalyticsController::class, 'getComparison']);
+    Route::get('/analytics/trends', [AnalyticsController::class, 'getTrends']);
 });

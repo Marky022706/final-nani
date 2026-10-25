@@ -65,9 +65,9 @@ export const AboutSection: React.FC = () => {
               }}
             >
               <img
-                src="/library-books-corner.png"
-                alt="Balingasag Municipal Library book collection shelves"
-                style={{ width: '100%', height: '360px', objectFit: 'cover', display: 'block' }}
+                src="/balingasag-library-entrance.jpg"
+                alt="Balingasag Municipal Library entrance and front facade"
+                style={{ width: '100%', height: '380px', objectFit: 'cover', objectPosition: 'center 40%', display: 'block' }}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = '/balingasag-library-bg.jpg';
                 }}

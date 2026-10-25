@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { User as UserType } from '../../types';
 import { User, Settings, LogOut, ChevronDown, Mail, HelpCircle } from 'lucide-react';
+import { ThemeSwitcher } from '../common/ThemeSwitcher';
 
 interface UserProfileDropdownProps {
   currentUser: UserType;
@@ -189,6 +190,24 @@ export const UserProfileDropdown: React.FC<UserProfileDropdownProps> = ({
               <HelpCircle size={16} className="profile-menu-icon" />
               <span>Help & Support</span>
             </button>
+
+            {/* 2c. Appearance Switcher */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                marginTop: '4px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-subtle, #f1f5f9)'
+              }}
+            >
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475569)' }}>
+                Theme
+              </span>
+              <ThemeSwitcher variant="segmented" showLabel={false} />
+            </div>
           </div>
 
           <div className="profile-menu-divider" role="separator" />

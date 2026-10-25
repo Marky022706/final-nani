@@ -203,33 +203,53 @@ export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="tabs-container" style={{ borderBottom: '1px solid var(--border-main)', paddingBottom: '0' }}>
+      <div
+        role="tablist"
+        aria-label="Help and Support sections"
+        className="tabs-container"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          borderBottom: '1px solid var(--border-main)',
+          paddingBottom: '0',
+          marginBottom: '4px',
+          overflowX: 'auto'
+        }}
+      >
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'guides'}
           onClick={() => setActiveTab('guides')}
           className={`tab-btn ${activeTab === 'guides' ? 'active' : ''}`}
-          style={{ gap: '8px' }}
         >
           <BookOpen size={16} />
-          <span>User Guides & SOPs ({USER_GUIDES.length})</span>
+          <span>User Guides &amp; SOPs</span>
+          <span className="tab-badge">{USER_GUIDES.length}</span>
         </button>
+
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'helpdesk'}
           onClick={() => setActiveTab('helpdesk')}
           className={`tab-btn ${activeTab === 'helpdesk' ? 'active' : ''}`}
-          style={{ gap: '8px' }}
         >
           <Headphones size={16} />
-          <span>Help Desk & IT Support</span>
+          <span>Help Desk &amp; IT Support</span>
         </button>
+
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'faq'}
           onClick={() => setActiveTab('faq')}
           className={`tab-btn ${activeTab === 'faq' ? 'active' : ''}`}
-          style={{ gap: '8px' }}
         >
           <FileText size={16} />
-          <span>Frequently Asked Questions ({FAQS.length})</span>
+          <span>Frequently Asked Questions</span>
+          <span className="tab-badge">{FAQS.length}</span>
         </button>
       </div>
 
@@ -348,13 +368,13 @@ export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
               <div
                 style={{
                   padding: '14px 18px',
-                  backgroundColor: '#eff6ff',
-                  border: '1px solid #bfdbfe',
+                  backgroundColor: 'var(--info-bg, #eff6ff)',
+                  border: '1px solid var(--info-border, #bfdbfe)',
                   borderRadius: 'var(--radius-md)',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: '12px',
-                  color: '#1e40af',
+                  color: 'var(--info-text, #1e40af)',
                   fontSize: '13px'
                 }}
               >
@@ -594,7 +614,7 @@ export const HelpSupportView: React.FC<HelpSupportViewProps> = ({
                       style={{
                         padding: '14px 18px',
                         borderTop: '1px solid var(--border-subtle)',
-                        backgroundColor: '#ffffff',
+                        backgroundColor: 'var(--bg-surface, #ffffff)',
                         fontSize: '13.5px',
                         color: 'var(--text-secondary)',
                         lineHeight: 1.6

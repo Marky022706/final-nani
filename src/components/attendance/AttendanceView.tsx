@@ -25,6 +25,7 @@ interface AttendanceViewProps {
   title?: string;
   subtitle?: string;
   defaultTab?: 'kiosk' | 'records';
+  showKiosk?: boolean;
   onAttendanceProcessed: (record: AttendanceRecord, actionType: 'time_in' | 'time_out') => void;
   onSaveAttendanceEdit: (record: AttendanceRecord, reason: string) => void;
 }
@@ -38,16 +39,22 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   title,
   subtitle,
   defaultTab = 'kiosk',
+  showKiosk = true,
   onAttendanceProcessed,
   onSaveAttendanceEdit
 }) => {
-  const [activeTab, setActiveTab] = useState<'kiosk' | 'records'>(defaultTab);
+  const isKioskAvailable = showKiosk && userRole !== 'member';
+  const [activeTab, setActiveTab] = useState<'kiosk' | 'records'>(
+    isKioskAvailable ? defaultTab : 'records'
+  );
 
   useEffect(() => {
-    if (defaultTab) {
+    if (!isKioskAvailable) {
+      setActiveTab('records');
+    } else if (defaultTab) {
       setActiveTab(defaultTab);
     }
-  }, [defaultTab]);
+  }, [defaultTab, isKioskAvailable]);
 
   const [isKioskFullscreen, setIsKioskFullscreen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,7 +166,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           </div>
         </div>
 
-        {userRole !== 'member' && (
+        {isKioskAvailable && (
           <div className="page-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               onClick={() => setIsKioskFullscreen(true)}
@@ -178,8 +185,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         )}
       </div>
 
-      {/* Tabs for Librarian / Admin Staff */}
-      {userRole !== 'member' && (
+      {/* Tabs for Librarian / Admin / Volunteer Staff (Only shown when Kiosk is enabled) */}
+      {isKioskAvailable && (
         <div
           style={{
             display: 'flex',
@@ -245,8 +252,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* TAB 1: KIOSK SCANNER (Matches Reference UI) */}
-      {userRole !== 'member' && activeTab === 'kiosk' && (
+      {/* TAB 1: KIOSK SCANNER (Only when kiosk is enabled and active) */}
+      {isKioskAvailable && activeTab === 'kiosk' && (
         <div style={{ marginBottom: '24px' }}>
           <DailyUsersLogKiosk
             members={members}
@@ -258,8 +265,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* TAB 2: ATTENDANCE RECORDS & MONITORING (Or Default for Member) */}
-      {(userRole === 'member' || activeTab === 'records') && (
+      {/* TAB 2: ATTENDANCE RECORDS & MONITORING (Or Default when Kiosk is disabled) */}
+      {(!isKioskAvailable || activeTab === 'records') && (
         <div>
           {/* Volunteer Desk Relief Notice */}
           {userRole === 'volunteer' && (

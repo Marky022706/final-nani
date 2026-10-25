@@ -51,7 +51,11 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
           <div
             key={toast.id}
             className={`toast ${isExiting ? 'toast-exiting' : ''}`}
-            style={{ borderColor }}
+            style={{
+              borderColor,
+              backgroundColor: 'var(--bg-surface, #ffffff)',
+              color: 'var(--text-primary)'
+            }}
             role="alert"
           >
             <Icon size={20} color={iconColor} style={{ flexShrink: 0, marginTop: 1 }} />

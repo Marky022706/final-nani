@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Member, Book, PhysicalCopy, CirculationTransaction, User } from '../../types';
 import {
   X,
@@ -223,6 +223,61 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       setIsCameraActive(false);
     }
   }, [currentStep]);
+
+  // Quick physical copies available in inventory for test scans
+  const availableQuickCopies = useMemo(() => {
+    const list: { title: string; barcode: string; accession: string }[] = [];
+    for (const b of books || []) {
+      for (const c of b.copies || []) {
+        if (c.status === 'Available' && c.barcode) {
+          list.push({ title: b.title, barcode: c.barcode, accession: c.accessionNumber });
+          if (list.length >= 6) return list;
+        }
+      }
+    }
+    return list;
+  }, [books]);
+
+  // Hardware Barcode Scanner Listener (USB / Bluetooth Keyboard Wedge Mode)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isTyping = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable
+      );
+
+      const now = Date.now();
+      if (now - lastKeyTime > 80) {
+        buffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 3 && !isTyping) {
+          e.preventDefault();
+          const scanned = buffer.trim();
+          buffer = '';
+          if (currentStep === 1) {
+            handleMemberScan(scanned);
+          } else if (currentStep === 2) {
+            handleBookScan(scanned);
+          }
+        }
+      } else if (e.key.length === 1) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, currentStep, members, books]);
 
   if (!isOpen) return null;
 
@@ -541,13 +596,14 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="modal-dialog animate-modal-fade-in"
+        className="modal-dialog animate-modal-fade-in issue-loan-modal"
         style={{
           width: '100%',
           maxWidth: '780px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-surface, #FFFFFF)',
+          color: 'var(--text-primary, #0F172A)',
           borderRadius: '20px',
-          border: '1px solid #E2E8F0',
+          border: '1px solid var(--border-main, #E2E8F0)',
           boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(22, 101, 52, 0.08)',
           display: 'flex',
           flexDirection: 'column',
@@ -598,18 +654,19 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         {/* MODAL HEADER: Breadcrumb, Title, Stepper, Close      */}
         {/* ==================================================== */}
         <div
+          className="issue-loan-header"
           style={{
             padding: '20px 28px 16px',
-            borderBottom: '1px solid #E2E8F0',
-            backgroundColor: '#FFFFFF'
+            borderBottom: '1px solid var(--border-main, #E2E8F0)',
+            backgroundColor: 'var(--bg-surface, #FFFFFF)'
           }}
         >
           {/* Top row: Breadcrumb + Close Button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-              <span style={{ color: '#64748B', fontWeight: 500 }}>Circulation</span>
-              <ChevronRight size={13} color="#94A3B8" />
-              <span style={{ color: '#166534', fontWeight: 700 }}>Borrow Book</span>
+              <span style={{ color: 'var(--text-muted, #64748B)', fontWeight: 500 }}>Circulation</span>
+              <ChevronRight size={13} color="var(--text-subtle, #94A3B8)" />
+              <span style={{ color: 'var(--deep-green, #166534)', fontWeight: 700 }}>Borrow Book</span>
             </div>
             <button
               onClick={onClose}
@@ -620,7 +677,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 borderRadius: '8px',
                 border: 'none',
                 backgroundColor: 'transparent',
-                color: '#64748B',
+                color: 'var(--text-muted, #64748B)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -628,12 +685,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#F1F5F9';
-                e.currentTarget.style.color = '#0F172A';
+                e.currentTarget.style.backgroundColor = 'var(--bg-hover, #F1F5F9)';
+                e.currentTarget.style.color = 'var(--text-primary, #0F172A)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#64748B';
+                e.currentTarget.style.color = 'var(--text-muted, #64748B)';
               }}
             >
               <X size={18} />
@@ -647,7 +704,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 style={{
                   fontSize: '22px',
                   fontWeight: 800,
-                  color: '#0F172A',
+                  color: 'var(--text-primary, #0F172A)',
                   letterSpacing: '-0.02em',
                   margin: 0
                 }}
@@ -658,9 +715,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: '#166534',
-                  backgroundColor: '#DCFCE7',
-                  border: '1px solid #BBF7D0',
+                  color: 'var(--deep-green, #166534)',
+                  backgroundColor: 'var(--light-green, #DCFCE7)',
+                  border: '1px solid var(--light-green-border, #BBF7D0)',
                   padding: '3px 8px',
                   borderRadius: '9999px',
                   letterSpacing: '0.04em',
@@ -673,7 +730,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
             <p
               style={{
                 fontSize: '13px',
-                color: '#64748B',
+                color: 'var(--text-muted, #64748B)',
                 margin: '4px 0 0',
                 lineHeight: 1.4
               }}
@@ -692,7 +749,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 left: '32px',
                 right: '32px',
                 height: '2px',
-                backgroundColor: '#E2E8F0',
+                backgroundColor: 'var(--border-main, #E2E8F0)',
                 zIndex: 0
               }}
             />
@@ -705,7 +762,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 width: `${((currentStep - 1) / 3) * 100}%`,
                 maxWidth: 'calc(100% - 64px)',
                 height: '2px',
-                backgroundColor: '#166534',
+                backgroundColor: 'var(--deep-green, #166534)',
                 transition: 'width 0.3s ease',
                 zIndex: 0
               }}
@@ -748,13 +805,13 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                         justifyContent: 'center',
                         fontSize: '13px',
                         fontWeight: 700,
-                        backgroundColor: isCompleted ? '#166534' : isCurrent ? '#FFFFFF' : '#F8FAFC',
-                        color: isCompleted ? '#FFFFFF' : isCurrent ? '#166534' : '#94A3B8',
+                        backgroundColor: isCompleted ? 'var(--deep-green, #166534)' : isCurrent ? 'var(--bg-surface, #FFFFFF)' : 'var(--bg-subtle, #F8FAFC)',
+                        color: isCompleted ? '#FFFFFF' : isCurrent ? 'var(--deep-green, #166534)' : 'var(--text-muted, #94A3B8)',
                         border: isCompleted
-                          ? '2px solid #166534'
+                          ? '2px solid var(--deep-green, #166534)'
                           : isCurrent
-                          ? '2px solid #166534'
-                          : '2px solid #E2E8F0',
+                          ? '2px solid var(--deep-green, #166534)'
+                          : '2px solid var(--border-main, #E2E8F0)',
                         boxShadow: isCurrent ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : 'none',
                         transition: 'all 0.2s ease'
                       }}
@@ -765,7 +822,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       style={{
                         fontSize: '12px',
                         fontWeight: isCurrent ? 700 : 500,
-                        color: isCurrent ? '#166534' : isCompleted ? '#0F172A' : '#94A3B8',
+                        color: isCurrent ? 'var(--deep-green, #166534)' : isCompleted ? 'var(--text-primary, #0F172A)' : 'var(--text-muted, #94A3B8)',
                         whiteSpace: 'nowrap'
                       }}
                     >
@@ -849,11 +906,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         {/* MODAL BODY CONTENT                                   */}
         {/* ==================================================== */}
         <div
+          className="issue-loan-body"
           style={{
             padding: '24px 28px',
             overflowY: 'auto',
             flex: 1,
-            backgroundColor: '#F8FAFC'
+            backgroundColor: 'var(--bg-subtle, #F8FAFC)'
           }}
         >
           {/* ==================================================== */}
@@ -1448,6 +1506,42 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       </button>
                     </div>
                   </form>
+                )}
+
+                {/* Quick Available Book Barcode Chips */}
+                {availableQuickCopies.length > 0 && (
+                  <div style={{ marginTop: '8px', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>
+                      Quick Available Book Barcodes (Inventory):
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {availableQuickCopies.map((item: { title: string; barcode: string; accession: string }) => (
+                        <button
+                          key={item.barcode}
+                          type="button"
+                          onClick={() => handleBookScan(item.barcode)}
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #CBD5E1',
+                            backgroundColor: '#F8FAFC',
+                            color: '#1E293B',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title={`Click to simulate scanning "${item.title}"`}
+                        >
+                          <span>{item.title.length > 16 ? item.title.slice(0, 15) + '...' : item.title}</span>
+                          <code style={{ fontSize: '10px', color: '#166534', backgroundColor: '#DCFCE7', padding: '1px 4px', borderRadius: '3px' }}>
+                            {item.barcode}
+                          </code>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -2087,10 +2181,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         {/* ==================================================== */}
         {currentStep < 4 && (
           <div
+            className="issue-loan-footer"
             style={{
               padding: '16px 28px',
-              borderTop: '1px solid #E2E8F0',
-              backgroundColor: '#FFFFFF',
+              borderTop: '1px solid var(--border-main, #E2E8F0)',
+              backgroundColor: 'var(--bg-surface, #FFFFFF)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -2105,9 +2200,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     height: '38px',
                     padding: '0 16px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: '#FFFFFF',
-                    color: '#475569',
+                    border: '1px solid var(--border-strong, #CBD5E1)',
+                    backgroundColor: 'var(--bg-surface, #FFFFFF)',
+                    color: 'var(--text-secondary, #475569)',
                     fontSize: '13px',
                     fontWeight: 600,
                     display: 'flex',
@@ -2127,9 +2222,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     height: '38px',
                     padding: '0 16px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: '#FFFFFF',
-                    color: '#64748B',
+                    border: '1px solid var(--border-strong, #CBD5E1)',
+                    backgroundColor: 'var(--bg-surface, #FFFFFF)',
+                    color: 'var(--text-muted, #64748B)',
                     fontSize: '13px',
                     fontWeight: 600,
                     cursor: 'pointer'

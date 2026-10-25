@@ -65,22 +65,22 @@ export const HeroSection: React.FC = () => {
         boxSizing: 'border-box',
       }}
     >
-      {/* Blurred Photographic Background of Balingasag Public Library */}
+      {/* Photographic Background of Balingasag Public Library */}
       <div
         id="hero-background-image"
         style={{
           position: 'absolute',
-          top: '-20px',
-          left: '-20px',
-          right: '-20px',
-          bottom: '-20px',
+          top: '-10px',
+          left: '-10px',
+          right: '-10px',
+          bottom: '-10px',
           backgroundImage: 'url(/balingasag-library-bg.jpg)',
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundPosition: 'center 40%',
           backgroundRepeat: 'no-repeat',
-          filter: 'blur(5px)',
-          transform: 'scale(1.04)',
-          opacity: 0.95,
+          filter: 'blur(1px)',
+          transform: 'scale(1.02)',
+          opacity: 0.98,
           pointerEvents: 'none',
           zIndex: 0,
         }}

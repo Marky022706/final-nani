@@ -180,7 +180,7 @@ export const BookCoverSelector: React.FC<BookCoverSelectorProps> = ({
 
           {/* Quick Presets */}
           <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', marginBottom: '5px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', fontWeight: 600, marginBottom: '6px' }}>
               Quick Presets / Curated Covers:
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -195,12 +195,22 @@ export const BookCoverSelector: React.FC<BookCoverSelectorProps> = ({
                       fontSize: '11px',
                       padding: '3px 8px',
                       borderRadius: '4px',
-                      border: isSelected ? '1px solid var(--brand-forest, #166534)' : '1px solid var(--border-color, #cbd5e1)',
-                      backgroundColor: isSelected ? 'rgba(22, 101, 52, 0.08)' : '#ffffff',
-                      color: isSelected ? 'var(--brand-forest, #166534)' : 'var(--text-secondary, #475569)',
+                      border: isSelected ? '1px solid var(--brand-forest, #166534)' : '1px solid var(--border-main, #cbd5e1)',
+                      backgroundColor: isSelected ? 'var(--light-green, rgba(22, 101, 52, 0.12))' : 'var(--bg-surface, #ffffff)',
+                      color: isSelected ? 'var(--brand-forest, #166534)' : 'var(--text-primary, #475569)',
                       cursor: 'pointer',
-                      fontWeight: isSelected ? 600 : 400,
+                      fontWeight: isSelected ? 700 : 500,
                       transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f1f5f9)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-surface, #ffffff)';
+                      }
                     }}
                   >
                     {p.label}

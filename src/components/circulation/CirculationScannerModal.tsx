@@ -17,11 +17,24 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
   onClose,
   mode,
   members,
-  books: _books,
+  books,
   onCodeDetected
 }) => {
   const [manualInput, setManualInput] = useState('');
   const [detectedFeedback, setDetectedFeedback] = useState<string | null>(null);
+
+  const availableBookCopies = React.useMemo(() => {
+    const list: { title: string; barcode: string }[] = [];
+    for (const b of books || []) {
+      for (const c of b.copies || []) {
+        if (c.barcode && (c.status === 'Available' || !list.length)) {
+          list.push({ title: b.title, barcode: c.barcode });
+          if (list.length >= 6) return list;
+        }
+      }
+    }
+    return list;
+  }, [books]);
 
   if (!isOpen) return null;
 
@@ -71,7 +84,7 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
               <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 {mode === 'member_qr'
                   ? 'Position the digital or printed member card QR code in front of scanner'
-                  : 'Scan the barcode on the back cover or inside flap of the book'}
+                  : 'Scan the Code 128 barcode on the book cover or inside flap'}
               </p>
             </div>
           </div>
@@ -86,7 +99,7 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
             scannerId="circulation-quick-cam-scanner"
             mode={mode === 'member_qr' ? 'qr' : 'barcode'}
             isActive={isOpen}
-            label={mode === 'member_qr' ? 'Align patron QR code in viewfinder' : 'Align book barcode in viewfinder'}
+            label={mode === 'member_qr' ? 'Align patron QR code in viewfinder' : 'Align Code 128 book barcode in viewfinder'}
             onScan={(detectedCode) => {
               handleSimulateScan(detectedCode, detectedCode);
             }}
@@ -109,7 +122,7 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
             </div>
           )}
 
-          {/* Quick Member / Book Simulator Chips */}
+          {/* Quick Member Test Chips */}
           {mode === 'member_qr' && members && members.length > 0 && (
             <div style={{ marginBottom: '14px' }}>
               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
@@ -126,6 +139,30 @@ export const CirculationScannerModal: React.FC<CirculationScannerModalProps> = (
                   >
                     <span>{m.fullName.split(' ')[0]}</span>
                     <code style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({m.memberId})</code>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Book Barcode Test Chips */}
+          {mode === 'book_barcode' && availableBookCopies.length > 0 && (
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Quick Book Barcode Test Chips (Inventory):
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {availableBookCopies.map((item) => (
+                  <button
+                    key={item.barcode}
+                    type="button"
+                    onClick={() => handleSimulateScan(item.barcode, item.title)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '11.5px', padding: '4px 8px' }}
+                    title={`Simulate scan for ${item.title}`}
+                  >
+                    <span>{item.title.length > 16 ? item.title.slice(0, 15) + '...' : item.title}</span>
+                    <code style={{ fontSize: '10px', color: 'var(--text-muted)' }}>({item.barcode})</code>
                   </button>
                 ))}
               </div>

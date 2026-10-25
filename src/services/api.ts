@@ -12,6 +12,11 @@ import type {
   ServiceRecord,
   LibrarianPrivileges
 } from '../types';
+import type {
+  ComparisonAnalyticsResponse,
+  TrendsAnalyticsResponse,
+  AnalyticsQueryParams
+} from '../types/analytics';
 
 const API_BASE = '/api';
 const TOKEN_KEY = 'bpl_auth_token';
@@ -41,6 +46,28 @@ function setToken(token: string | null): void {
   }
 }
 
+export type ApiErrorType =
+  | 'connection_error'
+  | 'database_error'
+  | 'timeout_error'
+  | 'server_error'
+  | 'auth_error'
+  | 'unexpected_error';
+
+export class ApiError extends Error {
+  status?: number;
+  errorType: ApiErrorType;
+  rawMessage?: string;
+
+  constructor(message: string, errorType: ApiErrorType, status?: number, rawMessage?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.errorType = errorType;
+    this.status = status;
+    this.rawMessage = rawMessage;
+  }
+}
+
 /**
  * Universal JSON Fetch Helper
  */
@@ -60,9 +87,20 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       ...options,
       headers
     });
-  } catch (err) {
-    throw new Error(
-      'Unable to connect to the server. Please check your network connection and ensure the backend service is running.'
+  } catch (err: unknown) {
+    const errorObj = err as { name?: string; message?: string } | undefined;
+    if (errorObj?.name === 'AbortError' || options.signal?.aborted) {
+      throw new ApiError(
+        'The server took too long to respond. Please try again.',
+        'timeout_error',
+        408
+      );
+    }
+    throw new ApiError(
+      'Unable to connect to the library server. Please check your internet connection and try again.',
+      'connection_error',
+      0,
+      errorObj?.message
     );
   }
 
@@ -73,11 +111,27 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     let errorDetail = `HTTP ${response.status}: ${response.statusText || 'Error'}`;
+    let errorType: ApiErrorType = 'unexpected_error';
+
     try {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const errData = await response.json();
-        if (errData.message) {
+        if (errData.error_type === 'database_error') {
+          errorType = 'database_error';
+          errorDetail = errData.message || 'The library database is temporarily unavailable. Please try again later.';
+        } else if (errData.error_type === 'server_error') {
+          errorType = 'server_error';
+          errorDetail = errData.message || 'The library system is temporarily unavailable. Please try again later.';
+        } else if (response.status === 401 || response.status === 403) {
+          errorType = 'auth_error';
+          errorDetail = errData.message || 'Invalid credentials. Please verify your email / username and password.';
+        } else if (response.status === 500 || response.status === 502 || response.status === 503 || response.status === 504) {
+          errorType = response.status === 502 || response.status === 504 ? 'connection_error' : 'server_error';
+          errorDetail = errData.message || (errorType === 'connection_error'
+            ? 'Unable to connect to the library server. Please check your internet connection and try again.'
+            : 'The library system is temporarily unavailable. Please try again later.');
+        } else if (errData.message) {
           errorDetail = errData.message;
         } else if (errData.error) {
           errorDetail = errData.error;
@@ -85,23 +139,38 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       } else {
         const rawText = await response.text();
         if (response.status === 502 || response.status === 503 || response.status === 504) {
-          errorDetail = `Backend server is unreachable (${response.status} ${response.statusText || 'Bad Gateway'}). Please ensure the Laravel API server is running on port 8000.`;
+          errorType = 'connection_error';
+          errorDetail = 'Unable to connect to the library server. Please check your internet connection and try again.';
+        } else if (response.status >= 500) {
+          errorType = 'server_error';
+          errorDetail = 'The library system is temporarily unavailable. Please try again later.';
         } else if (rawText && rawText.length < 200 && !rawText.trim().startsWith('<')) {
           errorDetail = rawText.trim();
         }
       }
     } catch {
       if (response.status === 502 || response.status === 503 || response.status === 504) {
-        errorDetail = `Backend server is unreachable (${response.status} ${response.statusText || 'Bad Gateway'}). Please ensure the Laravel API server is running on port 8000.`;
+        errorType = 'connection_error';
+        errorDetail = 'Unable to connect to the library server. Please check your internet connection and try again.';
+      } else if (response.status >= 500) {
+        errorType = 'server_error';
+        errorDetail = 'The library system is temporarily unavailable. Please try again later.';
       }
     }
-    throw new Error(errorDetail);
+
+    if (errorType === 'unexpected_error') {
+      if (response.status === 408) errorType = 'timeout_error';
+      else if (response.status === 401 || response.status === 403) errorType = 'auth_error';
+      else if (response.status >= 500) errorType = 'server_error';
+    }
+
+    throw new ApiError(errorDetail, errorType, response.status);
   }
 
   try {
     return (await response.json()) as T;
   } catch {
-    throw new Error('Received an invalid non-JSON response from the server.');
+    throw new ApiError('Received an invalid non-JSON response from the server.', 'unexpected_error', response.status);
   }
 }
 
@@ -206,6 +275,42 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ password })
     });
+  },
+
+  async validateMemberImport(fileOrRows: File | any[]): Promise<any> {
+    if (fileOrRows instanceof File) {
+      const formData = new FormData();
+      formData.append('file', fileOrRows);
+      return request<any>('/members/import/validate', {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      return request<any>('/members/import/validate', {
+        method: 'POST',
+        body: JSON.stringify({ rows: fileOrRows })
+      });
+    }
+  },
+
+  async bulkImportMembers(
+    fileOrRows: File | any[],
+    mode: 'all_or_nothing' | 'skip_errors' = 'all_or_nothing'
+  ): Promise<any> {
+    if (fileOrRows instanceof File) {
+      const formData = new FormData();
+      formData.append('file', fileOrRows);
+      formData.append('mode', mode);
+      return request<any>('/members/import', {
+        method: 'POST',
+        body: formData
+      });
+    } else {
+      return request<any>('/members/import', {
+        method: 'POST',
+        body: JSON.stringify({ rows: fileOrRows, mode })
+      });
+    }
   },
 
   // Circulation Loans
@@ -377,13 +482,21 @@ export const api = {
     return Boolean(getToken());
   },
 
-  async login(identifier: string, password: string): Promise<{ user: User; token: string }> {
-    const result = await request<{ user: User; token: string }>('/login', {
-      method: 'POST',
-      body: JSON.stringify({ identifier, password })
-    });
-    setToken(result.token);
-    return result;
+  async login(identifier: string, password: string, timeoutMs = 10000): Promise<{ user: User; token: string }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const result = await request<{ user: User; token: string }>('/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier, password }),
+        signal: controller.signal
+      });
+      setToken(result.token);
+      return result;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   async logout(): Promise<void> {
@@ -395,7 +508,13 @@ export const api = {
   },
 
   async me(): Promise<User> {
-    return request<User>('/me');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    try {
+      return await request<User>('/me', { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   // Administrative Accounts (super_admin / admin governance)
@@ -475,5 +594,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     });
+  },
+
+  // Library Analytics (Interactive Bar & Line Graphs)
+  async getAnalyticsComparison(params: AnalyticsQueryParams = {}): Promise<ComparisonAnalyticsResponse> {
+    const query = new URLSearchParams();
+    if (params.metric) query.set('metric', params.metric);
+    if (params.period) query.set('period', params.period);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<ComparisonAnalyticsResponse>(`/analytics/comparison${qs}`);
+  },
+
+  async getAnalyticsTrends(params: AnalyticsQueryParams = {}): Promise<TrendsAnalyticsResponse> {
+    const query = new URLSearchParams();
+    if (params.metric) query.set('metric', params.metric);
+    if (params.period) query.set('period', params.period);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<TrendsAnalyticsResponse>(`/analytics/trends${qs}`);
   }
 };

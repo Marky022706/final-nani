@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { User, UserRole, NotificationItem } from '../../types';
-import { QrCode, Search } from 'lucide-react';
+import { QrCode, Search, Menu } from 'lucide-react';
 import { Breadcrumbs } from './Breadcrumbs';
 import { UserProfileDropdown } from './UserProfileDropdown';
 import { NotificationDropdown } from './NotificationDropdown';
+import { ThemeSwitcher } from '../common/ThemeSwitcher';
 
 interface HeaderProps {
   currentUser: User;
@@ -22,6 +23,7 @@ interface HeaderProps {
   onOpenProfile?: () => void;
   onOpenAccountSettings?: () => void;
   onLogout?: () => void;
+  onOpenMobileSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,7 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications: _onOpenNotifications,
   onOpenProfile,
   onOpenAccountSettings,
-  onLogout
+  onLogout,
+  onOpenMobileSidebar
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -51,6 +54,16 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="app-header no-print">
       <div className="header-left">
+        {onOpenMobileSidebar && (
+          <button
+            type="button"
+            onClick={onOpenMobileSidebar}
+            className="mobile-menu-btn"
+            aria-label="Open sidebar navigation menu"
+          >
+            <Menu size={20} />
+          </button>
+        )}
         <Breadcrumbs
           currentRole={currentUser.role}
           currentDestination={currentDestination}
@@ -86,6 +99,9 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Scan QR / Card</span>
           </button>
         )}
+
+        {/* Theme Appearance Quick Switcher */}
+        <ThemeSwitcher variant="button" />
 
         {/* Interactive Notification Bell Dropdown */}
         <NotificationDropdown

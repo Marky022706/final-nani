@@ -11,11 +11,13 @@ import {
   Layers,
   Wrench,
   Save,
+  Palette,
   X
 } from 'lucide-react';
 import type { SystemSettings, MemberTierPolicy, DatabaseBackupRecord } from '../../types';
 import { StorageService } from '../../utils/storage';
 import { ProfileSettingsSkeleton } from '../common/skeleton';
+import { ThemeSwitcher } from '../common/ThemeSwitcher';
 
 interface SystemSettingsViewProps {
   onSaveSettingsNotice: () => void;
@@ -242,6 +244,25 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({
       {/* ─────────────────── TAB 1: SYSTEM CONFIGURATION ─────────────────── */}
       {activeTab === 'config' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1000px' }}>
+          {/* Workstation Appearance & Theme Standard */}
+          <div className="card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="stat-icon" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--brand-forest)' }}>
+                  <Palette size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Interface Appearance & Theme Standard</h3>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Choose between Light Mode, Dark Mode, or Automatic System appearance
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <ThemeSwitcher variant="cards" />
+          </div>
+
           {/* Overdue Fines & Circulation Parameters */}
           <div className="card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>

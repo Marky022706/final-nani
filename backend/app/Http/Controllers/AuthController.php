@@ -22,73 +22,102 @@ class AuthController extends Controller
 
         $identifier = trim($request->input('identifier'));
 
-        $user = User::where('email', $identifier)
-            ->orWhere('username', $identifier)
-            ->orWhere('member_id', $identifier)
-            ->first();
-
-        // Check if identifier belongs to a Member record directly
-        $member = Member::where('email', $identifier)
-            ->orWhere('username', $identifier)
-            ->orWhere('member_id', $identifier)
-            ->first();
-
-        if ($member && $member->status === 'inactive') {
-            return response()->json([
-                'message' => 'Your library account is currently inactive. Please contact the library administrator.',
-            ], 403);
-        }
-
-        if ($member && $member->status === 'suspended') {
-            return response()->json([
-                'message' => 'Your library account is currently suspended. Please contact the library administrator.',
-            ], 403);
-        }
-
-        if (!$user || !Hash::check($request->input('password'), $user->password)) {
-            return response()->json([
-                'message' => 'Invalid credentials. Please verify your email / username and password.',
-            ], 401);
-        }
-
-        if ($user->status === 'inactive') {
-            return response()->json([
-                'message' => 'Your library account is currently inactive. Please contact the library administrator.',
-            ], 403);
-        }
-
-        if ($user->status === 'suspended') {
-            return response()->json([
-                'message' => 'Your library account is currently suspended. Please contact the library administrator.',
-            ], 403);
-        }
-
-        if ($user->role === 'member') {
-            return response()->json([
-                'message' => 'Library member accounts do not have access to the staff dashboard. Web portal access is restricted to Super Admin and Admin staff.',
-            ], 403);
-        }
-
-        // Invalidate previous tokens so only one active session token exists at a time.
-        $user->tokens()->delete();
-        $token = $user->createToken('bpl-staff-portal')->plainTextToken;
-
         try {
-            AuditLog::create([
-                'action' => 'USER_LOGIN',
-                'category' => 'Admin',
-                'details' => "{$user->name} ({$user->role}) signed in to the staff dashboard.",
-                'performed_by' => $user->name,
-                'ip_address' => $request->ip(),
-            ]);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Login audit log recording failed: ' . $e->getMessage());
-        }
+            // Verify database connectivity
+            \Illuminate\Support\Facades\DB::connection()->getPdo();
 
-        return response()->json([
-            'user' => $user->toPublicArray(),
-            'token' => $token,
-        ]);
+            $user = User::where('email', $identifier)
+                ->orWhere('username', $identifier)
+                ->orWhere('member_id', $identifier)
+                ->first();
+
+            // Check if identifier belongs to a Member record directly
+            $member = Member::where('email', $identifier)
+                ->orWhere('username', $identifier)
+                ->orWhere('member_id', $identifier)
+                ->first();
+
+            if ($member && $member->status === 'inactive') {
+                return response()->json([
+                    'error_type' => 'account_inactive',
+                    'message' => 'Your library account is currently inactive. Please contact the library administrator.',
+                ], 403);
+            }
+
+            if ($member && $member->status === 'suspended') {
+                return response()->json([
+                    'error_type' => 'account_suspended',
+                    'message' => 'Your library account is currently suspended. Please contact the library administrator.',
+                ], 403);
+            }
+
+            if (!$user || !Hash::check($request->input('password'), $user->password)) {
+                return response()->json([
+                    'error_type' => 'invalid_credentials',
+                    'message' => 'Invalid credentials. Please verify your email / username and password.',
+                ], 401);
+            }
+
+            if ($user->status === 'inactive') {
+                return response()->json([
+                    'error_type' => 'account_inactive',
+                    'message' => 'Your library account is currently inactive. Please contact the library administrator.',
+                ], 403);
+            }
+
+            if ($user->status === 'suspended') {
+                return response()->json([
+                    'error_type' => 'account_suspended',
+                    'message' => 'Your library account is currently suspended. Please contact the library administrator.',
+                ], 403);
+            }
+
+            if ($user->role === 'member') {
+                return response()->json([
+                    'error_type' => 'restricted_role',
+                    'message' => 'Library member accounts do not have access to the staff dashboard. Web portal access is restricted to Super Admin and Admin staff.',
+                ], 403);
+            }
+
+            // Invalidate previous tokens so only one active session token exists at a time.
+            $user->tokens()->delete();
+            $token = $user->createToken('bpl-staff-portal')->plainTextToken;
+
+            try {
+                AuditLog::create([
+                    'action' => 'USER_LOGIN',
+                    'category' => 'Admin',
+                    'details' => "{$user->name} ({$user->role}) signed in to the staff dashboard.",
+                    'performed_by' => $user->name,
+                    'ip_address' => $request->ip(),
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Login audit log recording failed: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'user' => $user->toPublicArray(),
+                'token' => $token,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            \Illuminate\Support\Facades\Log::error('Database error during login: ' . $e->getMessage());
+            return response()->json([
+                'error_type' => 'database_error',
+                'message' => 'The library database is temporarily unavailable. Please try again later.',
+            ], 503);
+        } catch (\PDOException $e) {
+            \Illuminate\Support\Facades\Log::error('PDO error during login: ' . $e->getMessage());
+            return response()->json([
+                'error_type' => 'database_error',
+                'message' => 'The library database is temporarily unavailable. Please try again later.',
+            ], 503);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Unexpected error during login: ' . $e->getMessage());
+            return response()->json([
+                'error_type' => 'server_error',
+                'message' => 'The library system is temporarily unavailable. Please try again later.',
+            ], 500);
+        }
     }
 
     /**

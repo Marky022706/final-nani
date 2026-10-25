@@ -3,6 +3,7 @@ import type { Book, PhysicalCopy, UserRole } from '../../types';
 import { BarcodeSvg } from '../../utils/barcode';
 import { X, Printer, Plus, Bookmark, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { BookCover } from './BookCover';
+import { ViewBarcodeModal } from './ViewBarcodeModal';
 
 interface BookDetailModalProps {
   book: Book | null;
@@ -15,6 +16,7 @@ interface BookDetailModalProps {
   onEditBook?: (book: Book) => void;
   onDeleteBook?: (bookId: string) => void;
   onToggleArchive?: (bookId: string) => void;
+  onNavigateToCirculation?: (barcode?: string) => void;
 }
 
 export const BookDetailModal: React.FC<BookDetailModalProps> = ({
@@ -27,20 +29,18 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onRequestBorrow,
   onEditBook,
   onDeleteBook,
-  onToggleArchive
+  onToggleArchive,
+  onNavigateToCirculation
 }) => {
-  const [selectedBarcode, setSelectedBarcode] = useState<string | null>(null);
+  const [barcodeModalCopy, setBarcodeModalCopy] = useState<PhysicalCopy | null>(null);
 
   if (!isOpen || !book) return null;
 
   const availableCopies = book.copies.filter((c) => c.status === 'Available').length;
   const isAvailable = availableCopies > 0;
 
-  const handlePrintBarcode = (barcode: string) => {
-    setSelectedBarcode(barcode);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  const handleOpenBarcode = (copy: PhysicalCopy) => {
+    setBarcodeModalCopy(copy);
   };
 
   const handleQuickAddCopy = () => {
@@ -205,17 +205,31 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
                         </span>
                       </td>
                       <td>
-                        <BarcodeSvg value={copy.barcode} height={24} showText={false} />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenBarcode(copy)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            display: 'inline-flex'
+                          }}
+                          title="Click to inspect scannable Code 128 barcode"
+                        >
+                          <BarcodeSvg value={copy.barcode} height={24} showText={false} />
+                        </button>
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         {userRole !== 'member' ? (
                           <button
-                            onClick={() => handlePrintBarcode(copy.barcode)}
+                            onClick={() => handleOpenBarcode(copy)}
                             className="btn btn-ghost btn-sm"
-                            title="Print Barcode Label"
+                            title="View & Print Scannable Barcode Label"
                           >
                             <Printer size={14} />
-                            <span>Print</span>
+                            <span>Barcode</span>
                           </button>
                         ) : copy.status === 'Available' && onRequestBorrow ? (
                           <button
@@ -345,17 +359,19 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Hidden printable barcode area */}
-      {selectedBarcode && (
-        <div style={{ position: 'fixed', top: -9999, left: -9999 }}>
-          <div className="barcode-sticker printable-card" style={{ padding: 20 }}>
-            <div style={{ fontSize: '12px', fontWeight: 'bold' }}>BALINGASAG PUBLIC LIBRARY</div>
-            <div style={{ fontSize: '11px', marginBottom: '8px' }}>{book.title.slice(0, 30)}...</div>
-            <BarcodeSvg value={selectedBarcode} height={40} showText={true} />
-            <div style={{ fontSize: '10px', marginTop: '4px' }}>{book.classification}</div>
-          </div>
-        </div>
-      )}
+      {/* Official Book Accession Barcode Modal */}
+      <ViewBarcodeModal
+        isOpen={!!barcodeModalCopy}
+        onClose={() => setBarcodeModalCopy(null)}
+        book={book}
+        copy={barcodeModalCopy}
+        onTestInCirculation={(barcode) => {
+          if (onNavigateToCirculation) {
+            onNavigateToCirculation(barcode);
+            onClose();
+          }
+        }}
+      />
     </div>
   );
 };

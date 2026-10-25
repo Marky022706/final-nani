@@ -16,8 +16,10 @@ import {
   Eye,
   XCircle,
   AlertTriangle,
-  Archive
+  Archive,
+  Upload
 } from 'lucide-react';
+import { BulkImportMembersModal } from './BulkImportMembersModal';
 
 interface MemberListProps {
   members: Member[];
@@ -28,6 +30,8 @@ interface MemberListProps {
   onMemberDeleted: (memberId: string) => void;
   onToggleStatus?: (memberId: string, newStatus?: AccountStatus) => void;
   onToggleArchive: (memberId: string) => void;
+  onMembersImported?: (members: Member[]) => void;
+  onShowToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
@@ -37,7 +41,9 @@ export const MemberList: React.FC<MemberListProps> = ({
   onMemberCreated,
   onMemberUpdated,
   onMemberDeleted,
-  onToggleArchive
+  onToggleArchive,
+  onMembersImported,
+  onShowToast
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -49,6 +55,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // Success Confirmation Modal
   const [createdMemberSummary, setCreatedMemberSummary] = useState<{
@@ -144,14 +151,25 @@ export const MemberList: React.FC<MemberListProps> = ({
 
         <div className="page-actions">
           {userRole !== 'member' && (
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="btn btn-primary"
-              style={{ gap: '8px' }}
-            >
-              <UserPlus size={16} />
-              <span>+ Add Member</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                title="Bulk import members from CSV or Excel spreadsheet"
+              >
+                <Upload size={15} />
+                <span>Bulk Import</span>
+              </button>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="btn btn-primary"
+                style={{ gap: '8px' }}
+              >
+                <UserPlus size={16} />
+                <span>+ Add Member</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -494,6 +512,24 @@ export const MemberList: React.FC<MemberListProps> = ({
           </div>
         </div>
       )}
+
+      {/* Bulk Import Members Modal */}
+      <BulkImportMembersModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        existingMembers={members}
+        onImportSuccess={(importedMembers, message) => {
+          if (onMembersImported) {
+            onMembersImported(importedMembers);
+          } else {
+            importedMembers.forEach(m => onMemberCreated(m, {} as User));
+          }
+          if (onShowToast) {
+            onShowToast('success', 'Members Imported', message);
+          }
+        }}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { QrCodeSvg } from '../../utils/qr';
+import { ThemeSwitcher } from '../common/ThemeSwitcher';
 
 export type ProfileTab = 'profile' | 'security' | 'privileges' | 'preferences' | 'card';
 
@@ -1046,12 +1047,23 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
           }}
         >
           <div style={{ marginBottom: '22px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-main, #0f172a)' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary, #0f172a)' }}>
               Workstation & Display Preferences
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--text-muted, #64748b)', margin: 0 }}>
-              Configure sensory feedback, scanning chimes, and operational density for this computer.
+              Configure appearance mode, sensory feedback, scanning chimes, and operational density for this computer.
             </p>
+          </div>
+
+          {/* Theme Appearance Mode Selector */}
+          <div style={{ marginBottom: '28px' }}>
+            <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', marginBottom: '4px' }}>
+              Interface Appearance Theme
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', marginBottom: '14px' }}>
+              Select your visual preference. In System mode, the interface automatically adapts to your operating system schedule.
+            </div>
+            <ThemeSwitcher variant="cards" />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', marginBottom: '24px' }}>

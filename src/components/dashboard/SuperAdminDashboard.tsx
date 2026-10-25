@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { StorageService } from '../../utils/storage';
 import { DashboardSkeleton } from '../common/skeleton';
+import { DashboardAnalyticsSection } from './DashboardAnalyticsSection';
 
 interface SuperAdminDashboardProps {
   books: Book[];
@@ -245,6 +246,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Interactive Library Traffic & Operational Analytics (Bar and Line Graphs) */}
+      <DashboardAnalyticsSection userRole="super_admin" />
 
       {/* 2-Column Operational Governance Overview */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '24px' }}>

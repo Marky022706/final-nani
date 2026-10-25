@@ -3,25 +3,46 @@ import React from 'react';
 export const GallerySection: React.FC = () => {
   const galleryItems = [
     {
-      src: '/balingasag-library-bg.jpg',
-      alt: 'Balingasag Municipal Library reading area and study desks',
-      title: 'Reading & Study Room',
-      category: 'Library Interior',
-      attribution: 'Municipality of Balingasag'
-    },
-    {
-      src: '/library-books-corner.png',
-      alt: 'Physical collection shelves and cataloged reference books',
-      title: 'Cataloged Book Shelves',
-      category: 'Collections',
+      src: '/gallery-reading-hall.jpg',
+      alt: 'Balingasag Municipal Library main reading hall with active students and book collections',
+      title: 'Main Study & Reading Hall',
+      category: 'Study Spaces',
       attribution: 'Balingasag Municipal Library'
     },
     {
-      src: '/login-books.jpg',
-      alt: 'Student reference textbooks and educational reading material',
-      title: 'Academic References',
-      category: 'Educational Resources',
-      attribution: 'Library Reading Resource'
+      src: '/gallery-storytelling-session.jpg',
+      alt: 'Storytelling session and literacy class with children and library teacher',
+      title: "Children's Storytelling Session",
+      category: "Children's Corner",
+      attribution: 'Balingasag Municipal Library'
+    },
+    {
+      src: '/gallery-student-collaboration.jpg',
+      alt: 'Students collaborating and studying reference materials around study desks',
+      title: 'Student Research & Group Study',
+      category: 'Academic Support',
+      attribution: 'Balingasag Municipal Library'
+    },
+    {
+      src: '/gallery-mentorship-reading.jpg',
+      alt: 'Educator and student teacher guiding early readers with illustrated storybooks',
+      title: 'Early Reader Mentorship',
+      category: 'Literacy Outreach',
+      attribution: 'Balingasag Municipal Library'
+    },
+    {
+      src: '/gallery-youth-circle.jpg',
+      alt: 'Community youth reading circle and guided reading exercises',
+      title: 'Youth Community Reading Circle',
+      category: 'Community Activities',
+      attribution: 'Balingasag Municipal Library'
+    },
+    {
+      src: '/balingasag-library-bg.jpg',
+      alt: 'Balingasag Municipal Library and Balay Silangan compound grounds',
+      title: 'Library Grounds & Building',
+      category: 'Facility & Grounds',
+      attribution: 'Municipality of Balingasag'
     },
   ];
 

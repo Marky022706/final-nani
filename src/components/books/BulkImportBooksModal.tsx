@@ -309,7 +309,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
               <FileSpreadsheet size={22} />
             </div>
             <div>
-              <h2 id={titleId} style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--text-main, #0f172a)' }}>
+              <h2 id={titleId} style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: 'var(--brand-forest, #15803d)' }}>
                 Bulk Book Import
               </h2>
               <p style={{ fontSize: '13px', margin: '2px 0 0', color: 'var(--text-secondary, #64748b)' }}>
@@ -392,7 +392,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-main, #0f172a)' }}>
+                      <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary, #0f172a)' }}>
                         Official Cataloging Spreadsheet Template
                       </span>
                       <span
@@ -444,150 +444,33 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 </div>
               </div>
 
-              {/* Column Specification Cards - All 12 Fields */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: '8px'
-                }}
-              >
-                {/* 1. Book Title * */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Book Title *</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Primary book title. Full official bibliographic title.</div>
-                </div>
-
-                {/* 2. Category */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Category</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>e.g. General Reference, Fiction, Filipiniana. Defaults to General Reference.</div>
-                </div>
-
-                {/* 3. Subtitle */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Subtitle</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Subtitle or edition notes.</div>
-                </div>
-
-                {/* 4. Author(s) * */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Author(s) *</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Author full name (e.g. Robert C. Martin).</div>
-                </div>
-
-                {/* 5. Publisher */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Publisher</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>e.g. Prentice Hall, MIT Press.</div>
-                </div>
-
-                {/* 6. Publication Year */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Publication Year</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>4-digit year (e.g. 2026).</div>
-                </div>
-
-                {/* 7. Classification (DDC) */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Classification (DDC)</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Dewey Decimal number (e.g. 005.133 MAR).</div>
-                </div>
-
-                {/* 8. Format * */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Format *</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>e.g. Paperback, Hardcover, Periodical.</div>
-                </div>
-
-                {/* 9. Accession Number * */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Accession Number *</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Unique accession identifier (e.g. BPL-ACC-0006).</div>
-                </div>
-
-                {/* 10. Availability * */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Availability *</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Required</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Initial copy status (e.g. Available, Reserved).</div>
-                </div>
-
-                {/* 11. Description / Abstract */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Description / Abstract</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Optional</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Bibliographic summary or synopsis.</div>
-                </div>
-
-                {/* 12. Number of Copies */}
-                <div style={{ backgroundColor: 'var(--bg-surface, #ffffff)', border: '1px solid var(--border-main, #e2e8f0)', borderRadius: '8px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <code style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>Number of Copies</code>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>Integer &gt; 0</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>Quantity of physical copies to catalog (e.g. 1).</div>
-                </div>
-              </div>
-
               {/* Mini Spreadsheet Design Preview */}
               <div
                 style={{
                   border: '1px solid var(--border-main, #cbd5e1)',
                   borderRadius: '6px',
                   overflowX: 'auto',
-                  backgroundColor: '#ffffff',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                  backgroundColor: 'var(--bg-surface, #ffffff)',
+                  boxShadow: 'var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05))'
                 }}
               >
                 {/* Excel-like sheet tab bar */}
                 <div
                   style={{
-                    backgroundColor: '#f1f5f9',
-                    borderBottom: '1px solid #cbd5e1',
+                    backgroundColor: 'var(--bg-subtle, #f1f5f9)',
+                    borderBottom: '1px solid var(--border-main, #cbd5e1)',
                     padding: '4px 10px',
                     fontSize: '11px',
-                    color: '#475569',
+                    color: 'var(--text-secondary, #475569)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px'
                   }}
                 >
-                  <FileSpreadsheet size={13} color="#15803d" />
+                  <FileSpreadsheet size={13} color="var(--brand-forest, #15803d)" />
                   <span style={{ fontWeight: 600 }}>Template Layout Preview</span>
-                  <span style={{ color: '#94a3b8' }}>•</span>
-                  <span style={{ color: '#64748b' }}>Sheet 1: Books_Catalog</span>
+                  <span style={{ color: 'var(--text-muted, #94a3b8)' }}>•</span>
+                  <span style={{ color: 'var(--text-muted, #64748b)' }}>Sheet 1: Books_Catalog</span>
                 </div>
 
                 <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '11.5px', textAlign: 'left' }}>
@@ -604,25 +487,25 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: '#ffffff' }}>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>1</td>
-                      <td style={{ padding: '6px 10px', color: '#0f172a', fontWeight: 600 }}>Clean Code: A Handbook of Agile Software Craftsmanship</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>General Reference</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>Robert C. Martin</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>Paperback</td>
-                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#15803d', fontWeight: 600 }}>BPL-ACC-0006</td>
-                      <td style={{ padding: '6px 10px', color: '#059669' }}>Available</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: '#15803d' }}>1</td>
+                    <tr style={{ borderBottom: '1px solid var(--border-main, #f1f5f9)', backgroundColor: 'var(--bg-surface, #ffffff)' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '11px' }}>1</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-primary, #0f172a)', fontWeight: 600 }}>Clean Code: A Handbook of Agile Software Craftsmanship</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>General Reference</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Robert C. Martin</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Paperback</td>
+                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--primary-green, #15803d)', fontWeight: 600 }}>BPL-ACC-0006</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--primary-green, #059669)' }}>Available</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>1</td>
                     </tr>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>2</td>
-                      <td style={{ padding: '6px 10px', color: '#0f172a', fontWeight: 600 }}>Introduction to Algorithms</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>General Reference</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>Thomas H. Cormen, et al.</td>
-                      <td style={{ padding: '6px 10px', color: '#475569' }}>Hardcover</td>
-                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: '#15803d', fontWeight: 600 }}>BPL-ACC-0007</td>
-                      <td style={{ padding: '6px 10px', color: '#059669' }}>Available</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: '#15803d' }}>2</td>
+                    <tr style={{ borderBottom: '1px solid var(--border-main, #f1f5f9)', backgroundColor: 'var(--bg-subtle, #f8fafc)' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '11px' }}>2</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-primary, #0f172a)', fontWeight: 600 }}>Introduction to Algorithms</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>General Reference</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Thomas H. Cormen, et al.</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Hardcover</td>
+                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--primary-green, #15803d)', fontWeight: 600 }}>BPL-ACC-0007</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--primary-green, #059669)' }}>Available</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>2</td>
                     </tr>
                   </tbody>
                 </table>
@@ -637,18 +520,18 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                   flexWrap: 'wrap',
                   fontSize: '11.5px',
                   color: 'var(--text-secondary, #64748b)',
-                  backgroundColor: 'rgba(16, 185, 129, 0.05)',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  backgroundColor: 'var(--success-bg, rgba(16, 185, 129, 0.08))',
+                  border: '1px solid var(--success-border, rgba(16, 185, 129, 0.25))',
                   borderRadius: '6px',
                   padding: '8px 12px'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065f46' }}>
-                  <Info size={14} style={{ flexShrink: 0 }} />
-                  <span><strong>Accession &amp; Copies:</strong> Each record requires a unique Accession Number (e.g. <code>BPL-ACC-0006</code>). When Number of Copies &gt; 1, sequential copy suffixes are created.</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary, #065f46)' }}>
+                  <Info size={14} style={{ flexShrink: 0, color: 'var(--primary-green, #10b981)' }} />
+                  <span><strong>Accession &amp; Copies:</strong> Each record requires a unique Accession Number (e.g. <code style={{ backgroundColor: 'var(--bg-muted, #e2e8f0)', padding: '1px 5px', borderRadius: '3px' }}>BPL-ACC-0006</code>). When Number of Copies &gt; 1, sequential copy suffixes are created.</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065f46' }}>
-                  <Check size={14} style={{ flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary, #065f46)' }}>
+                  <Check size={14} style={{ flexShrink: 0, color: 'var(--primary-green, #10b981)' }} />
                   <span><strong>Safe Protection:</strong> Duplicates within the file or existing in the library catalog are automatically flagged.</span>
                 </div>
               </div>
@@ -697,8 +580,8 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
               >
                 <Upload size={24} />
               </div>
-              <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-main, #0f172a)' }}>
-                Ready to import? Drop your completed file here, or <span style={{ color: '#10b981', textDecoration: 'underline' }}>browse files</span>
+              <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary, #0f172a)' }}>
+                Ready to import? Drop your completed file here, or <span style={{ color: 'var(--primary-green, #10b981)', textDecoration: 'underline' }}>browse files</span>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)', maxWidth: '440px', lineHeight: 1.4 }}>
                 Supports <strong>.CSV</strong> and <strong>.XLSX</strong> formats up to 5 MB.
@@ -723,7 +606,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                     height: '36px',
                     borderRadius: '6px',
                     backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                    color: '#10b981',
+                    color: 'var(--primary-green, #10b981)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -732,7 +615,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                   <FileText size={20} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main, #0f172a)' }}>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary, #0f172a)' }}>
                     {selectedFile.name}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)' }}>
@@ -861,7 +744,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)', fontWeight: 500 }}>
                     Total Rows Detected
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: 'var(--text-main, #0f172a)' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: 'var(--text-primary, #0f172a)' }}>
                     {summary.totalRows}
                   </div>
                 </div>
@@ -869,17 +752,17 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 {/* Valid */}
                 <div
                   style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    backgroundColor: 'var(--success-bg, rgba(16, 185, 129, 0.08))',
+                    border: '1px solid var(--success-border, rgba(16, 185, 129, 0.25))',
                     borderRadius: '8px',
                     padding: '12px 14px'
                   }}
                 >
-                  <div style={{ fontSize: '12px', color: '#047857', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--success, #047857)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <CheckCircle2 size={13} />
                     <span>Valid Records</span>
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: '#065f46' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: 'var(--success-text, #065f46)' }}>
                     {summary.validRows}
                   </div>
                 </div>
@@ -887,17 +770,17 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 {/* Invalid */}
                 <div
                   style={{
-                    backgroundColor: summary.invalidRows > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-subtle, #f8fafc)',
-                    border: `1px solid ${summary.invalidRows > 0 ? 'rgba(239, 68, 68, 0.25)' : 'var(--border-main, #e2e8f0)'}`,
+                    backgroundColor: summary.invalidRows > 0 ? 'var(--danger-bg, rgba(239, 68, 68, 0.08))' : 'var(--bg-subtle, #f8fafc)',
+                    border: `1px solid ${summary.invalidRows > 0 ? 'var(--danger-border, rgba(239, 68, 68, 0.25))' : 'var(--border-main, #e2e8f0)'}`,
                     borderRadius: '8px',
                     padding: '12px 14px'
                   }}
                 >
-                  <div style={{ fontSize: '12px', color: summary.invalidRows > 0 ? '#b91c1c' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '12px', color: summary.invalidRows > 0 ? 'var(--danger, #b91c1c)' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <XCircle size={13} />
                     <span>Invalid / Incomplete</span>
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.invalidRows > 0 ? '#b91c1c' : 'var(--text-main, #0f172a)' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.invalidRows > 0 ? 'var(--danger, #b91c1c)' : 'var(--text-primary, #0f172a)' }}>
                     {summary.invalidRows}
                   </div>
                 </div>
@@ -905,17 +788,17 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 {/* File Duplicates */}
                 <div
                   style={{
-                    backgroundColor: summary.duplicateFileRows > 0 ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-subtle, #f8fafc)',
-                    border: `1px solid ${summary.duplicateFileRows > 0 ? 'rgba(245, 158, 11, 0.25)' : 'var(--border-main, #e2e8f0)'}`,
+                    backgroundColor: summary.duplicateFileRows > 0 ? 'var(--warning-bg, rgba(245, 158, 11, 0.08))' : 'var(--bg-subtle, #f8fafc)',
+                    border: `1px solid ${summary.duplicateFileRows > 0 ? 'var(--warning-border, rgba(245, 158, 11, 0.25))' : 'var(--border-main, #e2e8f0)'}`,
                     borderRadius: '8px',
                     padding: '12px 14px'
                   }}
                 >
-                  <div style={{ fontSize: '12px', color: summary.duplicateFileRows > 0 ? '#b45309' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '12px', color: summary.duplicateFileRows > 0 ? 'var(--warning, #b45309)' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Copy size={13} />
                     <span>File Duplicates</span>
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.duplicateFileRows > 0 ? '#b45309' : 'var(--text-main, #0f172a)' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.duplicateFileRows > 0 ? 'var(--warning, #b45309)' : 'var(--text-primary, #0f172a)' }}>
                     {summary.duplicateFileRows}
                   </div>
                 </div>
@@ -923,17 +806,17 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 {/* DB Duplicates */}
                 <div
                   style={{
-                    backgroundColor: summary.duplicateDbRows > 0 ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-subtle, #f8fafc)',
-                    border: `1px solid ${summary.duplicateDbRows > 0 ? 'rgba(99, 102, 241, 0.25)' : 'var(--border-main, #e2e8f0)'}`,
+                    backgroundColor: summary.duplicateDbRows > 0 ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-subtle, #f8fafc)',
+                    border: `1px solid ${summary.duplicateDbRows > 0 ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-main, #e2e8f0)'}`,
                     borderRadius: '8px',
                     padding: '12px 14px'
                   }}
                 >
-                  <div style={{ fontSize: '12px', color: summary.duplicateDbRows > 0 ? '#4338ca' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '12px', color: summary.duplicateDbRows > 0 ? '#818cf8' : 'var(--text-secondary, #64748b)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Database size={13} />
                     <span>Exists in Catalog</span>
                   </div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.duplicateDbRows > 0 ? '#4338ca' : 'var(--text-main, #0f172a)' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: summary.duplicateDbRows > 0 ? '#a5b4fc' : 'var(--text-primary, #0f172a)' }}>
                     {summary.duplicateDbRows}
                   </div>
                 </div>
@@ -991,7 +874,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                       borderRadius: '6px',
                       border: '1px solid var(--border-main, #cbd5e1)',
                       backgroundColor: 'var(--bg-surface, #ffffff)',
-                      color: 'var(--text-main, #0f172a)'
+                      color: 'var(--text-primary, #0f172a)'
                     }}
                   >
                     <option value="all_or_nothing">All-or-Nothing (Strict: requires 100% valid records)</option>
@@ -1064,19 +947,19 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                 #{row.rowNumber}
                               </td>
                               <td style={{ padding: '10px 12px' }}>
-                                <div style={{ fontWeight: 600, color: 'var(--text-main, #0f172a)', fontSize: '13px' }}>
-                                  {row.title || <span style={{ color: '#ef4444', fontStyle: 'italic' }}>Missing Title</span>}
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary, #0f172a)', fontSize: '13px' }}>
+                                  {row.title || <span style={{ color: 'var(--danger, #ef4444)', fontStyle: 'italic' }}>Missing Title</span>}
                                 </div>
                                 {(row.subtitle || row.category || row.classification) && (
                                   <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', marginTop: '2px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                     {row.subtitle && <span>{row.subtitle}</span>}
                                     {row.category && (
-                                      <span style={{ backgroundColor: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
+                                      <span style={{ backgroundColor: 'var(--bg-subtle, #f1f5f9)', color: 'var(--text-secondary, #475569)', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1px 5px', borderRadius: '4px' }}>
                                         {row.category}
                                       </span>
                                     )}
                                     {row.classification && (
-                                      <span style={{ backgroundColor: '#f1f5f9', padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>
+                                      <span style={{ backgroundColor: 'var(--bg-subtle, #f1f5f9)', color: 'var(--text-secondary, #475569)', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>
                                         {row.classification}
                                       </span>
                                     )}
@@ -1084,26 +967,26 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                 )}
                               </td>
                               <td style={{ padding: '10px 12px', color: 'var(--text-secondary, #475569)', fontSize: '12.5px' }}>
-                                {row.author || <span style={{ color: '#ef4444', fontStyle: 'italic' }}>Missing</span>}
+                                {row.author || <span style={{ color: 'var(--danger, #ef4444)', fontStyle: 'italic' }}>Missing</span>}
                               </td>
                               <td style={{ padding: '10px 10px', fontSize: '12px' }}>
-                                <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', fontWeight: 500 }}>
+                                <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-main, #e2e8f0)', color: 'var(--text-secondary, #334155)', fontWeight: 500 }}>
                                   {row.format || 'Paperback'}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 10px', fontFamily: 'monospace', fontSize: '12px', fontWeight: 600, color: isFileDup || isDbDup ? '#b91c1c' : '#15803d' }}>
-                                {row.accessionNumber || <span style={{ color: '#ef4444', fontStyle: 'italic' }}>Missing</span>}
+                              <td style={{ padding: '10px 10px', fontFamily: 'monospace', fontSize: '12px', fontWeight: 600, color: isFileDup || isDbDup ? 'var(--danger, #b91c1c)' : 'var(--primary-green, #15803d)' }}>
+                                {row.accessionNumber || <span style={{ color: 'var(--danger, #ef4444)', fontStyle: 'italic' }}>Missing</span>}
                               </td>
                               <td style={{ padding: '10px 10px', fontSize: '12px' }}>
-                                <span style={{ color: row.availability === 'Available' ? '#059669' : '#d97706', fontWeight: 500 }}>
+                                <span style={{ color: row.availability === 'Available' ? 'var(--primary-green, #059669)' : 'var(--warning, #d97706)', fontWeight: 500 }}>
                                   {row.availability || 'Available'}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: '#0f172a' }}>
+                              <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
                                 {row.quantity !== null ? (
                                   row.quantity
                                 ) : (
-                                  <span style={{ color: '#ef4444' }}>{row.rawQuantity || 'Empty'}</span>
+                                  <span style={{ color: 'var(--danger, #ef4444)' }}>{row.rawQuantity || 'Empty'}</span>
                                 )}
                               </td>
                               <td style={{ padding: '10px 10px' }}>
@@ -1134,8 +1017,8 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                       borderRadius: '12px',
                                       fontSize: '11px',
                                       fontWeight: 600,
-                                      backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                                      color: '#b45309'
+                                      backgroundColor: 'var(--warning-bg, rgba(245, 158, 11, 0.12))',
+                                      color: 'var(--warning, #b45309)'
                                     }}
                                   >
                                     <Copy size={11} /> File Duplicate
@@ -1151,8 +1034,8 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                       borderRadius: '12px',
                                       fontSize: '11px',
                                       fontWeight: 600,
-                                      backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                                      color: '#4338ca'
+                                      backgroundColor: 'rgba(99, 102, 241, 0.16)',
+                                      color: '#818cf8'
                                     }}
                                   >
                                     <Database size={11} /> Exists in DB
@@ -1168,15 +1051,15 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                       borderRadius: '12px',
                                       fontSize: '11px',
                                       fontWeight: 600,
-                                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                                      color: '#dc2626'
+                                      backgroundColor: 'var(--danger-bg, rgba(239, 68, 68, 0.12))',
+                                      color: 'var(--danger, #dc2626)'
                                     }}
                                   >
                                     <XCircle size={11} /> Invalid
                                   </span>
                                 )}
                               </td>
-                              <td style={{ padding: '10px 12px', fontSize: '12px', color: isRowValid ? '#059669' : '#b91c1c' }}>
+                              <td style={{ padding: '10px 12px', fontSize: '12px', color: isRowValid ? 'var(--primary-green, #059669)' : 'var(--danger, #b91c1c)' }}>
                                 {isRowValid ? (
                                   'Ready for insertion'
                                 ) : (
@@ -1201,8 +1084,9 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                 <div
                   style={{
                     fontSize: '12px',
-                    color: '#b45309',
-                    backgroundColor: 'rgba(245, 158, 11, 0.06)',
+                    color: 'var(--warning-text, #b45309)',
+                    backgroundColor: 'var(--warning-bg, rgba(245, 158, 11, 0.06))',
+                    border: '1px solid var(--warning-border, rgba(245, 158, 11, 0.25))',
                     padding: '8px 12px',
                     borderRadius: '6px',
                     display: 'flex',
