@@ -84,7 +84,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       date: att.date,
       patronName: att.memberName,
       patronId: att.memberId,
-      details: `Library Visit: In ${att.timeIn} ${att.timeOut ? `• Out ${att.timeOut} (${att.duration || 'Completed'})` : '• Currently Inside'}`,
+      details: `Library Visit: Time-In at ${att.timeIn}`,
       status: att.status
     });
   });

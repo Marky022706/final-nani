@@ -30,15 +30,17 @@ export const AdminVerificationModal: React.FC<AdminVerificationModalProps> = ({ 
       }}
     >
       <div
+        className="modal-dialog modal-content admin-verification-modal"
         style={{
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-surface, #FFFFFF)',
+          color: 'var(--text-primary)',
           borderRadius: '16px',
           maxWidth: '640px',
           width: '100%',
           maxHeight: '90vh',
           overflowY: 'auto',
-          boxShadow: '0 25px 50px -12px rgba(23, 77, 50, 0.35)',
-          border: '1px solid #E8F3E8',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+          border: '1px solid var(--border-main, #E8F3E8)',
           padding: '28px 32px'
         }}
       >

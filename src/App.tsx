@@ -43,6 +43,7 @@ import { CreateMemberModal } from './components/members/CreateMemberModal';
 import { LibraryCardModal } from './components/members/LibraryCardModal';
 import { ArchiveView } from './components/archive/ArchiveView';
 import { AttendanceView } from './components/attendance/AttendanceView';
+import { AttendanceRecordsSection } from './components/attendance/AttendanceRecordsSection';
 import { ScanQrModal } from './components/attendance/ScanQrModal';
 import { LibraryServicesView } from './components/services/LibraryServicesView';
 import { CirculationView } from './components/circulation/CirculationView';
@@ -281,6 +282,46 @@ export function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [currentDestination, startTransition]);
+
+  // Handle server-side 401 Unauthorized / Token Expiration gracefully
+  useEffect(() => {
+    let isHandlingSessionExpiry = false;
+
+    const handleSessionExpired = (e: Event) => {
+      const customEvent = e as CustomEvent<{ endpoint?: string; status?: number }>;
+      const endpoint = customEvent.detail?.endpoint || '';
+
+      // Ignore login credential failures or logout cleanup to prevent loops
+      if (endpoint === '/login' || endpoint === '/logout' || isHandlingSessionExpiry) {
+        return;
+      }
+
+      isHandlingSessionExpiry = true;
+
+      // Clean up local session immediately without triggering another network request
+      try {
+        localStorage.removeItem('bpl_auth_session');
+        sessionStorage.removeItem('bpl_auth_session');
+        StorageService.clearCurrentUser();
+      } catch {
+        // ignore storage errors
+      }
+
+      setIsLoggedIn(false);
+      setCurrentUser(GUEST_USER);
+      addToast('error', 'Session Expired', 'Your session has expired. Please sign in again.');
+
+      // Reset guard after 2 seconds
+      setTimeout(() => {
+        isHandlingSessionExpiry = false;
+      }, 2000);
+    };
+
+    window.addEventListener('bpl:session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('bpl:session-expired', handleSessionExpired);
+    };
+  }, [addToast]);
 
   // Enforce role boundaries and granular staff privileges
   useEffect(() => {
@@ -1081,333 +1122,147 @@ export function App() {
   };
 
   // 5. Circulation Operations
-  const handleBorrowBook = (memberId: string, barcode: string, dueDate: string) => {
-    const member = members.find((m) => m.memberId === memberId);
-    if (!member) return { success: false, message: 'Member record not found.' };
-    if (member.status === 'inactive') return { success: false, message: 'Member account is inactive.' };
-
-    const currentMemberActiveLoans = transactions.filter(
-      (t) => t.memberId === memberId && (t.status === 'Active' || t.status === 'Overdue')
-    );
-    if (currentMemberActiveLoans.length >= 3) {
-      return { success: false, message: 'Member has reached maximum allowed active loans (3 books).' };
-    }
-
-    let targetedBook: Book | null = null;
-    let targetedCopy: PhysicalCopy | null = null;
-
-    for (const b of books) {
-      const copy = b.copies.find((c) => c.barcode.toUpperCase() === barcode.toUpperCase());
-      if (copy) {
-        targetedBook = b;
-        targetedCopy = copy;
-        break;
+  const handleBorrowBook = async (memberId: string, barcode: string, dueDate: string) => {
+    try {
+      const res = await api.borrowBook(memberId, barcode, dueDate);
+      if (!res.success) {
+        addToast('error', 'Borrowing Failed', res.message);
+        return { success: false, message: res.message };
       }
-    }
 
-    if (!targetedBook || !targetedCopy) {
-      return { success: false, message: `No physical book found with barcode "${barcode}".` };
-    }
-
-    if (targetedCopy.status !== 'Available') {
-      return { success: false, message: `Copy ${barcode} is currently ${targetedCopy.status}.` };
-    }
-
-    const updatedBooks = books.map((b) => {
-      if (b.id === targetedBook?.id) {
-        return {
-          ...b,
-          copies: b.copies.map((c) => (c.barcode === barcode ? { ...c, status: 'Borrowed' as const } : c))
-        };
+      // Re-fetch authoritative state from backend
+      const [freshTx, freshBooks, freshMembers] = await Promise.all([
+        api.getTransactions().catch(() => null),
+        api.getBooks().catch(() => null),
+        api.getMembers().catch(() => null)
+      ]);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
       }
-      return b;
-    });
-    setBooks(updatedBooks);
-    StorageService.saveBooks(updatedBooks);
+      if (freshBooks) {
+        setBooks(freshBooks);
+        StorageService.saveBooks(freshBooks);
+      }
+      if (freshMembers) {
+        setMembers(freshMembers);
+        StorageService.saveMembers(freshMembers);
+      }
 
-    const txNumber = String(transactions.length + 1).padStart(5, '0');
-    const newTx: CirculationTransaction = {
-      id: `BRW-2026-${txNumber}`,
-      bookId: targetedBook.id,
-      bookTitle: targetedBook.title,
-      bookAuthor: targetedBook.author,
-      accessionNumber: targetedCopy.accessionNumber,
-      barcode: targetedCopy.barcode,
-      memberId: member.memberId,
-      memberName: member.fullName,
-      borrowDate: new Date().toISOString().split('T')[0],
-      dueDate,
-      status: 'Active',
-      renewalCount: 0,
-      processedBy: currentUser.name
-    };
-
-    const updatedTx = [newTx, ...transactions];
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
-
-    const updatedMembers = members.map((m) =>
-      m.memberId === memberId ? { ...m, totalBorrows: m.totalBorrows + 1 } : m
-    );
-    setMembers(updatedMembers);
-    StorageService.saveMembers(updatedMembers);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Book Successfully Borrowed!',
-      message: `"${targetedBook.title}" was issued to your account. Scheduled due date: ${dueDate}.`,
-      type: 'success',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: member.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    StorageService.addAuditLog(
-      'CIRCULATION_BORROW_RECORDED',
-      'Circulation',
-      `Issued "${targetedBook.title}" (${targetedCopy.barcode}) to ${member.fullName} (${member.memberId}). Due date: ${dueDate}`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
-
-    // Asynchronously dispatch to Laravel backend to keep database in sync
-    api.borrowBook(member.memberId, targetedCopy.barcode, dueDate).catch((err) => {
-      console.info('Backend sync note:', err);
-    });
-
-    return {
-      success: true,
-      message: `✓ Successfully borrowed "${targetedBook.title}". Due date: ${dueDate}`,
-      transaction: newTx
-    };
-  };
-
-  const handleBorrowBooksBatch = (memberId: string, barcodes: string[], dueDate: string) => {
-    const member = members.find((m) => m.memberId === memberId);
-    if (!member) return { success: false, message: 'Member record not found.' };
-    if (member.status === 'inactive') return { success: false, message: 'Member account is inactive.' };
-
-    const currentMemberActiveLoans = transactions.filter(
-      (t) => t.memberId === memberId && (t.status === 'Active' || t.status === 'Overdue')
-    );
-    if (currentMemberActiveLoans.length + barcodes.length > 3) {
-      const remaining = Math.max(0, 3 - currentMemberActiveLoans.length);
+      addToast('success', 'Book Issued', res.message);
       return {
-        success: false,
-        message: `Member has ${currentMemberActiveLoans.length} active loans and can only borrow ${remaining} more book(s) (Maximum 3).`
+        success: true,
+        message: res.message,
+        transaction: res.transaction
       };
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to borrow book.';
+      addToast('error', 'Borrow Error', errorMsg);
+      return { success: false, message: errorMsg };
     }
+  };
 
-    const uniqueBarcodes = Array.from(new Set(barcodes));
-    const targetedPairs: { book: Book; copy: PhysicalCopy }[] = [];
-
-    for (const barcode of uniqueBarcodes) {
-      let foundBook: Book | null = null;
-      let foundCopy: PhysicalCopy | null = null;
-      for (const b of books) {
-        const copy = b.copies.find(
-          (c) => c.barcode.toUpperCase() === barcode.toUpperCase() || c.accessionNumber.toUpperCase() === barcode.toUpperCase()
-        );
-        if (copy) {
-          foundBook = b;
-          foundCopy = copy;
-          break;
-        }
+  const handleBorrowBooksBatch = async (memberId: string, barcodes: string[], dueDate: string) => {
+    try {
+      const res = await api.borrowBooks(memberId, barcodes, dueDate, currentUser.name);
+      if (!res.success) {
+        addToast('error', 'Borrowing Failed', res.message);
+        return { success: false, message: res.message };
       }
 
-      if (!foundBook || !foundCopy) {
-        return { success: false, message: `No physical book copy found with barcode "${barcode}".` };
+      const [freshTx, freshBooks, freshMembers] = await Promise.all([
+        api.getTransactions().catch(() => null),
+        api.getBooks().catch(() => null),
+        api.getMembers().catch(() => null)
+      ]);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
       }
-      if (foundCopy.status !== 'Available') {
-        return {
-          success: false,
-          message: `Copy "${foundBook.title}" (${barcode}) is currently ${foundCopy.status} and cannot be issued.`
-        };
+      if (freshBooks) {
+        setBooks(freshBooks);
+        StorageService.saveBooks(freshBooks);
       }
-      targetedPairs.push({ book: foundBook, copy: foundCopy });
-    }
+      if (freshMembers) {
+        setMembers(freshMembers);
+        StorageService.saveMembers(freshMembers);
+      }
 
-    // Update copies in books
-    const copyBarcodeSet = new Set(targetedPairs.map((p) => p.copy.barcode));
-    const updatedBooks = books.map((b) => {
-      const hasAnyCopy = b.copies.some((c) => copyBarcodeSet.has(c.barcode));
-      if (!hasAnyCopy) return b;
+      addToast('success', 'Books Issued', res.message);
       return {
-        ...b,
-        copies: b.copies.map((c) => (copyBarcodeSet.has(c.barcode) ? { ...c, status: 'Borrowed' as const } : c))
+        success: true,
+        message: res.message,
+        transactions: res.transactions,
+        transaction: res.transaction || (res.transactions && res.transactions[0])
       };
-    });
-    setBooks(updatedBooks);
-    StorageService.saveBooks(updatedBooks);
-
-    const newTransactions: CirculationTransaction[] = [];
-    targetedPairs.forEach((pair, idx) => {
-      const txNumber = String(transactions.length + idx + 1).padStart(5, '0');
-      const newTx: CirculationTransaction = {
-        id: `BRW-2026-${txNumber}`,
-        bookId: pair.book.id,
-        bookTitle: pair.book.title,
-        bookAuthor: pair.book.author,
-        accessionNumber: pair.copy.accessionNumber,
-        barcode: pair.copy.barcode,
-        memberId: member.memberId,
-        memberName: member.fullName,
-        borrowDate: new Date().toISOString().split('T')[0],
-        dueDate,
-        status: 'Active',
-        renewalCount: 0,
-        processedBy: currentUser.name
-      };
-      newTransactions.push(newTx);
-    });
-
-    const updatedTx = [...newTransactions, ...transactions];
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
-
-    const updatedMembers = members.map((m) =>
-      m.memberId === memberId ? { ...m, totalBorrows: m.totalBorrows + newTransactions.length } : m
-    );
-    setMembers(updatedMembers);
-    StorageService.saveMembers(updatedMembers);
-
-    targetedPairs.forEach((pair) => {
-      StorageService.addAuditLog(
-        'CIRCULATION_BORROW_RECORDED',
-        'Circulation',
-        `Issued "${pair.book.title}" (${pair.copy.barcode}) to ${member.fullName} (${member.memberId}). Due date: ${dueDate}`,
-        currentUser.name
-      );
-    });
-    setAuditLogs(StorageService.getAuditLogs());
-
-    // Sync to Laravel API backend
-    api.borrowBooks(member.memberId, uniqueBarcodes, dueDate, currentUser.name).catch((err) => {
-      console.info('Backend sync note:', err);
-    });
-
-    return {
-      success: true,
-      message: newTransactions.length === 1
-        ? `✓ Successfully borrowed "${newTransactions[0].bookTitle}". Due date: ${dueDate}`
-        : `✓ Successfully borrowed ${newTransactions.length} books. Due date: ${dueDate}`,
-      transactions: newTransactions,
-      transaction: newTransactions[0]
-    };
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to issue books.';
+      addToast('error', 'Borrow Error', errorMsg);
+      return { success: false, message: errorMsg };
+    }
   };
 
-  const handleReturnBook = (barcode: string) => {
-    const activeTx = transactions.find(
-      (t) => t.barcode.toUpperCase() === barcode.toUpperCase() && (t.status === 'Active' || t.status === 'Overdue')
-    );
+  const handleReturnBook = async (barcode: string) => {
+    try {
+      const res = await api.returnBook(barcode);
+      if (!res.success) {
+        addToast('error', 'Return Failed', res.message);
+        return { success: false, message: res.message };
+      }
 
-    if (!activeTx) {
-      return { success: false, message: `No active borrowing transaction found for barcode "${barcode}".` };
+      const [freshTx, freshBooks, freshMembers] = await Promise.all([
+        api.getTransactions().catch(() => null),
+        api.getBooks().catch(() => null),
+        api.getMembers().catch(() => null)
+      ]);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
+      }
+      if (freshBooks) {
+        setBooks(freshBooks);
+        StorageService.saveBooks(freshBooks);
+      }
+      if (freshMembers) {
+        setMembers(freshMembers);
+        StorageService.saveMembers(freshMembers);
+      }
+
+      addToast('success', 'Book Returned', res.message);
+      return {
+        success: true,
+        message: res.message,
+        transaction: res.transaction,
+        fine: res.fine
+      };
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to return book.';
+      addToast('error', 'Return Error', errorMsg);
+      return { success: false, message: errorMsg };
     }
-
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const updatedTx = transactions.map((t) => {
-      if (t.id === activeTx.id) {
-        return {
-          ...t,
-          status: 'Returned' as const,
-          returnDate: todayStr
-        };
-      }
-      return t;
-    });
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
-
-    const updatedBooks = books.map((b) => {
-      if (b.id === activeTx.bookId) {
-        return {
-          ...b,
-          copies: b.copies.map((c) =>
-            c.barcode.toUpperCase() === barcode.toUpperCase() ? { ...c, status: 'Available' as const } : c
-          )
-        };
-      }
-      return b;
-    });
-    setBooks(updatedBooks);
-    StorageService.saveBooks(updatedBooks);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Book Returned Successfully',
-      message: `"${activeTx.bookTitle}" was returned. Your account record has been updated.`,
-      type: 'info',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: activeTx.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    StorageService.addAuditLog(
-      'CIRCULATION_RETURN_RECORDED',
-      'Circulation',
-      `Returned "${activeTx.bookTitle}" (${barcode}) from ${activeTx.memberName}. Transaction closed.`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
-
-    // Asynchronously dispatch to Laravel backend to keep database in sync
-    api.returnBook(barcode).catch((err) => {
-      console.info('Backend sync note:', err);
-    });
-
-    return {
-      success: true,
-      message: `✓ Book "${activeTx.bookTitle}" returned successfully. Physical copy is now AVAILABLE on shelf.`,
-      transaction: { ...activeTx, status: 'Returned' as const, returnDate: todayStr }
-    };
   };
 
-  const handleRenewBook = (transactionId: string) => {
-    const tx = transactions.find((t) => t.id === transactionId);
-    if (!tx) return { success: false, message: 'Transaction not found.' };
-
-    if (tx.renewalCount >= 2) {
-      return { success: false, message: 'Maximum renewal allowance (2 times) reached for this loan.' };
-    }
-
-    const currentDue = new Date(tx.dueDate);
-    currentDue.setDate(currentDue.getDate() + 14);
-    const newDueDateStr = currentDue.toISOString().split('T')[0];
-
-    const updatedTx = transactions.map((t) => {
-      if (t.id === transactionId) {
-        return {
-          ...t,
-          dueDate: newDueDateStr,
-          renewalCount: t.renewalCount + 1,
-          status: 'Active' as const
-        };
+  const handleRenewBook = async (transactionId: string) => {
+    try {
+      const res = await api.renewBook(transactionId);
+      if (!res.success) {
+        addToast('error', 'Renewal Failed', res.message);
+        return { success: false, message: res.message };
       }
-      return t;
-    });
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
 
-    StorageService.addAuditLog(
-      'CIRCULATION_RENEWAL',
-      'Circulation',
-      `Renewed "${tx.bookTitle}" for ${tx.memberName}. New due date: ${newDueDateStr}`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
+      const freshTx = await api.getTransactions().catch(() => null);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
+      }
 
-    addToast('success', 'Loan Renewed', `Due date extended to ${newDueDateStr}`);
-    return { success: true, message: `Loan renewed. New due date: ${newDueDateStr}` };
+      addToast('success', 'Loan Renewed', res.message);
+      return { success: true, message: res.message, transaction: res.transaction };
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to renew loan.';
+      addToast('error', 'Renewal Error', errorMsg);
+      return { success: false, message: errorMsg };
+    }
   };
 
   // 5. Member Borrow Requests & Admin Approvals
@@ -1507,126 +1362,59 @@ export function App() {
     return { success: true, message: 'Borrow request submitted successfully.' };
   };
 
-  const handleApproveBorrow = (transactionId: string) => {
-    const tx = transactions.find((t) => t.id === transactionId);
-    if (!tx) return;
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const due = new Date();
-    due.setDate(due.getDate() + 14);
-    const dueDateStr = due.toISOString().split('T')[0];
-
-    const updatedTx = transactions.map((t) => {
-      if (t.id === transactionId) {
-        return {
-          ...t,
-          status: 'Active' as const,
-          borrowDate: todayStr,
-          dueDate: dueDateStr,
-          processedBy: currentUser.name
-        };
+  const handleApproveBorrow = async (transactionId: string) => {
+    try {
+      const res = await api.approveBorrow(transactionId);
+      if (!res.success) {
+        addToast('error', 'Approval Failed', res.message);
+        return;
       }
-      return t;
-    });
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
-
-    const updatedBooks = books.map((b) => {
-      if (b.id === tx.bookId) {
-        return {
-          ...b,
-          copies: b.copies.map((c) => (c.barcode === tx.barcode ? { ...c, status: 'Borrowed' as const } : c))
-        };
+      const [freshTx, freshBooks, freshMembers] = await Promise.all([
+        api.getTransactions().catch(() => null),
+        api.getBooks().catch(() => null),
+        api.getMembers().catch(() => null)
+      ]);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
       }
-      return b;
-    });
-    setBooks(updatedBooks);
-    StorageService.saveBooks(updatedBooks);
-
-    const updatedMembers = members.map((m) =>
-      m.memberId === tx.memberId ? { ...m, totalBorrows: m.totalBorrows + 1 } : m
-    );
-    setMembers(updatedMembers);
-    StorageService.saveMembers(updatedMembers);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Borrow Request Approved!',
-      message: `Your request to borrow "${tx.bookTitle}" has been approved. Due date: ${dueDateStr}.`,
-      type: 'success',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: tx.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    StorageService.addAuditLog(
-      'CIRCULATION_BORROW_APPROVED',
-      'Circulation',
-      `Approved loan for "${tx.bookTitle}" to ${tx.memberName} (${tx.memberId}). Due date: ${dueDateStr}.`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
-
-    addToast('success', 'Borrow Approved', `Loan activated for ${tx.memberName}. Due date set to ${dueDateStr}.`);
+      if (freshBooks) {
+        setBooks(freshBooks);
+        StorageService.saveBooks(freshBooks);
+      }
+      if (freshMembers) {
+        setMembers(freshMembers);
+        StorageService.saveMembers(freshMembers);
+      }
+      addToast('success', 'Borrow Approved', res.message);
+    } catch (err: any) {
+      addToast('error', 'Approval Error', err?.message || 'Failed to approve borrow.');
+    }
   };
 
-  const handleRejectBorrow = (transactionId: string, reason?: string) => {
-    const tx = transactions.find((t) => t.id === transactionId);
-    if (!tx) return;
-
-    const updatedTx = transactions.map((t) => {
-      if (t.id === transactionId) {
-        return {
-          ...t,
-          status: 'Rejected' as const,
-          rejectionReason: reason || 'Declined by library administration',
-          processedBy: currentUser.name
-        };
+  const handleRejectBorrow = async (transactionId: string, reason?: string) => {
+    try {
+      const res = await api.rejectBorrow(transactionId, reason);
+      if (!res.success) {
+        addToast('error', 'Decline Failed', res.message);
+        return;
       }
-      return t;
-    });
-    setTransactions(updatedTx);
-    StorageService.saveTransactions(updatedTx);
-
-    const updatedBooks = books.map((b) => {
-      if (b.id === tx.bookId) {
-        return {
-          ...b,
-          copies: b.copies.map((c) => (c.barcode === tx.barcode ? { ...c, status: 'Available' as const } : c))
-        };
+      const [freshTx, freshBooks] = await Promise.all([
+        api.getTransactions().catch(() => null),
+        api.getBooks().catch(() => null)
+      ]);
+      if (freshTx) {
+        setTransactions(freshTx);
+        StorageService.saveTransactions(freshTx);
       }
-      return b;
-    });
-    setBooks(updatedBooks);
-    StorageService.saveBooks(updatedBooks);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Borrow Request Declined',
-      message: `Your request for "${tx.bookTitle}" was declined: ${reason || 'Physical copy is reserved for reference.'}.`,
-      type: 'warning',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: tx.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    StorageService.addAuditLog(
-      'CIRCULATION_BORROW_REJECTED',
-      'Circulation',
-      `Declined borrow request for "${tx.bookTitle}" from ${tx.memberName}`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
-
-    addToast('info', 'Borrow Request Declined', `Released copy ${tx.barcode} back to shelf.`);
+      if (freshBooks) {
+        setBooks(freshBooks);
+        StorageService.saveBooks(freshBooks);
+      }
+      addToast('info', 'Borrow Request Declined', res.message);
+    } catch (err: any) {
+      addToast('error', 'Decline Error', err?.message || 'Failed to reject borrow.');
+    }
   };
 
   const handleCancelBorrowRequest = (transactionId: string) => {
@@ -1709,90 +1497,44 @@ export function App() {
     addToast('success', 'Hold Request Submitted', `Your reservation for "${book.title}" is pending staff approval.`);
   };
 
-  const handleApproveReservation = (resId: string) => {
-    const res = reservations.find((r) => r.id === resId);
-    if (!res) return;
-
-    const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 7);
-    const expiryStr = expiry.toISOString().split('T')[0];
-
-    const updated = reservations.map((r) => {
-      if (r.id === resId) {
-        return {
-          ...r,
-          status: 'Ready for Pickup' as const,
-          expiryDate: expiryStr
-        };
+  const handleApproveReservation = async (resId: string) => {
+    try {
+      const res = await api.approveReservation(resId);
+      if (!res.success) {
+        addToast('error', 'Approval Failed', res.message);
+        return;
       }
-      return r;
-    });
-    setReservations(updated);
-    StorageService.saveReservations(updated);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Reservation Ready for Pickup!',
-      message: `Your reserved copy of "${res.bookTitle}" is now ready at the circulation counter! Valid until ${expiryStr}.`,
-      type: 'success',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: res.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    StorageService.addAuditLog(
-      'CIRCULATION_RESERVATION_APPROVED',
-      'Circulation',
-      `Approved reservation hold for "${res.bookTitle}" to ${res.memberName}. Ready for Pickup.`,
-      currentUser.name
-    );
-    setAuditLogs(StorageService.getAuditLogs());
-
-    addToast('success', 'Reservation Approved', `"${res.bookTitle}" marked as Ready for Pickup for ${res.memberName}.`);
+      const freshRes = await api.getReservations().catch(() => null);
+      if (freshRes) {
+        setReservations(freshRes);
+        StorageService.saveReservations(freshRes);
+      }
+      addToast('success', 'Reservation Approved', res.message);
+    } catch (err: any) {
+      addToast('error', 'Approval Error', err?.message || 'Failed to approve reservation hold.');
+    }
   };
 
-  const handleRejectReservation = (resId: string) => {
-    const res = reservations.find((r) => r.id === resId);
-    if (!res) return;
-
-    const updated = reservations.map((r) => {
-      if (r.id === resId) {
-        return {
-          ...r,
-          status: 'Cancelled' as const
-        };
+  const handleRejectReservation = async (resId: string) => {
+    try {
+      const res = await api.cancelReservation(resId);
+      if (!res.success) {
+        addToast('error', 'Cancellation Failed', res.message);
+        return;
       }
-      return r;
-    });
-    setReservations(updated);
-    StorageService.saveReservations(updated);
-
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: 'Reservation Cancelled',
-      message: `Your reservation for "${res.bookTitle}" could not be fulfilled at this time.`,
-      type: 'warning',
-      timestamp: 'Just now',
-      read: false,
-      targetRole: 'member',
-      targetMemberId: res.memberId
-    };
-    const updatedNotifs = [newNotif, ...notifications];
-    setNotifications(updatedNotifs);
-    StorageService.saveNotifications(updatedNotifs);
-
-    addToast('info', 'Reservation Cancelled', `Reservation for "${res.bookTitle}" cancelled.`);
+      const freshRes = await api.getReservations().catch(() => null);
+      if (freshRes) {
+        setReservations(freshRes);
+        StorageService.saveReservations(freshRes);
+      }
+      addToast('info', 'Reservation Cancelled', res.message);
+    } catch (err: any) {
+      addToast('error', 'Cancel Error', err?.message || 'Failed to cancel reservation hold.');
+    }
   };
 
-  const handleCancelReservation = (resId: string) => {
-    const updated = reservations.filter((r) => r.id !== resId);
-    setReservations(updated);
-    StorageService.saveReservations(updated);
-    addToast('info', 'Reservation Cancelled');
+  const handleCancelReservation = async (resId: string) => {
+    await handleRejectReservation(resId);
   };
 
   // 6. Admin Governance
@@ -1838,13 +1580,13 @@ export function App() {
     }
   };
 
-  const handleResetAdminPassword = async (userId: string) => {
-    const targeted = users.find((u) => u.id === userId);
+  const handleResetAdminPassword = async (userId: string): Promise<{ temporary_password: string }> => {
     try {
-      const { temporary_password } = await api.resetUserPassword(userId);
-      addToast('success', 'Password Reset', `New temporary password for ${targeted?.email}: ${temporary_password}`);
+      const res = await api.resetUserPassword(userId);
+      return res;
     } catch (err) {
-      addToast('error', 'Failed to Reset Password', err instanceof Error ? err.message : 'Please try again.');
+      const msg = err instanceof Error ? err.message : 'Failed to reset password. Please try again.';
+      throw new Error(msg);
     }
   };
 
@@ -2077,6 +1819,7 @@ export function App() {
                   currentUser={currentUser}
                   isLoading={isDataLoading}
                   onNavigate={handleNavigate}
+                  onSaveAttendanceEdit={handleSaveAttendanceEdit}
                 />
               )}
 
@@ -2094,22 +1837,54 @@ export function App() {
                   onOpenAddBook={() => setIsAddBookOpen(true)}
                   onOpenCreateMember={() => setIsCreateMemberOpen(true)}
                   onOpenScanner={() => setIsScannerOpen(true)}
+                  onSaveAttendanceEdit={handleSaveAttendanceEdit}
                 />
               )}
 
               {currentUser.role === 'volunteer' && (
-                <AttendanceView
-                  attendance={attendance}
-                  members={members}
-                  userRole={currentUser.role}
-                  currentUser={currentUser}
-                  title="Operation Desk"
-                  subtitle="Attendance Records & History • Live Patron Monitoring & Daily Logs"
-                  defaultTab="records"
-                  showKiosk={false}
-                  onAttendanceProcessed={handleAttendanceProcessed}
-                  onSaveAttendanceEdit={handleSaveAttendanceEdit}
-                />
+                <div>
+                  <div className="page-header" style={{ marginBottom: '20px' }}>
+                    <div>
+                      <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span>Welcome back, {currentUser.name || 'Volunteer Staff'}!</span>
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            padding: '3px 10px',
+                            borderRadius: '999px',
+                            backgroundColor: '#ecfdf5',
+                            color: '#047857',
+                            border: '1px solid #bbf7d0',
+                          }}
+                        >
+                          Volunteer Staff Desk
+                        </span>
+                      </div>
+                      <div className="page-subtitle">
+                        Balingasag Public Library • Operation Desk & Patron Attendance Monitoring
+                      </div>
+                    </div>
+                    <div className="page-actions">
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('attendance')}
+                        className="btn btn-primary btn-sm"
+                      >
+                        <span>Open Attendance Kiosk</span>
+                      </button>
+                    </div>
+                  </div>
+                  <AttendanceRecordsSection
+                    attendance={attendance}
+                    userRole="volunteer"
+                    currentUser={currentUser}
+                    title="Attendance Records & History"
+                    subtitle="Live Patron Monitoring & Daily Logs"
+                    onSaveAttendanceEdit={handleSaveAttendanceEdit}
+                    onNavigateToAttendance={() => handleNavigate('attendance')}
+                  />
+                </div>
               )}
 
             </>
@@ -2153,6 +1928,8 @@ export function App() {
               onToggleArchive={handleToggleArchiveMember}
               onMembersImported={handleMembersBulkImported}
               onShowToast={addToast}
+              attendance={attendance}
+              onAttendanceProcessed={handleAttendanceProcessed}
             />
           )}
 
@@ -2245,8 +2022,8 @@ export function App() {
             />
           )}
 
-          {/* 9. REPORTS (Librarian Admin only) */}
-          {currentDestination === 'reports' && currentUser.role === 'admin' && (
+          {/* 9. REPORTS (Librarian Admin and Super Admin) */}
+          {currentDestination === 'reports' && (currentUser.role === 'admin' || currentUser.role === 'super_admin') && (
             <ReportsView
               books={books}
               members={members}
@@ -2254,7 +2031,8 @@ export function App() {
               transactions={transactions}
               serviceRecords={serviceRecords}
               isLoading={isDataLoading}
-              onTriggerExport={handleTriggerExport}
+              currentUser={currentUser}
+              onShowToast={addToast}
             />
           )}
 

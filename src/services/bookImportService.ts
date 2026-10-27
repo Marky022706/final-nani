@@ -8,11 +8,7 @@ import type {
 
 export const REQUIRED_IMPORT_COLUMNS = [
   'book_title',
-  'author',
-  'format',
-  'accession_number',
-  'availability',
-  'quantity'
+  'author'
 ] as const;
 
 export const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -109,8 +105,11 @@ export function resolveColumnHeader(header: string): string | null {
   if (['availability', 'status', 'availability status'].includes(clean)) {
     return 'availability';
   }
-  if (['description / abstract', 'description', 'abstract', 'summary', 'bibliographic summary'].includes(clean)) {
+  if (['description / abstract', 'description', 'abstract', 'summary', 'bibliographic summary', 'description abstract'].includes(clean)) {
     return 'description';
+  }
+  if (['number of pages', 'pages', 'number_of_pages', 'page count', 'num pages', 'no of pages', 'pages count'].includes(clean)) {
+    return 'pages';
   }
   if (['number of copies', 'copies', 'quantity', 'qty', 'number_of_copies', 'count', 'copy count'].includes(clean)) {
     return 'quantity';
@@ -284,13 +283,7 @@ export async function parseAndValidateSpreadsheet(
     if (!hasLegacy) {
       for (const req of REQUIRED_IMPORT_COLUMNS) {
         if (!canonicalHeaders.includes(req)) {
-          let label = req.replace('_', ' ').toUpperCase();
-          if (req === 'book_title') label = 'Book Title *';
-          if (req === 'author') label = 'Author(s) *';
-          if (req === 'format') label = 'Format *';
-          if (req === 'accession_number') label = 'Accession Number *';
-          if (req === 'availability') label = 'Availability *';
-          if (req === 'quantity') label = 'Number of Copies';
+          let label = req === 'book_title' ? 'Book Title *' : 'Author(s) *';
           missingHeaders.push(label);
         }
       }
@@ -405,6 +398,7 @@ export async function parseAndValidateSpreadsheet(
       const rawAccession = colIndexMap.accession_number !== undefined ? String(row[colIndexMap.accession_number] || '').trim() : '';
       const rawAvailability = colIndexMap.availability !== undefined ? String(row[colIndexMap.availability] || '').trim() : '';
       const rawDescription = colIndexMap.description !== undefined ? String(row[colIndexMap.description] || '').trim() : '';
+      const rawPages = colIndexMap.pages !== undefined ? String(row[colIndexMap.pages] || '').trim() : '';
       const rawQuantity = colIndexMap.quantity !== undefined ? String(row[colIndexMap.quantity] || '').trim() : '';
       const rawIsbn = colIndexMap.isbn !== undefined ? String(row[colIndexMap.isbn] || '').trim() : '';
 
@@ -412,30 +406,35 @@ export async function parseAndValidateSpreadsheet(
       let status: ValidatedImportRow['status'] = 'valid';
       const normIsbn = normalizeIsbn(rawIsbn);
       const normAccession = rawAccession.toUpperCase();
-      let parsedQuantity: number | null = null;
+      let parsedQuantity: number | null = 1;
+      let parsedPages: number | null = null;
       let parsedYear: number | undefined = undefined;
 
-      // Mandatory field presence checks
+      // Mandatory field presence checks (only Book Title and Author are required)
       if (!rawTitle) {
         errors.push('Book Title is required.');
       }
       if (!rawAuthor) {
         errors.push('Author(s) is required.');
       }
-      if (!rawFormat && !hasLegacy) {
-        errors.push('Format is required (e.g. Paperback, Hardcover).');
-      }
-      if (!rawAccession && !hasLegacy) {
-        errors.push('Accession Number is required (e.g. BPL-ACC-0006).');
-      }
-      if (!rawAvailability && !hasLegacy) {
-        errors.push('Availability is required (e.g. Available).');
-      }
-      if (!rawQuantity) {
-        errors.push('Number of Copies is required.');
+
+      // Number of Pages validation if supplied
+      if (rawPages) {
+        if (rawPages.includes('.') || rawPages.includes(',')) {
+          errors.push(`Number of Pages must be a positive whole number (decimals like '${rawPages}' not allowed).`);
+        } else if (!/^\d+$/.test(rawPages)) {
+          errors.push('Number of Pages must be a valid whole number integer.');
+        } else {
+          const p = parseInt(rawPages, 10);
+          if (p <= 0) {
+            errors.push('Number of Pages must be greater than zero.');
+          } else {
+            parsedPages = p;
+          }
+        }
       }
 
-      // Quantity type-casting and constraint checks
+      // Quantity type-casting and constraint checks (defaults to 1 copy per row)
       if (rawQuantity) {
         if (rawQuantity.includes('.') || rawQuantity.includes(',')) {
           errors.push(`Number of Copies must be a positive whole number (decimals like '${rawQuantity}' not allowed).`);
@@ -451,6 +450,8 @@ export async function parseAndValidateSpreadsheet(
             parsedQuantity = qty;
           }
         }
+      } else {
+        parsedQuantity = 1;
       }
 
       // Year parsing
@@ -558,8 +559,10 @@ export async function parseAndValidateSpreadsheet(
         accessionNumber: generatedAcc,
         availability: rawAvailability || 'Available',
         description: rawDescription || undefined,
+        pages: parsedPages,
+        rawPages,
         quantity: parsedQuantity,
-        rawQuantity,
+        rawQuantity: rawQuantity || '1',
         isbn: rawIsbn || generatedIsbn,
         normalizedIsbn: normIsbn || generatedIsbn,
         status,
@@ -615,12 +618,12 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
     'Author(s) *',
     'Publisher',
     'Publication Year',
-    'Classification (DDC)',
-    'Format *',
-    'Accession Number *',
-    'Availability *',
+    'Classification',
+    'Format',
+    'Accession Number',
+    'Availability',
     'Description / Abstract',
-    'Number of Copies'
+    'Number of Pages'
   ];
 
   const sampleCatalogRows = [
@@ -636,7 +639,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
       'BPL-ACC-0006',
       'Available',
       'Even bad code can function. But if code is not clean, it can bring a development organization to its knees.',
-      1
+      464
     ],
     [
       'Introduction to Algorithms',
@@ -650,7 +653,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
       'BPL-ACC-0007',
       'Available',
       'Comprehensive textbook covering modern computer algorithms, data structures, and algorithmic complexity analysis.',
-      2
+      1312
     ],
     [
       'The Philippine Islands, 1493–1898',
@@ -664,7 +667,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
       'BPL-ACC-0008',
       'Available',
       'Monumental collection of historical records, exploration accounts, and colonial documents on the Philippines.',
-      1
+      560
     ],
     [
       'To Kill a Mockingbird',
@@ -678,7 +681,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
       'BPL-ACC-0009',
       'Available',
       'The unforgettable novel of childhood in a sleepy Southern town and the crisis of conscience that rocked it.',
-      1
+      336
     ]
   ];
 
@@ -688,7 +691,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
       '# ==========================================================================================================',
       '# BALINGASAG PUBLIC LIBRARY — OFFICIAL BOOK CATALOGING TEMPLATE (v2026.2)',
       '# Municipality of Balingasag, Misamis Oriental • Public Library Management System',
-      '# INSTRUCTIONS: Columns with (*) are REQUIRED. Accession numbers must be unique. Fill entries below.',
+      '# INSTRUCTIONS: Columns with (*) are REQUIRED. Fill catalog entries below.',
       '# ==========================================================================================================',
       headers.map((h) => escapeCsvValue(h)).join(',')
     ];
@@ -718,7 +721,7 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
   const sheet1Data = [
     ['BALINGASAG PUBLIC LIBRARY — OFFICIAL BOOK CATALOGING TEMPLATE'],
     ['Municipality of Balingasag, Misamis Oriental • Public Library Management System (Schema v2026.2)'],
-    ['INSTRUCTIONS: Columns with (*) are REQUIRED. Accession Numbers must be unique per copy. Fill catalog entries starting from Row 5.'],
+    ['INSTRUCTIONS: Columns with (*) are REQUIRED. Fill catalog entries starting from Row 5.'],
     [''],
     headers,
     ...sampleCatalogRows
@@ -734,12 +737,12 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
     { wch: 32 }, // Author(s) *
     { wch: 28 }, // Publisher
     { wch: 18 }, // Publication Year
-    { wch: 22 }, // Classification (DDC)
-    { wch: 14 }, // Format *
-    { wch: 22 }, // Accession Number *
-    { wch: 16 }, // Availability *
+    { wch: 22 }, // Classification
+    { wch: 14 }, // Format
+    { wch: 22 }, // Accession Number
+    { wch: 16 }, // Availability
     { wch: 60 }, // Description / Abstract
-    { wch: 18 }  // Number of Copies
+    { wch: 18 }  // Number of Pages
   ];
 
   // Row height formatting
@@ -775,13 +778,13 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
     C5: 'Optional. Subtitle or edition notes.',
     D5: 'Required. Primary author full name or multiple authors separated by commas.',
     E5: 'Optional. Publishing house or imprint.',
-    F5: 'Optional. 4-digit publication year (e.g. 2026).',
+    F5: 'Optional. 4-digit publication year (e.g. 2026). Defaults to current year.',
     G5: 'Optional. Dewey Decimal Classification code (e.g. 005.133 MAR).',
-    H5: 'Required. Paperback, Hardcover, Digital, Periodical. Defaults to Paperback.',
-    I5: 'Required. Unique accession identifier (e.g. BPL-ACC-0006). Must be unique.',
-    J5: 'Required. Catalog availability: Available, Reserved, Under Repair. Defaults to Available.',
+    H5: 'Optional. Paperback, Hardcover, Digital, Periodical. Defaults to Paperback.',
+    I5: 'Optional. Unique accession identifier (e.g. BPL-ACC-0006). If empty, automatically assigned.',
+    J5: 'Optional. Catalog availability: Available, Reserved, Under Repair. Defaults to Available.',
     K5: 'Optional. Bibliographic summary, abstract, or synopsis.',
-    L5: 'Required. Number of physical copies to accession (positive integer >= 1).'
+    L5: 'Optional. Total number of pages in the publication (e.g. 464).'
   };
 
   for (const [cellRef, commentText] of Object.entries(headerComments)) {
@@ -807,16 +810,16 @@ export function downloadSampleTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
     ['Author(s) *', 'YES', 'Text', 'Author full name or multiple authors separated by commas.', 'Robert C. Martin'],
     ['Publisher', 'NO', 'Text', 'Publishing house, university press, or institutional imprint.', 'Prentice Hall'],
     ['Publication Year', 'NO', 'Integer', '4-digit publication year (e.g. 2026). Defaults to current year.', '2026'],
-    ['Classification (DDC)', 'NO', 'Text', 'Dewey Decimal Classification number with optional author cutter.', '005.133 MAR'],
-    ['Format *', 'YES', 'Enum', 'Book physical binding: Paperback, Hardcover, Digital, Periodical, Reference. Defaults to "Paperback".', 'Paperback'],
-    ['Accession Number *', 'YES', 'Text', 'Unique library accession number (e.g. BPL-ACC-0006). Must not collide with existing catalog.', 'BPL-ACC-0006'],
-    ['Availability *', 'YES', 'Enum', 'Initial status: Available, Reserved, Under Repair. Defaults to "Available".', 'Available'],
+    ['Classification', 'NO', 'Text', 'Dewey Decimal Classification number with optional author cutter.', '005.133 MAR'],
+    ['Format', 'NO', 'Enum', 'Book physical binding: Paperback, Hardcover, Digital, Periodical, Reference. Defaults to "Paperback".', 'Paperback'],
+    ['Accession Number', 'NO', 'Text', 'Unique library accession number (e.g. BPL-ACC-0006). If empty, auto-generated.', 'BPL-ACC-0006'],
+    ['Availability', 'NO', 'Enum', 'Initial status: Available, Reserved, Under Repair. Defaults to "Available".', 'Available'],
     ['Description / Abstract', 'NO', 'Text', 'Bibliographic synopsis, summary, or subject description.', 'Even bad code can function. But if code is not clean, it can bring a team to its knees.'],
-    ['Number of Copies', 'YES', 'Integer', 'Physical copies count to catalog (positive whole number >= 1).', '1'],
+    ['Number of Pages', 'NO', 'Integer', 'Total number of pages in the publication (e.g. 464).', '464'],
     [''],
     ['INVENTORY & ACCESSIONING POLICIES:'],
     ['1. Unique Accession Identifier Policy', '', '', 'Each accession number must be unique across the library catalog and within the file.'],
-    ['2. Automated Multi-Copy Accessioning', '', '', 'When Number of Copies > 1, the system automatically assigns sequential copy suffixes (-C2, -C3).'],
+    ['2. Automated Single-Copy Accessioning', '', '', 'Each row catalogs one book title with its physical copy and specified number of pages.'],
     ['3. Standard Book Formats', '', '', 'Allowed formats: Paperback, Hardcover, eBook, Periodical, Reference, Spiral-bound.'],
     ['4. Shelf Location & Dewey Decimal System', '', '', 'Call numbers follow Dewey Decimal Classification (DDC) to maintain proper shelf order.'],
     ['5. Transaction Safety Mode', '', '', 'All-or-Nothing mode ensures only 100% valid batches are committed to avoid partial database corruption.']

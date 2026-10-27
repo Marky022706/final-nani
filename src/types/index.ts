@@ -95,6 +95,7 @@ export interface Member {
   phone: string;
   address: string;
   membershipType: 'Student' | 'Faculty' | 'Community' | 'Researcher';
+  school?: string;
   status: AccountStatus;
   photoUrl: string;
   qrCodeData: string; // memberId e.g. BPL-2026-0001

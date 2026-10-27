@@ -18,21 +18,21 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
   if (!isOpen || !record) return null;
 
   const [timeIn, setTimeIn] = useState<string>(record.timeIn);
-  const [timeOut, setTimeOut] = useState<string>(record.timeOut || '');
   const [status, setStatus] = useState<AttendanceRecord['status']>(record.status);
   const [reason, setReason] = useState<string>('');
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      alert('Please provide a reason for the attendance correction for audit trail.');
+      setInlineError('Please provide a reason for the attendance correction for the audit trail.');
       return;
     }
+    setInlineError(null);
 
     const updated: AttendanceRecord = {
       ...record,
       timeIn: timeIn.trim(),
-      timeOut: timeOut.trim() || undefined,
       status,
       editReason: reason.trim(),
       editedAt: new Date().toISOString()
@@ -68,6 +68,26 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {inlineError && (
+              <div
+                style={{
+                  backgroundColor: 'var(--danger-bg, #fef2f2)',
+                  color: 'var(--danger-text, #991b1b)',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  border: '1px solid var(--danger-border, #fecaca)'
+                }}
+              >
+                <ShieldAlert size={16} />
+                <span>{inlineError}</span>
+              </div>
+            )}
+
             <div
               style={{
                 backgroundColor: 'var(--warning-bg)',
@@ -86,28 +106,15 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
               <span>All manual attendance adjustments are logged in the System Audit Trail.</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Time-In (Format: 03:15 PM)</label>
-                <input
-                  type="text"
-                  required
-                  className="form-input"
-                  value={timeIn}
-                  onChange={(e) => setTimeIn(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Time-Out (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={timeOut}
-                  onChange={(e) => setTimeOut(e.target.value)}
-                  placeholder="e.g. 05:30 PM"
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Time-In (Format: 03:15 PM)</label>
+              <input
+                type="text"
+                required
+                className="form-input"
+                value={timeIn}
+                onChange={(e) => setTimeIn(e.target.value)}
+              />
             </div>
 
             <div className="form-group">
@@ -117,8 +124,7 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
                 value={status}
                 onChange={(e) => setStatus(e.target.value as AttendanceRecord['status'])}
               >
-                <option value="Inside">Inside</option>
-                <option value="Completed">Completed</option>
+                <option value="Inside">Inside (Logged In)</option>
               </select>
             </div>
 

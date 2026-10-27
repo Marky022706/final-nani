@@ -51,7 +51,7 @@ export const CirculationSkeleton: React.FC = () => {
 
       {/* Transaction Status Filter Tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'hidden' }}>
-        {['All Transactions', 'Active Loans', 'Overdue', 'Returned', 'Pending Approvals'].map((_, idx) => (
+        {['All Records', 'Active', 'Overdue', 'Renewed', 'Returned'].map((_, idx) => (
           <Skeleton
             key={idx}
             width={idx === 0 ? 110 : 100}

@@ -74,6 +74,9 @@ export function resolveMemberColumnHeader(header: string): string | null {
   if (['temporary password', 'temporary_password', 'password', 'temp password', 'temp_password'].includes(clean)) {
     return 'temporary_password';
   }
+  if (['school', 'school name', 'school_name', 'university', 'college', 'institution', 'academy'].includes(clean)) {
+    return 'school';
+  }
 
   return null;
 }

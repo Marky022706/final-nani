@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Member, User, UserRole, AccountStatus } from '../../types';
+import type { Member, User, UserRole, AccountStatus, AttendanceRecord } from '../../types';
 import { LibraryCardModal } from './LibraryCardModal';
 import { CreateMemberModal } from './CreateMemberModal';
 import { MemberCreatedModal } from './MemberCreatedModal';
@@ -25,6 +25,7 @@ interface MemberListProps {
   members: Member[];
   userRole: UserRole;
   isLoading?: boolean;
+  attendance?: AttendanceRecord[];
   onMemberCreated: (member: Member, user: User, tempPass?: string) => void;
   onMemberUpdated: (member: Member) => void;
   onMemberDeleted: (memberId: string) => void;
@@ -32,18 +33,21 @@ interface MemberListProps {
   onToggleArchive: (memberId: string) => void;
   onMembersImported?: (members: Member[]) => void;
   onShowToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
+  onAttendanceProcessed?: (record: AttendanceRecord, actionType: 'time_in' | 'time_out') => void;
 }
 
 export const MemberList: React.FC<MemberListProps> = ({
   members,
   userRole,
   isLoading = false,
+  attendance = [],
   onMemberCreated,
   onMemberUpdated,
   onMemberDeleted,
   onToggleArchive,
   onMembersImported,
-  onShowToast
+  onShowToast,
+  onAttendanceProcessed
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -102,6 +106,7 @@ export const MemberList: React.FC<MemberListProps> = ({
       member.memberId.toLowerCase().includes(q) ||
       member.fullName.toLowerCase().includes(q) ||
       member.email.toLowerCase().includes(q) ||
+      (member.school && member.school.toLowerCase().includes(q)) ||
       (member.phone && member.phone.toLowerCase().includes(q));
 
     const matchesType = typeFilter === 'All' || member.membershipType === typeFilter;
@@ -295,7 +300,12 @@ export const MemberList: React.FC<MemberListProps> = ({
                       <div>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{member.fullName}</div>
                         <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                          {member.membershipType}
+                          <span>{member.membershipType}</span>
+                          {member.school && (
+                            <span style={{ color: 'var(--brand-forest)', fontWeight: 500 }}>
+                              {' '}• {member.school}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -446,6 +456,8 @@ export const MemberList: React.FC<MemberListProps> = ({
         isOpen={isQrModalOpen}
         onClose={() => setIsQrModalOpen(false)}
         member={selectedMember}
+        attendance={attendance}
+        onAttendanceProcessed={onAttendanceProcessed}
       />
 
       {/* Delete Confirmation Dialog */}

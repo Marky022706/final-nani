@@ -480,10 +480,11 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                       <th style={{ padding: '6px 10px', fontWeight: 600 }}>Book Title *</th>
                       <th style={{ padding: '6px 10px', fontWeight: 600 }}>Category</th>
                       <th style={{ padding: '6px 10px', fontWeight: 600 }}>Author(s) *</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Format *</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Accession No. *</th>
-                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Availability *</th>
-                      <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'center' }}>Copies</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Classification</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Format</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Accession Number</th>
+                      <th style={{ padding: '6px 10px', fontWeight: 600 }}>Availability</th>
+                      <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'center' }}>Pages</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -492,20 +493,22 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                       <td style={{ padding: '6px 10px', color: 'var(--text-primary, #0f172a)', fontWeight: 600 }}>Clean Code: A Handbook of Agile Software Craftsmanship</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>General Reference</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Robert C. Martin</td>
+                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary, #475569)' }}>005.133 MAR</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Paperback</td>
                       <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--primary-green, #15803d)', fontWeight: 600 }}>BPL-ACC-0006</td>
                       <td style={{ padding: '6px 10px', color: 'var(--primary-green, #059669)' }}>Available</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>1</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>464</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid var(--border-main, #f1f5f9)', backgroundColor: 'var(--bg-subtle, #f8fafc)' }}>
                       <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '11px' }}>2</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-primary, #0f172a)', fontWeight: 600 }}>Introduction to Algorithms</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>General Reference</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Thomas H. Cormen, et al.</td>
+                      <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary, #475569)' }}>005.1 COR</td>
                       <td style={{ padding: '6px 10px', color: 'var(--text-secondary, #475569)' }}>Hardcover</td>
                       <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--primary-green, #15803d)', fontWeight: 600 }}>BPL-ACC-0007</td>
                       <td style={{ padding: '6px 10px', color: 'var(--primary-green, #059669)' }}>Available</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>2</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--primary-green, #15803d)' }}>1312</td>
                     </tr>
                   </tbody>
                 </table>
@@ -528,7 +531,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary, #065f46)' }}>
                   <Info size={14} style={{ flexShrink: 0, color: 'var(--primary-green, #10b981)' }} />
-                  <span><strong>Accession &amp; Copies:</strong> Each record requires a unique Accession Number (e.g. <code style={{ backgroundColor: 'var(--bg-muted, #e2e8f0)', padding: '1px 5px', borderRadius: '3px' }}>BPL-ACC-0006</code>). When Number of Copies &gt; 1, sequential copy suffixes are created.</span>
+                  <span><strong>12-Column Catalog Schema:</strong> Required fields are marked with (*): Book Title &amp; Author(s). Column 12 is Number of Pages.</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary, #065f46)' }}>
                   <Check size={14} style={{ flexShrink: 0, color: 'var(--primary-green, #10b981)' }} />
@@ -917,7 +920,7 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                         <th style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '100px' }}>Format</th>
                         <th style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '130px' }}>Accession No.</th>
                         <th style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '100px' }}>Availability</th>
-                        <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '60px', textAlign: 'center' }}>Copies</th>
+                        <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '70px', textAlign: 'center' }}>Pages</th>
                         <th style={{ padding: '10px 10px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', width: '120px' }}>Status</th>
                         <th style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', minWidth: '150px' }}>Validation Notes</th>
                       </tr>
@@ -982,11 +985,11 @@ export const BulkImportBooksModal: React.FC<BulkImportBooksModalProps> = ({
                                   {row.availability || 'Available'}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
-                                {row.quantity !== null ? (
-                                  row.quantity
+                              <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+                                {row.pages !== null && row.pages !== undefined ? (
+                                  `${row.pages} pp`
                                 ) : (
-                                  <span style={{ color: 'var(--danger, #ef4444)' }}>{row.rawQuantity || 'Empty'}</span>
+                                  <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>
                                 )}
                               </td>
                               <td style={{ padding: '10px 10px' }}>

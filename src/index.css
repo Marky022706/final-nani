@@ -933,15 +933,63 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* Print Stylesheet */
+/* Print Stylesheet (FR19.1 Official PDF & Print Documents) */
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  @page {
+    size: A4 portrait;
+    margin: 12mm 14mm;
   }
-  .no-print, header, aside, .toast-container, .btn-action {
+  
+  html, body {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide app chrome, navigation, sidebar, toasts, and buttons */
+  .no-print,
+  header,
+  aside,
+  nav,
+  .sidebar,
+  .toast-container,
+  .btn-action,
+  .page-header,
+  .floating-controls {
     display: none !important;
   }
+
+  /* Make print modal content fill page cleanly */
+  #printable-report-document {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Table repeating headers & page break preservation */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+  td, th {
+    border-color: #CBD5E1 !important;
+  }
+
   .printable-card {
     box-shadow: none !important;
     border: 1px solid #000 !important;
@@ -1131,15 +1179,26 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* Comprehensive Accessibility: Reduced Motion Support */
+/* Accessibility: Reduced Motion Support (Preserves essential loading feedback & prevents system freeze) */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html {
     scroll-behavior: auto !important;
+  }
+
+  /* Essential loading spinners and feedback MUST continue animating
+     so users know the application is actively processing and not frozen */
+  .loader,
+  .bpl-spinner,
+  .global-page-loader-spinner-ring,
+  .animate-spin,
+  .animate-spin-smooth,
+  .spinner-icon,
+  [class*="animate-spin"],
+  [class*="spinner"],
+  [role="status"],
+  [role="status"] * {
+    animation-iteration-count: infinite !important;
+    animation-play-state: running !important;
   }
 }
 
@@ -1290,15 +1349,9 @@ html.dark .global-page-loader-card {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .global-page-loader-overlay,
-  .global-page-loader-overlay.is-exiting,
-  .global-page-loader-card,
-  .global-page-loader-overlay.is-exiting .global-page-loader-card {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
   .global-page-loader-spinner-ring {
-    animation-duration: 3s !important;
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
   }
   .global-page-loader-emblem {
     animation: none !important;
@@ -1315,6 +1368,7 @@ html.dark .global-page-loader-card {
   aspect-ratio: 1;
   border-radius: 50%;
   background: #25b09b;
+  display: inline-block;
   --_m: 
     conic-gradient(#0000 10%,#000),
     linear-gradient(#000 0 0) content-box;
@@ -1322,13 +1376,20 @@ html.dark .global-page-loader-card {
           mask: var(--_m);
   -webkit-mask-composite: source-out;
           mask-composite: subtract;
-  animation: l3 1s infinite linear;
+  animation: l3 1s infinite linear !important;
 }
-@keyframes l3 {to{transform: rotate(1turn)}}
+@keyframes l3 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .loader {
-    animation-duration: 3s;
+    animation: l3 1.6s infinite linear !important;
   }
 }
 
@@ -1756,143 +1817,450 @@ html.dark .role-tab.active {
   color: var(--text-primary) !important;
 }
 
-/* Modals with custom inline styles override */
+/* ==========================================================================
+   UNIVERSAL MODAL SUITE DARK MODE
+   Applies to ALL dialogs, modals, popovers, and overlays across the app
+   ========================================================================== */
+[data-theme="dark"] .modal-overlay,
+html.dark .modal-overlay,
+[data-theme="dark"] .modal-backdrop,
+html.dark .modal-backdrop {
+  background-color: var(--bg-backdrop, rgba(3, 10, 6, 0.82)) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+[data-theme="dark"] .modal-dialog,
+html.dark .modal-dialog,
 [data-theme="dark"] .modal-content,
 html.dark .modal-content,
-[data-theme="dark"] .modal-body,
-html.dark .modal-body,
+[data-theme="dark"] .issue-loan-modal,
+html.dark .issue-loan-modal,
+[data-theme="dark"] .help-support-modal,
+html.dark .help-support-modal,
+[data-theme="dark"] .admin-verification-modal,
+html.dark .admin-verification-modal,
+[data-theme="dark"] .action-loading-modal,
+html.dark .action-loading-modal,
+[data-theme="dark"] .action-loading-card,
+html.dark .action-loading-card,
+[data-theme="dark"] [role="dialog"] > .card,
+html.dark [role="dialog"] > .card,
+[data-theme="dark"] [role="dialog"] > .modal-dialog,
+html.dark [role="dialog"] > .modal-dialog {
+  background-color: var(--modal-bg, #16261c) !important;
+  border: 1px solid var(--modal-border, #24402f) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Modal Headers */
 [data-theme="dark"] .modal-header,
 html.dark .modal-header,
-[data-theme="dark"] .modal-footer,
-html.dark .modal-footer {
-  background-color: var(--modal-bg) !important;
-  border-color: var(--modal-border) !important;
-  color: var(--text-primary) !important;
-}
-
-/* ==========================================================================
-   BOOK BORROW WIZARD MODAL DARK MODE (IssueLoanWizardModal)
-   ========================================================================== */
-[data-theme="dark"] .issue-loan-modal,
-html.dark .issue-loan-modal {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-main) !important;
-}
-
 [data-theme="dark"] .issue-loan-header,
-html.dark .issue-loan-header,
-[data-theme="dark"] .issue-loan-footer,
-html.dark .issue-loan-footer {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
+html.dark .issue-loan-header {
+  background-color: var(--modal-bg, #16261c) !important;
+  border-bottom: 1px solid var(--border-main, #1f3527) !important;
+  color: var(--text-primary, #f1f5f9) !important;
 }
 
+[data-theme="dark"] .modal-header .modal-title,
+html.dark .modal-header .modal-title,
+[data-theme="dark"] .modal-header h2,
+html.dark .modal-header h2,
+[data-theme="dark"] .modal-header h3,
+html.dark .modal-header h3,
+[data-theme="dark"] .modal-header h4,
+html.dark .modal-header h4 {
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+[data-theme="dark"] .modal-header .modal-subtitle,
+html.dark .modal-header .modal-subtitle,
+[data-theme="dark"] .modal-header p {
+  color: var(--text-muted, #94a3b8) !important;
+}
+
+[data-theme="dark"] .modal-close-btn,
+html.dark .modal-close-btn,
+[data-theme="dark"] .modal-header .btn-ghost,
+html.dark .modal-header .btn-ghost,
+[data-theme="dark"] .modal-header .btn-icon,
+html.dark .modal-header .btn-icon {
+  color: var(--text-muted, #94a3b8) !important;
+  background-color: transparent !important;
+}
+
+[data-theme="dark"] .modal-close-btn:hover,
+html.dark .modal-close-btn:hover,
+[data-theme="dark"] .modal-header .btn-ghost:hover,
+html.dark .modal-header .btn-ghost:hover,
+[data-theme="dark"] .modal-header .btn-icon:hover,
+html.dark .modal-header .btn-icon:hover {
+  background-color: var(--bg-hover, #223a2a) !important;
+  color: var(--text-primary, #ffffff) !important;
+}
+
+/* Modal Body */
+[data-theme="dark"] .modal-body,
+html.dark .modal-body,
 [data-theme="dark"] .issue-loan-body,
 html.dark .issue-loan-body {
-  background-color: var(--bg-page) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--modal-bg, #16261c) !important;
+  color: var(--text-primary, #f1f5f9) !important;
 }
 
-/* Cards & Panels inside Issue Loan Modal */
-[data-theme="dark"] .issue-loan-modal div[style*="background-color: #FFFFFF"],
-[data-theme="dark"] .issue-loan-modal div[style*="backgroundColor: #FFFFFF"],
-[data-theme="dark"] .issue-loan-modal div[style*="background-color: rgb(255, 255, 255)"],
-html.dark .issue-loan-modal div[style*="background-color: #FFFFFF"],
-html.dark .issue-loan-modal div[style*="backgroundColor: #FFFFFF"],
-html.dark .issue-loan-modal div[style*="background-color: rgb(255, 255, 255)"] {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
+/* Modal Footer */
+[data-theme="dark"] .modal-footer,
+html.dark .modal-footer,
+[data-theme="dark"] .issue-loan-footer,
+html.dark .issue-loan-footer {
+  background-color: var(--bg-surface, #121e16) !important;
+  border-top: 1px solid var(--border-main, #1f3527) !important;
+  color: var(--text-primary, #f1f5f9) !important;
 }
 
-[data-theme="dark"] .issue-loan-modal div[style*="background-color: #F8FAFC"],
-[data-theme="dark"] .issue-loan-modal div[style*="backgroundColor: #F8FAFC"],
-[data-theme="dark"] .issue-loan-modal div[style*="background-color: rgb(248, 250, 252)"],
-html.dark .issue-loan-modal div[style*="background-color: #F8FAFC"],
-html.dark .issue-loan-modal div[style*="backgroundColor: #F8FAFC"],
-html.dark .issue-loan-modal div[style*="background-color: rgb(248, 250, 252)"] {
-  background-color: var(--bg-subtle) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
+/* Form Controls Inside Any Modal */
+[data-theme="dark"] .modal-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+html.dark .modal-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+[data-theme="dark"] .modal-content input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+html.dark .modal-content input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]),
+[data-theme="dark"] .modal-dialog select,
+html.dark .modal-dialog select,
+[data-theme="dark"] .modal-content select,
+html.dark .modal-content select,
+[data-theme="dark"] .modal-dialog textarea,
+html.dark .modal-dialog textarea,
+[data-theme="dark"] .modal-content textarea,
+html.dark .modal-content textarea,
+[data-theme="dark"] .modal-dialog .form-input,
+html.dark .modal-dialog .form-input,
+[data-theme="dark"] .modal-content .form-input,
+html.dark .modal-content .form-input,
+[data-theme="dark"] .modal-dialog .form-select,
+html.dark .modal-dialog .form-select,
+[data-theme="dark"] .modal-content .form-select,
+html.dark .modal-content .form-select,
+[data-theme="dark"] .modal-dialog .form-textarea,
+html.dark .modal-dialog .form-textarea,
+[data-theme="dark"] .modal-content .form-textarea,
+html.dark .modal-content .form-textarea {
+  background-color: var(--input-bg, #142219) !important;
+  border-color: var(--input-border, #233a2b) !important;
+  color: var(--input-text, #f1f5f9) !important;
 }
 
-/* Form Inputs and Controls inside Issue Loan Modal */
-[data-theme="dark"] .issue-loan-modal input,
-[data-theme="dark"] .issue-loan-modal textarea,
-[data-theme="dark"] .issue-loan-modal select,
-html.dark .issue-loan-modal input,
-html.dark .issue-loan-modal textarea,
-html.dark .issue-loan-modal select {
-  background-color: var(--input-bg) !important;
-  border-color: var(--input-border) !important;
-  color: var(--input-text) !important;
+[data-theme="dark"] .modal-dialog input::placeholder,
+html.dark .modal-dialog input::placeholder,
+[data-theme="dark"] .modal-content input::placeholder,
+html.dark .modal-content input::placeholder,
+[data-theme="dark"] .modal-dialog textarea::placeholder,
+html.dark .modal-dialog textarea::placeholder {
+  color: var(--input-placeholder, #64748b) !important;
 }
 
-[data-theme="dark"] .issue-loan-modal input::placeholder,
-[data-theme="dark"] .issue-loan-modal textarea::placeholder,
-html.dark .issue-loan-modal input::placeholder,
-html.dark .issue-loan-modal textarea::placeholder {
-  color: var(--input-placeholder) !important;
+[data-theme="dark"] .modal-dialog select option,
+html.dark .modal-dialog select option,
+[data-theme="dark"] .modal-content select option,
+html.dark .modal-content select option {
+  background-color: var(--modal-bg, #16261c) !important;
+  color: var(--text-primary, #f1f5f9) !important;
 }
 
-/* Typography Overrides inside Issue Loan Modal */
-[data-theme="dark"] .issue-loan-modal h2,
-[data-theme="dark"] .issue-loan-modal h3,
-[data-theme="dark"] .issue-loan-modal h4,
-[data-theme="dark"] .issue-loan-modal strong,
-html.dark .issue-loan-modal h2,
-html.dark .issue-loan-modal h3,
-html.dark .issue-loan-modal h4,
-html.dark .issue-loan-modal strong {
-  color: var(--text-primary) !important;
+[data-theme="dark"] .modal-dialog .form-label,
+html.dark .modal-dialog .form-label,
+[data-theme="dark"] .modal-content .form-label,
+html.dark .modal-content .form-label,
+[data-theme="dark"] .modal-dialog .field-label,
+html.dark .modal-dialog .field-label,
+[data-theme="dark"] .modal-content .field-label,
+html.dark .modal-content .field-label,
+[data-theme="dark"] .modal-dialog label,
+html.dark .modal-dialog label {
+  color: var(--text-secondary, #cbd5e1) !important;
 }
 
-[data-theme="dark"] .issue-loan-modal p,
-html.dark .issue-loan-modal p {
-  color: var(--text-muted) !important;
+/* Typography Inside Any Modal */
+[data-theme="dark"] .modal-dialog h1,
+[data-theme="dark"] .modal-dialog h2,
+[data-theme="dark"] .modal-dialog h3,
+[data-theme="dark"] .modal-dialog h4,
+[data-theme="dark"] .modal-dialog strong,
+html.dark .modal-dialog h1,
+html.dark .modal-dialog h2,
+html.dark .modal-dialog h3,
+html.dark .modal-dialog h4,
+html.dark .modal-dialog strong,
+[data-theme="dark"] .modal-content h1,
+[data-theme="dark"] .modal-content h2,
+[data-theme="dark"] .modal-content h3,
+[data-theme="dark"] .modal-content h4,
+[data-theme="dark"] .modal-content strong,
+html.dark .modal-content h1,
+html.dark .modal-content h2,
+html.dark .modal-content h3,
+html.dark .modal-content h4,
+html.dark .modal-content strong {
+  color: var(--text-primary, #f1f5f9);
 }
 
-[data-theme="dark"] .issue-loan-modal code,
-html.dark .issue-loan-modal code {
-  background-color: var(--bg-muted) !important;
-  color: var(--deep-green) !important;
+[data-theme="dark"] .modal-dialog p,
+html.dark .modal-dialog p,
+[data-theme="dark"] .modal-content p,
+html.dark .modal-content p {
+  color: var(--text-secondary, #cbd5e1);
 }
 
-/* Outlined Buttons inside Issue Loan Modal */
-[data-theme="dark"] .issue-loan-modal button[style*="background-color: #FFFFFF"],
-[data-theme="dark"] .issue-loan-modal button[style*="backgroundColor: #FFFFFF"],
-[data-theme="dark"] .issue-loan-modal button[style*="background-color: rgb(255, 255, 255)"],
-html.dark .issue-loan-modal button[style*="background-color: #FFFFFF"],
-html.dark .issue-loan-modal button[style*="backgroundColor: #FFFFFF"],
-html.dark .issue-loan-modal button[style*="background-color: rgb(255, 255, 255)"] {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-strong) !important;
-  color: var(--text-secondary) !important;
+[data-theme="dark"] .modal-dialog code,
+html.dark .modal-dialog code,
+[data-theme="dark"] .modal-content code,
+html.dark .modal-content code {
+  background-color: var(--bg-muted, #1e3325) !important;
+  color: var(--deep-green, #22c55e) !important;
 }
 
-[data-theme="dark"] .issue-loan-modal button[style*="background-color: #FFFFFF"]:hover,
-[data-theme="dark"] .issue-loan-modal button[style*="backgroundColor: #FFFFFF"]:hover,
-html.dark .issue-loan-modal button[style*="background-color: #FFFFFF"]:hover,
-html.dark .issue-loan-modal button[style*="backgroundColor: #FFFFFF"]:hover {
-  background-color: var(--bg-hover) !important;
-  color: var(--text-primary) !important;
+/* White Panels & Cards Inside Modals (Auto-Adapt to Dark Mode) */
+[data-theme="dark"] .modal-dialog div[style*="background-color: #FFFFFF"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #ffffff"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #FFFFFF"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #ffffff"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: rgb(255, 255, 255)"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: white"],
+html.dark .modal-dialog div[style*="background-color: #FFFFFF"],
+html.dark .modal-dialog div[style*="background-color: #ffffff"],
+html.dark .modal-dialog div[style*="backgroundColor: #FFFFFF"],
+html.dark .modal-dialog div[style*="backgroundColor: #ffffff"],
+html.dark .modal-dialog div[style*="background-color: rgb(255, 255, 255)"],
+html.dark .modal-dialog div[style*="background-color: white"],
+[data-theme="dark"] .modal-content div[style*="background-color: #FFFFFF"],
+[data-theme="dark"] .modal-content div[style*="background-color: #ffffff"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #FFFFFF"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #ffffff"],
+[data-theme="dark"] .modal-content div[style*="background-color: rgb(255, 255, 255)"],
+html.dark .modal-content div[style*="background-color: #FFFFFF"],
+html.dark .modal-content div[style*="background-color: #ffffff"],
+html.dark .modal-content div[style*="backgroundColor: #FFFFFF"],
+html.dark .modal-content div[style*="backgroundColor: #ffffff"],
+html.dark .modal-content div[style*="background-color: rgb(255, 255, 255)"] {
+  background-color: var(--bg-surface, #121e16) !important;
+  border-color: var(--border-main, #1f3527) !important;
+  color: var(--text-primary, #f1f5f9) !important;
 }
 
-/* Soft green badges in dark mode */
-[data-theme="dark"] .issue-loan-modal span[style*="background-color: #DCFCE7"],
-[data-theme="dark"] .issue-loan-modal span[style*="backgroundColor: #DCFCE7"],
-[data-theme="dark"] .issue-loan-modal div[style*="background-color: #DCFCE7"],
-[data-theme="dark"] .issue-loan-modal div[style*="backgroundColor: #DCFCE7"],
-html.dark .issue-loan-modal span[style*="background-color: #DCFCE7"],
-html.dark .issue-loan-modal span[style*="backgroundColor: #DCFCE7"],
-html.dark .issue-loan-modal div[style*="background-color: #DCFCE7"],
-html.dark .issue-loan-modal div[style*="backgroundColor: #DCFCE7"] {
-  background-color: var(--light-green) !important;
-  border-color: var(--light-green-border) !important;
-  color: var(--deep-green) !important;
+/* Optical Scannable Codes (QR & Barcodes): MUST maintain pure white background for camera decoders */
+[data-theme="dark"] .qr-modal-svg,
+html.dark .qr-modal-svg,
+[data-theme="dark"] .modal-dialog div.qr-modal-svg,
+html.dark .modal-dialog div.qr-modal-svg,
+[data-theme="dark"] .modal-content div.qr-modal-svg,
+html.dark .modal-content div.qr-modal-svg,
+[data-theme="dark"] [data-qr-value],
+html.dark [data-qr-value],
+[data-theme="dark"] .qr-container,
+html.dark .qr-container,
+[data-theme="dark"] .barcode-box,
+html.dark .barcode-box {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="dark"] .qr-modal-svg svg,
+html.dark .qr-modal-svg svg,
+[data-theme="dark"] [data-qr-value] svg,
+html.dark [data-qr-value] svg {
+  background-color: #ffffff !important;
+}
+
+/* Light Gray Subtle Cards Inside Modals */
+[data-theme="dark"] .modal-dialog div[style*="background-color: #F8FAFC"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f8fafc"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #F8FAFC"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #f8fafc"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #F1F5F9"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f1f5f9"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #F1F5F9"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #f1f5f9"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #FAFAF8"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #fafaf8"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #F5F1E8"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f5f1e8"],
+html.dark .modal-dialog div[style*="background-color: #F8FAFC"],
+html.dark .modal-dialog div[style*="background-color: #f8fafc"],
+html.dark .modal-dialog div[style*="backgroundColor: #F8FAFC"],
+html.dark .modal-dialog div[style*="backgroundColor: #f8fafc"],
+html.dark .modal-dialog div[style*="background-color: #F1F5F9"],
+html.dark .modal-dialog div[style*="background-color: #f1f5f9"],
+html.dark .modal-dialog div[style*="backgroundColor: #F1F5F9"],
+html.dark .modal-dialog div[style*="backgroundColor: #f1f5f9"],
+html.dark .modal-dialog div[style*="background-color: #FAFAF8"],
+html.dark .modal-dialog div[style*="background-color: #F5F1E8"],
+[data-theme="dark"] .modal-content div[style*="background-color: #F8FAFC"],
+[data-theme="dark"] .modal-content div[style*="background-color: #f8fafc"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #F8FAFC"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #f8fafc"],
+[data-theme="dark"] .modal-content div[style*="background-color: #F1F5F9"],
+[data-theme="dark"] .modal-content div[style*="background-color: #f1f5f9"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #F1F5F9"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #f1f5f9"],
+[data-theme="dark"] .modal-content div[style*="background-color: #FAFAF8"],
+[data-theme="dark"] .modal-content div[style*="background-color: #F5F1E8"],
+html.dark .modal-content div[style*="background-color: #F8FAFC"],
+html.dark .modal-content div[style*="background-color: #f8fafc"],
+html.dark .modal-content div[style*="backgroundColor: #F8FAFC"],
+html.dark .modal-content div[style*="backgroundColor: #f8fafc"],
+html.dark .modal-content div[style*="background-color: #F1F5F9"],
+html.dark .modal-content div[style*="background-color: #f1f5f9"],
+html.dark .modal-content div[style*="backgroundColor: #F1F5F9"],
+html.dark .modal-content div[style*="backgroundColor: #f1f5f9"],
+html.dark .modal-content div[style*="background-color: #FAFAF8"],
+html.dark .modal-content div[style*="background-color: #F5F1E8"] {
+  background-color: var(--bg-subtle, #16241b) !important;
+  border-color: var(--border-main, #1f3527) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Light Mint Success Banners Inside Modals */
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f0fdf4"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #F0FDF4"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #f0fdf4"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #F0FDF4"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #DCFCE7"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #dcfce7"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #DCFCE7"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #dcfce7"],
+html.dark .modal-dialog div[style*="background-color: #f0fdf4"],
+html.dark .modal-dialog div[style*="background-color: #F0FDF4"],
+html.dark .modal-dialog div[style*="backgroundColor: #f0fdf4"],
+html.dark .modal-dialog div[style*="backgroundColor: #F0FDF4"],
+html.dark .modal-dialog div[style*="background-color: #DCFCE7"],
+html.dark .modal-dialog div[style*="backgroundColor: #DCFCE7"],
+[data-theme="dark"] .modal-content div[style*="background-color: #f0fdf4"],
+[data-theme="dark"] .modal-content div[style*="background-color: #F0FDF4"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #f0fdf4"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #F0FDF4"],
+[data-theme="dark"] .modal-content div[style*="background-color: #DCFCE7"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #DCFCE7"],
+html.dark .modal-content div[style*="background-color: #f0fdf4"],
+html.dark .modal-content div[style*="background-color: #F0FDF4"],
+html.dark .modal-content div[style*="backgroundColor: #f0fdf4"],
+html.dark .modal-content div[style*="backgroundColor: #F0FDF4"],
+html.dark .modal-content div[style*="background-color: #DCFCE7"],
+html.dark .modal-content div[style*="backgroundColor: #DCFCE7"] {
+  background-color: var(--light-green, #143522) !important;
+  border-color: var(--light-green-border, #1e5233) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f0fdf4"] div,
+[data-theme="dark"] .modal-dialog div[style*="background-color: #f0fdf4"] span,
+[data-theme="dark"] .modal-dialog div[style*="background-color: #DCFCE7"] span,
+html.dark .modal-dialog div[style*="background-color: #f0fdf4"] div,
+html.dark .modal-dialog div[style*="background-color: #f0fdf4"] span,
+html.dark .modal-dialog div[style*="background-color: #DCFCE7"] span,
+[data-theme="dark"] .modal-content div[style*="background-color: #f0fdf4"] div,
+[data-theme="dark"] .modal-content div[style*="background-color: #f0fdf4"] span,
+[data-theme="dark"] .modal-content div[style*="background-color: #DCFCE7"] span,
+html.dark .modal-content div[style*="background-color: #f0fdf4"] div,
+html.dark .modal-content div[style*="background-color: #f0fdf4"] span,
+html.dark .modal-content div[style*="background-color: #DCFCE7"] span {
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+/* Light Red Error Banners Inside Modals */
+[data-theme="dark"] .modal-dialog div[style*="background-color: #fef2f2"],
+[data-theme="dark"] .modal-dialog div[style*="background-color: #FEF2F2"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #fef2f2"],
+[data-theme="dark"] .modal-dialog div[style*="backgroundColor: #FEF2F2"],
+html.dark .modal-dialog div[style*="background-color: #fef2f2"],
+html.dark .modal-dialog div[style*="background-color: #FEF2F2"],
+html.dark .modal-dialog div[style*="backgroundColor: #fef2f2"],
+html.dark .modal-dialog div[style*="backgroundColor: #FEF2F2"],
+[data-theme="dark"] .modal-content div[style*="background-color: #fef2f2"],
+[data-theme="dark"] .modal-content div[style*="background-color: #FEF2F2"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #fef2f2"],
+[data-theme="dark"] .modal-content div[style*="backgroundColor: #FEF2F2"],
+html.dark .modal-content div[style*="background-color: #fef2f2"],
+html.dark .modal-content div[style*="background-color: #FEF2F2"],
+html.dark .modal-content div[style*="backgroundColor: #fef2f2"],
+html.dark .modal-content div[style*="backgroundColor: #FEF2F2"] {
+  background-color: var(--danger-bg, rgba(239, 68, 68, 0.16)) !important;
+  border-color: var(--danger-border, rgba(248, 113, 113, 0.32)) !important;
+  color: var(--danger-text, #fca5a5) !important;
+}
+
+/* Tables Inside Modals */
+[data-theme="dark"] .modal-dialog table,
+html.dark .modal-dialog table,
+[data-theme="dark"] .modal-content table,
+html.dark .modal-content table {
+  background-color: var(--modal-bg, #16261c) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+[data-theme="dark"] .modal-dialog th,
+html.dark .modal-dialog th,
+[data-theme="dark"] .modal-content th,
+html.dark .modal-content th {
+  background-color: var(--table-header-bg, #15251b) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+  border-bottom: 1px solid var(--border-main, #1f3527) !important;
+}
+
+[data-theme="dark"] .modal-dialog td,
+html.dark .modal-dialog td,
+[data-theme="dark"] .modal-content td,
+html.dark .modal-content td {
+  border-bottom: 1px solid var(--border-main, #1f3527) !important;
+  color: var(--text-primary, #f1f5f9) !important;
+}
+
+[data-theme="dark"] .modal-dialog tr:hover td,
+html.dark .modal-dialog tr:hover td,
+[data-theme="dark"] .modal-content tr:hover td,
+html.dark .modal-content tr:hover td {
+  background-color: var(--table-row-hover, #1b2f22) !important;
+}
+
+/* Secondary & Outline Buttons Inside Modals */
+[data-theme="dark"] .modal-dialog .btn-secondary,
+html.dark .modal-dialog .btn-secondary,
+[data-theme="dark"] .modal-content .btn-secondary,
+html.dark .modal-content .btn-secondary,
+[data-theme="dark"] .modal-dialog .btn-outline,
+html.dark .modal-dialog .btn-outline,
+[data-theme="dark"] .modal-content .btn-outline,
+html.dark .modal-content .btn-outline,
+[data-theme="dark"] .modal-dialog button[style*="background-color: #FFFFFF"],
+[data-theme="dark"] .modal-dialog button[style*="backgroundColor: #FFFFFF"],
+[data-theme="dark"] .modal-dialog button[style*="background-color: rgb(255, 255, 255)"],
+html.dark .modal-dialog button[style*="background-color: #FFFFFF"],
+html.dark .modal-dialog button[style*="backgroundColor: #FFFFFF"],
+[data-theme="dark"] .modal-content button[style*="background-color: #FFFFFF"],
+[data-theme="dark"] .modal-content button[style*="backgroundColor: #FFFFFF"],
+html.dark .modal-content button[style*="background-color: #FFFFFF"],
+html.dark .modal-content button[style*="backgroundColor: #FFFFFF"] {
+  background-color: var(--bg-surface, #121e16) !important;
+  border-color: var(--border-strong, #2d4c38) !important;
+  color: var(--text-secondary, #cbd5e1) !important;
+}
+
+[data-theme="dark"] .modal-dialog .btn-secondary:hover,
+html.dark .modal-dialog .btn-secondary:hover,
+[data-theme="dark"] .modal-content .btn-secondary:hover,
+html.dark .modal-content .btn-secondary:hover,
+[data-theme="dark"] .modal-dialog .btn-outline:hover,
+html.dark .modal-dialog .btn-outline:hover,
+[data-theme="dark"] .modal-content .btn-outline:hover,
+html.dark .modal-content .btn-outline:hover,
+[data-theme="dark"] .modal-dialog button[style*="background-color: #FFFFFF"]:hover,
+[data-theme="dark"] .modal-dialog button[style*="backgroundColor: #FFFFFF"]:hover,
+html.dark .modal-dialog button[style*="background-color: #FFFFFF"]:hover,
+html.dark .modal-dialog button[style*="backgroundColor: #FFFFFF"]:hover {
+  background-color: var(--bg-hover, #223a2a) !important;
+  border-color: var(--brand-forest, #22c55e) !important;
+  color: var(--text-primary, #ffffff) !important;
 }
 
 /* ==========================================================================

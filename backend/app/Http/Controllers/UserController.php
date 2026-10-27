@@ -131,7 +131,13 @@ class UserController extends Controller
         $newPassword = 'Admin@' . Str::upper(Str::random(6));
 
         $user->update(['password' => Hash::make($newPassword)]);
-        $user->tokens()->delete();
+
+        $currentTokenId = $request->user()?->currentAccessToken()?->id;
+        if ($currentTokenId && $request->user()?->id === $user->id) {
+            $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+        } else {
+            $user->tokens()->delete();
+        }
 
         AuditLog::create([
             'action' => 'ADMIN_PASSWORD_RESET',

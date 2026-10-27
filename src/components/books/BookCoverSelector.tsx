@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { Upload, Link2, X, Image as ImageIcon } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Upload, Link2, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { BookCover } from './BookCover';
 
 interface BookCoverSelectorProps {
@@ -49,21 +49,23 @@ export const BookCoverSelector: React.FC<BookCoverSelectorProps> = ({
   author = ''
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file (PNG, JPG, WEBP).');
+      setInlineError('Please select a valid image file (PNG, JPG, WEBP).');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image file is too large. Please select an image under 5MB.');
+      setInlineError('Image file is too large. Please select an image under 5MB.');
       return;
     }
 
+    setInlineError(null);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
@@ -102,6 +104,26 @@ export const BookCoverSelector: React.FC<BookCoverSelectorProps> = ({
           </button>
         )}
       </div>
+
+      {inlineError && (
+        <div
+          style={{
+            backgroundColor: '#FEF2F2',
+            color: '#991B1B',
+            border: '1px solid #FCA5A5',
+            borderRadius: 'var(--radius-md, 8px)',
+            padding: '8px 12px',
+            fontSize: '12px',
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <AlertCircle size={15} color="#DC2626" />
+          <span>{inlineError}</span>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '84px 1fr', gap: '16px', alignItems: 'start' }}>
         {/* Cover Preview Box */}

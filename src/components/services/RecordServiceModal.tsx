@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Member, LibraryServiceItem, ServiceRecord } from '../../types';
-import { X, Layers, Plus } from 'lucide-react';
+import { X, Layers, Plus, AlertCircle } from 'lucide-react';
 
 interface RecordServiceModalProps {
   isOpen: boolean;
@@ -22,6 +22,7 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [date, setDate] = useState<string>('2026-08-31');
   const [time, setTime] = useState<string>('03:30 PM');
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -31,9 +32,10 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
     const service = services.find((s) => s.id === selectedServiceId);
 
     if (!member || !service) {
-      alert('Please select both a valid member and library service.');
+      setInlineError('Please select both a valid registered patron and library service.');
       return;
     }
+    setInlineError(null);
 
     const newRecord: ServiceRecord = {
       id: `srvrec-${Date.now()}`,
@@ -77,6 +79,25 @@ export const RecordServiceModal: React.FC<RecordServiceModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {inlineError && (
+              <div
+                style={{
+                  backgroundColor: 'var(--danger-bg, #fef2f2)',
+                  color: 'var(--danger-text, #991b1b)',
+                  border: '1px solid var(--danger-border, #fca5a5)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  fontSize: '12.5px',
+                  marginBottom: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>{inlineError}</span>
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Select Patron / Member *</label>
               <select

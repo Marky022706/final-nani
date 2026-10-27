@@ -38,13 +38,17 @@ export const QrCodeSvg: React.FC<QrProps> = ({
   const cellSize = size / matrixSize;
 
   return (
-    <div className={`inline-block p-2 bg-white rounded-lg border border-slate-200 shadow-sm ${className}`}>
+    <div
+      className={`inline-block p-2 bg-white rounded-lg border border-slate-200 shadow-sm ${className}`}
+      style={{ backgroundColor: '#ffffff' }}
+    >
       <svg
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         xmlns="http://www.w3.org/2000/svg"
         className="block"
+        style={{ backgroundColor: '#ffffff' }}
       >
         <rect width="100%" height="100%" fill="#ffffff" />
         {matrix.map((row, r) =>
@@ -57,7 +61,7 @@ export const QrCodeSvg: React.FC<QrProps> = ({
                 y={r * cellSize}
                 width={cellSize + 0.15}
                 height={cellSize + 0.15}
-                fill="#0f172a"
+                fill="#000000"
               />
             );
           })

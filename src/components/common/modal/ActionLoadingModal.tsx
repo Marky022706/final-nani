@@ -43,6 +43,7 @@ export const ActionLoadingModal: React.FC<ActionLoadingModalProps> = ({
       aria-live="polite"
       aria-labelledby="action-loading-title"
       aria-describedby="action-loading-desc"
+      className="modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -58,19 +59,21 @@ export const ActionLoadingModal: React.FC<ActionLoadingModalProps> = ({
       }}
     >
       <div
+        className="modal-dialog modal-content action-loading-card"
         style={{
           width: '100%',
           maxWidth: '420px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-surface-elevated, #FFFFFF)',
+          color: 'var(--text-primary, #0F172A)',
           borderRadius: '16px',
           padding: '32px 28px',
-          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(22, 101, 52, 0.08)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
           gap: '16px',
-          border: '1px solid #E2E8F0'
+          border: '1px solid var(--border-main, #E2E8F0)'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -190,7 +193,7 @@ export const ActionLoadingModal: React.FC<ActionLoadingModalProps> = ({
             style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0F172A',
+              color: 'var(--text-primary, #0F172A)',
               margin: 0,
               letterSpacing: '-0.01em'
             }}
@@ -201,7 +204,7 @@ export const ActionLoadingModal: React.FC<ActionLoadingModalProps> = ({
             id="action-loading-desc"
             style={{
               fontSize: '13.5px',
-              color: '#64748B',
+              color: 'var(--text-muted, #64748B)',
               lineHeight: 1.5,
               margin: 0,
               maxWidth: '340px'
@@ -216,7 +219,7 @@ export const ActionLoadingModal: React.FC<ActionLoadingModalProps> = ({
           style={{
             width: '100%',
             height: '4px',
-            backgroundColor: '#F1F5F9',
+            backgroundColor: 'var(--bg-muted, #F1F5F9)',
             borderRadius: '999px',
             overflow: 'hidden',
             marginTop: '4px'

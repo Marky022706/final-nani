@@ -156,15 +156,18 @@ export const HelpSupportModal: React.FC<HelpSupportModalProps> = ({
       }}
     >
       <div
+        className="modal-dialog modal-content help-support-modal"
         style={{
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-surface, #FFFFFF)',
+          color: 'var(--text-primary)',
           borderRadius: '16px',
           maxWidth: '860px',
           width: '100%',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 24px 48px -12px rgba(23, 77, 50, 0.35)',
+          boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.45)',
+          border: '1px solid var(--border-main)',
           overflow: 'hidden'
         }}
       >

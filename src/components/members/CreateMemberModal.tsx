@@ -54,6 +54,7 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
   const [membershipStatus, setMembershipStatus] = useState<AccountStatus>('active');
   const [dateRegistered, setDateRegistered] = useState(new Date().toISOString().split('T')[0]);
   const [membershipType, setMembershipType] = useState<Member['membershipType']>('Student');
+  const [school, setSchool] = useState('');
 
   // Account Credentials (no member sign-in UI exists anymore - kept only as
   // the internal default assigned when the linked user record is created)
@@ -84,6 +85,7 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
       setMembershipStatus('active');
       setDateRegistered(new Date().toISOString().split('T')[0]);
       setMembershipType('Student');
+      setSchool('');
       setUsername('');
       setErrorMsg(null);
     }
@@ -162,6 +164,10 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
       setErrorMsg('Please enter the complete residential address.');
       return;
     }
+    if (membershipType === 'Student' && !school.trim()) {
+      setErrorMsg('Please specify the school / institution attended.');
+      return;
+    }
 
     // Auto-fill username if not set
     if (!username.trim()) {
@@ -208,6 +214,7 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
       phone: contactNumber.trim(),
       address: address.trim(),
       membershipType,
+      school: school.trim() || undefined,
       status: membershipStatus,
       photoUrl: effectivePhoto,
       qrCodeData: finalMemberId,
@@ -678,6 +685,49 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* School / Institution Field */}
+                <div className="form-group" style={{ marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>
+                      School / Institution {membershipType === 'Student' ? '*' : '(Optional)'}
+                    </label>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {membershipType === 'Student' ? 'Required for student patrons' : 'Affiliation / Alma Mater'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    list="balingasag-schools-list"
+                    required={membershipType === 'Student'}
+                    className="form-input"
+                    value={school}
+                    onChange={(e) => setSchool(e.target.value)}
+                    placeholder={
+                      membershipType === 'Student'
+                        ? 'e.g. St. Rita’s College of Balingasag, MOIST, Balingasag Central School...'
+                        : 'e.g. Current school, university, or affiliated institution'
+                    }
+                  />
+                  <datalist id="balingasag-schools-list">
+                    <option value="Misamis Oriental Institute of Science and Technology (MOIST)" />
+                    <option value="St. Rita's College of Balingasag (SRCB)" />
+                    <option value="Balingasag Central School (BCS)" />
+                    <option value="Balingasag Senior High School" />
+                    <option value="Balingasag National High School" />
+                    <option value="Baliwagan National High School" />
+                    <option value="San Isidro National High School" />
+                    <option value="Hermano National High School" />
+                    <option value="Dumarait Elementary School" />
+                    <option value="Talusan National High School" />
+                    <option value="Lagonglong National High School" />
+                    <option value="University of Science and Technology of Southern Philippines (USTP)" />
+                    <option value="Mindanao State University (MSU)" />
+                    <option value="Xavier University - Ateneo de Cagayan" />
+                    <option value="Capitol University" />
+                    <option value="Liceo de Cagayan University" />
+                  </datalist>
+                </div>
               </div>
             )}
 
@@ -690,8 +740,8 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
+                    backgroundColor: 'var(--light-green, #f0fdf4)',
+                    border: '1px solid var(--light-green-border, #bbf7d0)',
                     borderRadius: 'var(--radius-md)',
                     padding: '14px 18px',
                     marginBottom: '16px'
@@ -704,7 +754,7 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                         height: '46px',
                         borderRadius: '50%',
                         overflow: 'hidden',
-                        border: '2px solid #166534',
+                        border: '2px solid var(--brand-forest, #166534)',
                         backgroundColor: '#ffffff'
                       }}
                     >
@@ -715,13 +765,13 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: '11px', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--brand-forest, #166534)', fontWeight: 700, textTransform: 'uppercase' }}>
                         Assigned Member ID
                       </div>
-                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#14532d', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #14532d)', fontFamily: 'var(--font-mono)' }}>
                         {memberId}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#16a34a' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--primary-green, #16a34a)' }}>
                         {[firstName, middleName, lastName, suffix].filter(Boolean).join(' ')} • {membershipType}
                       </div>
                     </div>
@@ -784,6 +834,10 @@ export const CreateMemberModal: React.FC<CreateMemberModalProps> = ({
                     <div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Membership Type</div>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{membershipType}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>School / Institution</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{school.trim() || '—'}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Status</div>

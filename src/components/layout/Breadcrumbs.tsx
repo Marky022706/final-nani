@@ -50,7 +50,7 @@ const DESTINATION_META: Record<string, NavMeta> = {
   audit_logs: {
     category: 'Governance',
     categoryRoute: 'admin_mgmt',
-    label: 'Audit Trail'
+    label: 'System Log'
   },
   system_settings: {
     category: 'Governance',

@@ -24,6 +24,7 @@ class Member extends Model
         'phone',
         'address',
         'membership_type',
+        'school',
         'status',
         'photo_url',
         'qr_code_data',
@@ -49,6 +50,7 @@ class Member extends Model
         'gender',
         'sex',
         'membershipType',
+        'school',
         'photoUrl',
         'qrCodeData',
         'joinDate',
@@ -68,6 +70,7 @@ class Member extends Model
     public function getGenderAttribute() { return $this->attributes['gender'] ?? null; }
     public function getSexAttribute() { return $this->attributes['gender'] ?? null; }
     public function getMembershipTypeAttribute() { return $this->attributes['membership_type'] ?? null; }
+    public function getSchoolAttribute() { return $this->attributes['school'] ?? null; }
     public function getPhotoUrlAttribute() { return $this->attributes['photo_url'] ?? null; }
     public function getQrCodeDataAttribute() { return $this->attributes['qr_code_data'] ?? null; }
     public function getJoinDateAttribute() { return $this->attributes['join_date'] ?? null; }

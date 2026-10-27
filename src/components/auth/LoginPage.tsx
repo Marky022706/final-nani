@@ -1066,66 +1066,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
                 <div>
                   Member accounts are issued exclusively by library administration. Please visit the front desk with a valid ID for account creation.
                 </div>
-
-                {/* Quick Staff Testing Access */}
-                <div
-                  style={{
-                    marginTop: '16px',
-                    padding: '12px',
-                    borderRadius: '10px',
-                    backgroundColor: 'var(--bg-subtle, #F8FAFC)',
-                    border: '1px solid var(--border-main, #E2E8F0)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    textAlign: 'left'
-                  }}
-                >
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary, #64748B)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Quick Staff Testing Access
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      disabled={isLoading || authFeedbackStatus !== 'idle'}
-                      onClick={() => {
-                        setIdentifier('admin.arquita@balingasag.gov.ph');
-                        setPassword('admin123');
-                        performLogin('admin.arquita@balingasag.gov.ph', 'admin123');
-                      }}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, minWidth: '120px', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px' }}
-                    >
-                      👤 Admin (Ms. Arquita)
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isLoading || authFeedbackStatus !== 'idle'}
-                      onClick={() => {
-                        setIdentifier('admin1@balingasag.gov.ph');
-                        setPassword('admin123');
-                        performLogin('admin1@balingasag.gov.ph', 'admin123');
-                      }}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, minWidth: '120px', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px' }}
-                    >
-                      🤝 Volunteer (Balong)
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isLoading || authFeedbackStatus !== 'idle'}
-                      onClick={() => {
-                        setIdentifier('superadmin@balingasag.gov.ph');
-                        setPassword('admin123');
-                        performLogin('superadmin@balingasag.gov.ph', 'admin123');
-                      }}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, minWidth: '120px', justifyContent: 'center', fontSize: '11.5px', padding: '6px 8px' }}
-                    >
-                      🛡️ Superadmin
-                    </button>
-                  </div>
-                </div>
               </div>
           </section>
         </div>
@@ -1158,10 +1098,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
             style={{
               maxWidth: '440px',
               width: '100%',
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--bg-surface, #FFFFFF)',
+              color: 'var(--text-primary)',
               borderRadius: '16px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #E2E8F0',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--border-main, #E2E8F0)',
               overflow: 'hidden'
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1169,11 +1110,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
             <div
               style={{
                 padding: '18px 22px',
-                borderBottom: '1px solid #E2E8F0',
+                borderBottom: '1px solid var(--border-main, #E2E8F0)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: '#FAFAF9'
+                backgroundColor: 'var(--bg-subtle, #FAFAF9)'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1348,9 +1289,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBackToLanding }
         @media (prefers-reduced-motion: reduce) {
           .login-top-progress {
             animation: none !important;
-          }
-          * {
-            transition-duration: 0.01ms !important;
           }
         }
       `}</style>

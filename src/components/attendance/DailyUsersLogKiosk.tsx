@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Member, AttendanceRecord } from '../../types';
 import {
   Camera,
-  BookOpen,
   Users,
   User as UserIcon,
   CheckCircle2,
   AlertCircle,
+  ShieldAlert,
+  RotateCcw,
   Search,
   Maximize2,
   Minimize2,
@@ -27,37 +28,11 @@ export interface DailyUsersLogKioskProps {
 }
 
 interface ScanFeedbackState {
-  type: 'time_in' | 'time_out' | 'error';
+  type: 'time_in' | 'error';
   member?: Member;
   record?: AttendanceRecord;
   message: string;
   timestamp: string;
-}
-
-function computeDuration(timeInStr: string, timeOutStr: string): string {
-  try {
-    const parseTime = (str: string) => {
-      const match = str.match(/(\d+):(\d+)(?::\d+)?\s*(AM|PM)?/i);
-      if (!match) return null;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const meridiem = match[3]?.toUpperCase();
-      if (meridiem === 'PM' && hours < 12) hours += 12;
-      if (meridiem === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
-    };
-    const tIn = parseTime(timeInStr);
-    const tOut = parseTime(timeOutStr);
-    if (tIn === null || tOut === null) return '1h 15m';
-    let diff = tOut - tIn;
-    if (diff < 0) diff += 24 * 60;
-    const h = Math.floor(diff / 60);
-    const m = diff % 60;
-    if (h === 0) return `${Math.max(1, m)}m`;
-    return `${h}h ${m}m`;
-  } catch {
-    return '1h 15m';
-  }
 }
 
 export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
@@ -76,6 +51,11 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [lastScannedMember, setLastScannedMember] = useState<Member | null>(null);
   const [feedback, setFeedback] = useState<ScanFeedbackState | null>(null);
+  const [inlineError, setInlineError] = useState<{
+    title: string;
+    message: string;
+    code?: string;
+  } | null>(null);
 
   // Anti-duplicate protection cooldown map (memberId -> timestamp)
   const lastScanTimeRef = useRef<{ [key: string]: number }>({});
@@ -89,15 +69,16 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-reset feedback to "READY TO SCAN" after 8 seconds
+  // Auto-reset feedback and errors to "READY TO SCAN" after 8 seconds
   useEffect(() => {
-    if (!feedback) return;
+    if (!feedback && !inlineError) return;
     const timer = setTimeout(() => {
       setFeedback(null);
+      setInlineError(null);
       setLastScannedMember(null);
-    }, 10000);
+    }, 8000);
     return () => clearTimeout(timer);
-  }, [feedback]);
+  }, [feedback, inlineError]);
 
   // Clean scanned code (handles JSON, URLs, spaces)
   const cleanScannedCode = (raw: string): string => {
@@ -123,6 +104,7 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
     const clean = cleanScannedCode(code);
     if (!clean) return null;
     const upper = clean.toUpperCase();
+    const alphaClean = upper.replace(/[^A-Z0-9]/g, '');
 
     // Check local members state with full null-safety
     let matched = members.find((m) => {
@@ -133,12 +115,17 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
       const nameStr = m.fullName ? String(m.fullName).toUpperCase() : '';
       const uName = m.username ? String(m.username).toUpperCase() : '';
 
+      const memIdClean = memId.replace(/[^A-Z0-9]/g, '');
+      const qrDataClean = qrData.replace(/[^A-Z0-9]/g, '');
+
       return (
-        (memId && (memId === upper || memId.includes(upper))) ||
-        (qrData && qrData === upper) ||
-        (idStr && idStr === upper) ||
-        (nameStr && nameStr.includes(upper)) ||
-        (uName && uName === upper)
+        memId === upper ||
+        qrData === upper ||
+        idStr === upper ||
+        uName === upper ||
+        (alphaClean.length >= 4 && (memIdClean === alphaClean || qrDataClean === alphaClean)) ||
+        (memId && memId.includes(upper)) ||
+        (nameStr && nameStr.includes(upper))
       );
     });
 
@@ -193,9 +180,15 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
 
       if (!member) {
         playErrorTone();
+        const errObj = {
+          title: 'Patron Not Found',
+          message: `No patron record was found matching code "${cleanCode}". Please verify the ID number or register at the librarian desk.`,
+          code: cleanCode
+        };
+        setInlineError(errObj);
         setFeedback({
           type: 'error',
-          message: `No patron record found for scanned code "${cleanCode}".`,
+          message: `NO RECORD FOUND FOR "${cleanCode.toUpperCase()}"`,
           timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         });
         setLastScannedMember(null);
@@ -207,10 +200,16 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
       // Validate account status
       if (member.status === 'inactive') {
         playErrorTone();
+        const errObj = {
+          title: 'Patron Account Inactive',
+          message: `Patron account for ${member.fullName} (${member.memberId}) is currently marked inactive. Access to library services is paused until reactivated.`,
+          code: member.memberId
+        };
+        setInlineError(errObj);
         setFeedback({
           type: 'error',
           member,
-          message: `Patron account ${member.fullName} (${member.memberId}) is INACTIVE. Entry rejected.`,
+          message: `ACCOUNT INACTIVE — ENTRY REJECTED`,
           timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         });
         return;
@@ -218,14 +217,23 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
 
       if (member.status === 'suspended') {
         playErrorTone();
+        const errObj = {
+          title: 'Patron Account Suspended',
+          message: `Patron account for ${member.fullName} (${member.memberId}) has a suspended status. Please consult the chief librarian desk.`,
+          code: member.memberId
+        };
+        setInlineError(errObj);
         setFeedback({
           type: 'error',
           member,
-          message: `Patron account ${member.fullName} (${member.memberId}) is SUSPENDED. Entry rejected.`,
+          message: `ACCOUNT SUSPENDED — ENTRY REJECTED`,
           timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         });
         return;
       }
+
+      // Success: clear any existing inline error
+      setInlineError(null);
 
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
@@ -239,53 +247,49 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
         second: '2-digit'
       });
 
-      // Check if patron is already recorded as inside
-      const existingActive = activeAttendance.find(
-        (a) => (a.memberId === member.memberId || a.memberId === member.id) && a.status === 'Inside'
+      // Check if patron already recorded a Time-In in the same minute today (prevent double-beep duplication)
+      const recentSameMinute = activeAttendance.find(
+        (a) =>
+          ((a.memberId && member.memberId && a.memberId.toUpperCase() === member.memberId.toUpperCase()) ||
+            a.memberId === member.id ||
+            a.memberId === String(member.id)) &&
+          a.date === todayStr &&
+          a.timeIn === timeFormatted
       );
 
-      if (existingActive) {
-        // TIME OUT EVENT
-        const duration = computeDuration(existingActive.timeIn, timeFormatted);
-        const updatedRecord: AttendanceRecord = {
-          ...existingActive,
-          timeOut: timeFormatted,
-          duration,
-          status: 'Completed'
-        };
-
-        onAttendanceProcessed(updatedRecord, 'time_out');
-        playSuccessBeep();
-        setFeedback({
-          type: 'time_out',
-          member,
-          record: updatedRecord,
-          message: `TIME OUT SUCCESSFUL`,
-          timestamp: timeWithSec
-        });
-      } else {
-        // TIME IN EVENT
-        const newRecord: AttendanceRecord = {
-          id: `att-${Date.now()}`,
-          memberId: member.memberId,
-          memberName: member.fullName,
-          membershipType: member.membershipType || 'Student',
-          date: todayStr,
-          timeIn: timeFormatted,
-          status: 'Inside',
-          notes: 'Optical QR scan entry'
-        };
-
-        onAttendanceProcessed(newRecord, 'time_in');
+      if (recentSameMinute) {
         playSuccessBeep();
         setFeedback({
           type: 'time_in',
           member,
-          record: newRecord,
-          message: `TIME IN SUCCESSFUL`,
+          record: recentSameMinute,
+          message: `ALREADY TIMED IN (${recentSameMinute.timeIn})`,
           timestamp: timeWithSec
         });
+        return;
       }
+
+      // TIME IN EVENT (In Only - No Time Out)
+      const newRecord: AttendanceRecord = {
+        id: `att-${Date.now()}`,
+        memberId: member.memberId,
+        memberName: member.fullName,
+        membershipType: member.membershipType || 'Student',
+        date: todayStr,
+        timeIn: timeFormatted,
+        status: 'Inside',
+        notes: 'Optical QR scan entry'
+      };
+
+      onAttendanceProcessed(newRecord, 'time_in');
+      playSuccessBeep();
+      setFeedback({
+        type: 'time_in',
+        member,
+        record: newRecord,
+        message: `TIME IN SUCCESSFUL`,
+        timestamp: timeWithSec
+      });
     } finally {
       setIsProcessing(false);
       setManualCode('');
@@ -294,9 +298,17 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualCode.trim()) {
-      processAttendanceScan(manualCode.trim(), true);
+    const trimmed = manualCode.trim();
+    if (!trimmed) {
+      playErrorTone();
+      setInlineError({
+        title: 'Member ID Required',
+        message: 'Please enter a patron ID number (e.g. BPL-2026-0001) or scan an ID card barcode.'
+      });
+      manualInputRef.current?.focus();
+      return;
     }
+    processAttendanceScan(trimmed, true);
   };
 
   // Formatted Date & Time Strings matching the reference image layout
@@ -331,24 +343,102 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
   const displayMember = lastScannedMember;
   const ageDisplay = displayMember ? calculateAge(displayMember.dateOfBirth) : '';
 
-  // Floating & Running Background QR Particles Configuration
-  const backgroundQrElements = [
-    // Running QR codes (gliding across the screen continuously)
-    { id: 'run-1', type: 'runner-right', top: '18%', size: 72, opacity: 0.16, duration: '20s', delay: '-3s' },
-    { id: 'run-2', type: 'runner-left', top: '55%', size: 84, opacity: 0.14, duration: '26s', delay: '-10s' },
-    { id: 'run-3', type: 'runner-diag', top: '75%', size: 68, opacity: 0.15, duration: '22s', delay: '-14s' },
+  // Floating background QR code sprites driven by 60FPS RAF physics
+  const bgContainerRef = useRef<HTMLDivElement | null>(null);
+  const qrDomRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const qrPhysicsRef = useRef<Array<{
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    rotation: number;
+    rotationSpeed: number;
+  }>>([]);
 
-    // Ambient floating/drifting QR codes (staggered in 2D space)
-    { id: 'float-1', type: 'float-a', top: '6%', left: '5%', size: 76, opacity: 0.15, duration: '18s', delay: '-2s' },
-    { id: 'float-2', type: 'float-b', top: '12%', left: '88%', size: 92, opacity: 0.13, duration: '24s', delay: '-8s' },
-    { id: 'float-3', type: 'float-c', top: '42%', left: '3%', size: 80, opacity: 0.14, duration: '22s', delay: '-12s' },
-    { id: 'float-4', type: 'float-a', top: '48%', left: '92%', size: 86, opacity: 0.16, duration: '19s', delay: '-5s' },
-    { id: 'float-5', type: 'float-b', top: '82%', left: '8%', size: 70, opacity: 0.15, duration: '21s', delay: '-15s' },
-    { id: 'float-6', type: 'float-c', top: '85%', left: '84%', size: 78, opacity: 0.14, duration: '25s', delay: '-9s' },
-    { id: 'float-7', type: 'float-a', top: '28%', left: '46%', size: 54, opacity: 0.10, duration: '28s', delay: '-17s' },
-    { id: 'float-8', type: 'float-b', top: '68%', left: '50%', size: 60, opacity: 0.11, duration: '23s', delay: '-6s' },
-    { id: 'float-9', type: 'float-c', top: '4%', left: '42%', size: 64, opacity: 0.12, duration: '26s', delay: '-11s' }
-  ];
+  const [qrSpritesConfig] = useState(() => [
+    { size: 76, opacity: 0.18 },
+    { size: 92, opacity: 0.16 },
+    { size: 84, opacity: 0.20 },
+    { size: 68, opacity: 0.16 },
+    { size: 80, opacity: 0.19 },
+    { size: 96, opacity: 0.15 },
+    { size: 72, opacity: 0.18 },
+    { size: 88, opacity: 0.17 },
+    { size: 64, opacity: 0.15 },
+    { size: 78, opacity: 0.18 },
+    { size: 85, opacity: 0.16 },
+    { size: 70, opacity: 0.19 }
+  ]);
+
+  useEffect(() => {
+    const getBounds = () => {
+      const container = bgContainerRef.current;
+      const w = container?.clientWidth || window.innerWidth || 1200;
+      const h = container?.clientHeight || window.innerHeight || 800;
+      return { width: Math.max(w, 320), height: Math.max(h, 320) };
+    };
+
+    const { width, height } = getBounds();
+
+    // Initialize positions staggered nicely across the screen
+    qrPhysicsRef.current = qrSpritesConfig.map(({ size }, idx) => {
+      const speed = 0.75 + (idx % 3) * 0.35;
+      const angle = (idx * (Math.PI * 2 / qrSpritesConfig.length)) + 0.3;
+      return {
+        size,
+        x: ((idx * (width / qrSpritesConfig.length)) + 40) % Math.max(width - size, 40),
+        y: ((idx * 67 + 50) % Math.max(height - size, 40)),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: idx * 25,
+        rotationSpeed: (idx % 2 === 0 ? 0.35 : -0.35)
+      };
+    });
+
+    let animId: number;
+    const tick = () => {
+      const { width, height } = getBounds();
+      const sprites = qrPhysicsRef.current;
+
+      for (let i = 0; i < sprites.length; i++) {
+        const s = sprites[i];
+        const el = qrDomRefs.current[i];
+        if (!s || !el) continue;
+
+        s.x += s.vx;
+        s.y += s.vy;
+        s.rotation += s.rotationSpeed;
+
+        const maxX = Math.max(width - s.size, 10);
+        const maxY = Math.max(height - s.size, 10);
+
+        // Smooth bounce off edges
+        if (s.x <= 0) {
+          s.x = 0;
+          s.vx = Math.abs(s.vx);
+        } else if (s.x >= maxX) {
+          s.x = maxX;
+          s.vx = -Math.abs(s.vx);
+        }
+
+        if (s.y <= 0) {
+          s.y = 0;
+          s.vy = Math.abs(s.vy);
+        } else if (s.y >= maxY) {
+          s.y = maxY;
+          s.vy = -Math.abs(s.vy);
+        }
+
+        el.style.transform = `translate3d(${s.x}px, ${s.y}px, 0) rotate(${s.rotation}deg)`;
+      }
+
+      animId = requestAnimationFrame(tick);
+    };
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [qrSpritesConfig]);
 
   return (
     <div
@@ -434,17 +524,13 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
           }
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          .kiosk-animated-qr {
-            animation: none !important;
-          }
-        }
       `}</style>
 
       {/* ==================================================== */}
-      {/* ANIMATED BACKGROUND LAYER: LOOPING RUNNING QR CODES  */}
+      {/* ANIMATED BACKGROUND LAYER: DRIFTING & BOUNCING QR CODES */}
       {/* ==================================================== */}
       <div
+        ref={bgContainerRef}
         style={{
           position: 'absolute',
           inset: 0,
@@ -465,47 +551,37 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
           }}
         />
 
-        {/* Floating and running QR code particle elements */}
-        {backgroundQrElements.map((item) => {
-          let animationName = 'kioskQrFloatA';
-          if (item.type === 'runner-right') animationName = 'kioskQrRunRight';
-          else if (item.type === 'runner-left') animationName = 'kioskQrRunLeft';
-          else if (item.type === 'runner-diag') animationName = 'kioskQrRunDiag';
-          else if (item.type === 'float-b') animationName = 'kioskQrFloatB';
-          else if (item.type === 'float-c') animationName = 'kioskQrFloatC';
-
-          const isRunner = item.type.startsWith('runner');
-
-          return (
-            <div
-              key={item.id}
-              className="kiosk-animated-qr"
+        {/* Floating and actively moving QR code particle elements */}
+        {qrSpritesConfig.map((item, idx) => (
+          <div
+            key={idx}
+            ref={(el) => {
+              qrDomRefs.current[idx] = el;
+            }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: `${item.size}px`,
+              height: `${item.size}px`,
+              opacity: item.opacity,
+              filter: 'drop-shadow(0 4px 14px rgba(16, 185, 129, 0.3))',
+              willChange: 'transform',
+              pointerEvents: 'none'
+            }}
+          >
+            <img
+              src="/attendance-qr.png"
+              alt=""
               style={{
-                position: 'absolute',
-                top: item.top,
-                left: isRunner ? 0 : item.left,
-                width: `${item.size}px`,
-                height: `${item.size}px`,
-                opacity: item.opacity,
-                animation: `${animationName} ${item.duration} infinite ease-in-out`,
-                animationDelay: item.delay,
-                filter: 'drop-shadow(0 4px 12px rgba(16, 185, 129, 0.25))',
-                willChange: 'transform'
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                borderRadius: '12px'
               }}
-            >
-              <img
-                src="/attendance-qr.png"
-                alt=""
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  borderRadius: '12px'
-                }}
-              />
-            </div>
-          );
-        })}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Floating Kiosk Controls (Top Right: Fullscreen / Close) */}
@@ -785,12 +861,13 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
           <div
             style={{
               flex: 1,
-              minHeight: '280px',
-              maxHeight: '420px',
+              minHeight: '340px',
+              height: '380px',
               borderRadius: '16px',
               overflow: 'hidden',
-              backgroundColor: '#0F172A',
-              border: '2px solid #CBD5E1',
+              backgroundColor: '#020617',
+              border: '2px solid rgba(22, 101, 52, 0.45)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -802,6 +879,7 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
               scannerId="daily-kiosk-camera"
               isActive={true}
               mode="qr"
+              variant="kiosk"
               label="Position Library QR Code directly within the camera reticle"
             />
           </div>
@@ -818,7 +896,7 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
             <div style={{ position: 'relative', flex: 1 }}>
               <Search
                 size={16}
-                color="#94A3B8"
+                color={inlineError ? '#DC2626' : '#94A3B8'}
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
               />
               <input
@@ -826,7 +904,10 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                 ref={manualInputRef}
                 type="text"
                 value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
+                onChange={(e) => {
+                  setManualCode(e.target.value);
+                  if (inlineError) setInlineError(null);
+                }}
                 placeholder="Or enter Member ID (e.g. BPL-2026-0001)..."
                 style={{
                   width: '100%',
@@ -834,34 +915,85 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                   paddingLeft: '38px',
                   paddingRight: '12px',
                   borderRadius: '10px',
-                  border: '1px solid #CBD5E1',
+                  border: inlineError ? '2px solid #EF4444' : '1px solid #CBD5E1',
+                  outline: inlineError ? '2px solid rgba(239, 68, 68, 0.25)' : 'none',
                   fontSize: '13px',
                   color: '#0F172A',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
                 }}
               />
             </div>
             <button
               id="kiosk-manual-log-btn"
               type="submit"
-              disabled={isProcessing || !manualCode.trim()}
+              disabled={isProcessing}
               style={{
                 height: '40px',
                 padding: '0 18px',
                 borderRadius: '10px',
                 border: 'none',
-                backgroundColor: isProcessing || !manualCode.trim() ? '#94A3B8' : '#166534',
+                backgroundColor: isProcessing ? '#94A3B8' : '#166534',
                 color: '#FFFFFF',
                 fontSize: '13px',
                 fontWeight: 700,
-                cursor: isProcessing || !manualCode.trim() ? 'not-allowed' : 'pointer',
+                cursor: isProcessing ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease',
-                boxShadow: isProcessing || !manualCode.trim() ? 'none' : '0 2px 8px rgba(22, 101, 52, 0.3)'
+                boxShadow: isProcessing ? 'none' : '0 2px 8px rgba(22, 101, 52, 0.3)'
               }}
             >
               {isProcessing ? 'Verifying...' : 'Log'}
             </button>
           </form>
+
+          {/* Inline Error Banner (Directly Below Input) */}
+          {inlineError && (
+            <div
+              className="animate-modal-fade-in"
+              role="alert"
+              style={{
+                marginTop: '10px',
+                backgroundColor: '#FEF2F2',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: '10px',
+                color: '#991B1B',
+                boxShadow: '0 4px 14px rgba(239, 68, 68, 0.12)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1 }}>
+                <AlertCircle size={18} color="#DC2626" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div style={{ fontSize: '12.5px', lineHeight: 1.45 }}>
+                  <strong style={{ display: 'block', fontSize: '13px', color: '#991B1B', fontWeight: 800 }}>
+                    {inlineError.title}
+                  </strong>
+                  <span style={{ color: '#7F1D1D' }}>{inlineError.message}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInlineError(null)}
+                title="Dismiss error message"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#DC2626',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '6px'
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ========================================== */}
@@ -871,7 +1003,9 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
           style={{
             background: 'linear-gradient(145deg, rgba(20, 62, 42, 0.94) 0%, rgba(13, 44, 30, 0.97) 100%)',
             borderRadius: '24px',
-            border: '2px solid rgba(52, 211, 153, 0.45)',
+            border: (inlineError || feedback?.type === 'error')
+              ? '2px solid rgba(239, 68, 68, 0.55)'
+              : '2px solid rgba(52, 211, 153, 0.45)',
             boxShadow: '0 20px 45px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
             padding: '24px',
             display: 'flex',
@@ -879,7 +1013,8 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
             justifyContent: 'space-between',
             position: 'relative',
             backdropFilter: 'blur(12px)',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'border-color 0.25s ease'
           }}
         >
           {/* Main Content Area */}
@@ -892,21 +1027,26 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
               flex: 1
             }}
           >
-            {/* Left: Circular Member Profile Photo / Placeholder */}
+            {/* Left: Circular Member Profile Photo / Error Icon / Placeholder */}
             <div
               style={{
                 width: 'clamp(140px, 16vw, 220px)',
                 height: 'clamp(140px, 16vw, 220px)',
                 borderRadius: '50%',
-                backgroundColor: '#FFFFFF',
-                border: '4px solid #FFFFFF',
-                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
+                backgroundColor: (inlineError || feedback?.type === 'error') ? '#FEF2F2' : '#FFFFFF',
+                border: (inlineError || feedback?.type === 'error')
+                  ? '4px solid #EF4444'
+                  : '4px solid #FFFFFF',
+                boxShadow: (inlineError || feedback?.type === 'error')
+                  ? '0 12px 30px rgba(239, 68, 68, 0.35)'
+                  : '0 12px 30px rgba(0, 0, 0, 0.4)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
                 overflow: 'hidden',
-                position: 'relative'
+                position: 'relative',
+                transition: 'all 0.25s ease'
               }}
             >
               {displayMember ? (
@@ -921,8 +1061,8 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                     style={{
                       width: '100%',
                       height: '100%',
-                      backgroundColor: '#DCFCE7',
-                      color: '#166534',
+                      backgroundColor: displayMember.status !== 'active' ? '#FEE2E2' : '#DCFCE7',
+                      color: displayMember.status !== 'active' ? '#DC2626' : '#166534',
                       fontSize: 'clamp(36px, 4.5vw, 64px)',
                       fontWeight: 800,
                       display: 'flex',
@@ -938,7 +1078,7 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                       .toUpperCase()}
                   </div>
                 )
-              ) : (
+              ) : (inlineError || feedback?.type === 'error') ? (
                 <div
                   style={{
                     display: 'flex',
@@ -948,24 +1088,45 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                     padding: '8px'
                   }}
                 >
-                  <img
-                    src="/attendance-qr.png"
-                    alt="Scan QR"
-                    style={{
-                      width: 'clamp(60px, 7vw, 90px)',
-                      height: 'clamp(60px, 7vw, 90px)',
-                      objectFit: 'contain',
-                      borderRadius: '10px'
-                    }}
-                  />
-                  <span style={{ fontSize: '11px', fontWeight: 800, marginTop: '8px', color: '#166534', letterSpacing: '0.04em' }}>
-                    READY TO SCAN
+                  <AlertCircle size={56} color="#DC2626" />
+                  <span style={{ fontSize: '11px', fontWeight: 800, marginTop: '8px', color: '#DC2626', letterSpacing: '0.04em' }}>
+                    VERIFICATION FAILED
                   </span>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#F1F5F9',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  title="No profile picture"
+                >
+                  <svg
+                    viewBox="0 0 128 128"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'block'
+                    }}
+                    aria-label="No profile picture"
+                  >
+                    <circle cx="64" cy="48" r="25" fill="#94A3B8" />
+                    <path
+                      d="M64 82 C38 82 20 98 18 128 L110 128 C108 98 90 82 64 82 Z"
+                      fill="#94A3B8"
+                    />
+                  </svg>
                 </div>
               )}
             </div>
 
-            {/* Right: Member Details Column */}
+            {/* Right: Member Details Column or Inline Error State */}
             <div style={{ flex: 1, minWidth: 0 }}>
               {displayMember ? (
                 <div className="animate-modal-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1055,6 +1216,134 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                   >
                     Member ID: {displayMember.memberId}
                   </div>
+
+                  {/* Inactive or Suspended Inline Banner */}
+                  {displayMember.status !== 'active' && (
+                    <div
+                      style={{
+                        marginTop: '6px',
+                        backgroundColor: '#FEF2F2',
+                        border: '1px solid #FCA5A5',
+                        borderRadius: '10px',
+                        padding: '8px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        color: '#991B1B'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <ShieldAlert size={16} color="#DC2626" />
+                        <span style={{ fontSize: '12px', fontWeight: 700 }}>
+                          Account is currently {displayMember.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLastScannedMember(null);
+                          setInlineError(null);
+                          setFeedback(null);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#DC2626',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        Scan Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (inlineError || feedback?.type === 'error') ? (
+                /* Inline Error State Card in Right Panel */
+                <div className="animate-modal-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '5px 14px',
+                      borderRadius: '10px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                      border: '1px solid rgba(239, 68, 68, 0.45)',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      color: '#FCA5A5',
+                      width: 'fit-content'
+                    }}
+                  >
+                    <ShieldAlert size={15} />
+                    <span>VERIFICATION FAILED</span>
+                  </div>
+
+                  <h3
+                    style={{
+                      fontSize: 'clamp(20px, 2.4vw, 30px)',
+                      fontWeight: 800,
+                      color: '#FFFFFF',
+                      margin: '4px 0 0'
+                    }}
+                  >
+                    {inlineError?.title || 'Patron Not Found'}
+                  </h3>
+
+                  <p style={{ fontSize: '14px', color: '#FCA5A5', margin: 0, lineHeight: 1.5 }}>
+                    {inlineError?.message || feedback?.message || 'The scanned card could not be matched with an active library record.'}
+                  </p>
+
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.35)',
+                      border: '1px dashed rgba(252, 165, 165, 0.4)',
+                      borderRadius: '12px',
+                      padding: '10px 14px',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF', marginBottom: '4px' }}>
+                      Recommended Next Steps:
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.45 }}>
+                      <li>Check the library card surface for smudges or glare under the camera.</li>
+                      <li>Type the ID manually into the input box below the camera preview.</li>
+                      <li>Inquire at the circulation desk to confirm patron registration.</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInlineError(null);
+                      setFeedback(null);
+                      manualInputRef.current?.focus();
+                    }}
+                    style={{
+                      marginTop: '6px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: '#DC2626',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      width: 'fit-content',
+                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)'
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    <span>Dismiss & Ready Next Patron</span>
+                  </button>
                 </div>
               ) : (
                 /* Neutral Placeholder when no member scanned yet */
@@ -1089,7 +1378,7 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                   </h3>
 
                   <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.85)', margin: 0, lineHeight: 1.5 }}>
-                    Hold up your official Balingasag Public Library ID card in front of the live capture camera on the left to automatically record Time-In or Time-Out.
+                    Hold up your official Balingasag Public Library ID card in front of the live capture camera on the left to automatically record your Time-In.
                   </p>
                 </div>
               )}
@@ -1105,15 +1394,11 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                   backgroundColor:
                     feedback.type === 'time_in'
                       ? '#166534'
-                      : feedback.type === 'time_out'
-                      ? '#0D47A1'
                       : '#991B1B',
                   borderRadius: '14px',
                   border:
                     feedback.type === 'time_in'
                       ? '2px solid #4ADE80'
-                      : feedback.type === 'time_out'
-                      ? '2px solid #93C5FD'
                       : '2px solid #FCA5A5',
                   padding: '12px 18px',
                   display: 'flex',
@@ -1132,11 +1417,6 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
                     <strong style={{ fontSize: '15px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                       {feedback.message}
                     </strong>
-                    {feedback.record?.duration && (
-                      <div style={{ fontSize: '12px', opacity: 0.9 }}>
-                        Duration in library: {feedback.record.duration}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1192,39 +1472,6 @@ export const DailyUsersLogKiosk: React.FC<DailyUsersLogKioskProps> = ({
         </div>
       </div>
 
-      {/* ==================================================== */}
-      {/* SECTION D: FOOTER                                    */}
-      {/* ==================================================== */}
-      <div
-        style={{
-          backgroundColor: 'rgba(9, 32, 21, 0.92)',
-          borderRadius: '14px',
-          border: '1px solid rgba(52, 211, 153, 0.35)',
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-          position: 'relative',
-          zIndex: 2,
-          backdropFilter: 'blur(8px)',
-          fontSize: 'clamp(11.5px, 1.2vw, 13.5px)'
-        }}
-      >
-        <div style={{ fontWeight: 700, color: '#FFFFFF' }}>Balingasag Municipal Public Library</div>
-
-        <div style={{ color: 'rgba(255, 255, 255, 0.8)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span>|</span>
-          <span>Reading Today, Building a Brighter Tomorrow</span>
-          <span>|</span>
-          <span style={{ fontWeight: 600, color: '#6EE7B7' }}>Learn • Grow • Belong</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6EE7B7' }}>
-          <BookOpen size={18} />
-        </div>
-      </div>
     </div>
   );
 };

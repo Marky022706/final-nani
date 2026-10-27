@@ -19,8 +19,12 @@ class AttendanceController extends Controller
     {
         $request->validate(['member_id' => 'required|string']);
 
-        $member = Member::where('member_id', $request->member_id)
-            ->orWhere('qr_code_data', $request->member_id)
+        $code = trim($request->member_id);
+        $member = Member::where('member_id', $code)
+            ->orWhere('qr_code_data', $code)
+            ->orWhere('id', $code)
+            ->orWhereRaw('LOWER(member_id) = ?', [strtolower($code)])
+            ->orWhereRaw('LOWER(qr_code_data) = ?', [strtolower($code)])
             ->first();
 
         if (!$member) {

@@ -107,7 +107,8 @@ export const BulkUploadSuccessModal: React.FC<BulkUploadSuccessModalProps> = ({
         style={{
           width: '100%',
           maxWidth: '540px',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--bg-surface, #ffffff)',
+          color: 'var(--text-primary)',
           borderRadius: '16px',
           border: '1px solid var(--border-main, #e2e8f0)',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)',

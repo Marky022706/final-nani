@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Settings,
   BookmarkCheck,
-  CalendarCheck,
   User,
   ChevronRight,
   Archive,
@@ -162,7 +161,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } else if (currentRole === 'member') {
       libraryItems.push({ id: 'books', label: 'Book Catalog', icon: BookOpen });
       libraryItems.push({ id: 'my_books', label: 'My Books', icon: BookmarkCheck });
-      libraryItems.push({ id: 'reservations', label: 'Reservations', icon: CalendarCheck });
       libraryItems.push({ id: 'attendance', label: 'Attendance', icon: Clock });
     }
 
@@ -208,7 +206,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const activityItems: NavItem[] = [];
 
     if (currentRole === 'super_admin') {
-      activityItems.push({ id: 'audit_logs', label: 'Audit Logs', icon: ShieldCheck });
+      activityItems.push({ id: 'reports', label: 'Reports', icon: BarChart3 });
+      activityItems.push({ id: 'audit_logs', label: 'System Log', icon: ShieldCheck });
       activityItems.push({
         id: 'notifications',
         label: 'Notifications',
@@ -221,6 +220,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         activityItems.push({ id: 'reports', label: 'Reports', icon: BarChart3 });
       }
       activityItems.push({ id: 'history', label: 'History', icon: History });
+      activityItems.push({ id: 'audit_logs', label: 'System Log', icon: ShieldCheck });
       activityItems.push({
         id: 'notifications',
         label: 'Notifications',

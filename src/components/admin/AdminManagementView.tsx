@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { User, LibrarianPrivileges, StaffAccessAuditLog } from '../../types';
 import {
   UserPlus,
@@ -17,7 +17,8 @@ import {
   Lock,
   User as UserIcon,
   Shield,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 import { StorageService } from '../../utils/storage';
 
@@ -26,7 +27,7 @@ interface AdminManagementViewProps {
   currentUser?: User;
   onAddAdmin: (newAdmin: User) => Promise<any> | void;
   onToggleAdminStatus: (userId: string) => void;
-  onResetAdminPassword: (userId: string) => void;
+  onResetAdminPassword: (userId: string) => Promise<{ temporary_password: string } | any> | void;
   onUpdatePrivileges?: (userId: string, privileges: LibrarianPrivileges) => void;
 }
 
@@ -80,6 +81,116 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
     StorageService.getStaffAccessLogs()
   );
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
+
+  // Password Reset Modal & Inline Error State
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [resetPasswordModal, setResetPasswordModal] = useState<{
+    staffName: string;
+    staffEmail: string;
+    temporaryPassword: string;
+    copied: boolean;
+  } | null>(null);
+  const [copiedSuccessModal, setCopiedSuccessModal] = useState<{
+    isOpen: boolean;
+    password: string;
+    staffName: string;
+  } | null>(null);
+  const [resetError, setResetError] = useState<{
+    userId: string;
+    userName: string;
+    message: string;
+    isAuth?: boolean;
+  } | null>(null);
+
+  // Close "Copied Successful" modal on Escape key press
+  useEffect(() => {
+    if (!copiedSuccessModal?.isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCopiedSuccessModal(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copiedSuccessModal?.isOpen]);
+
+  const handleCopyPassword = async (password: string, staffName: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(password);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = password;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch {
+      // fallback
+    }
+
+    setResetPasswordModal((prev) => (prev ? { ...prev, copied: true } : null));
+    setCopiedSuccessModal({
+      isOpen: true,
+      password,
+      staffName
+    });
+  };
+
+  const handleTriggerResetPassword = async (staff: User) => {
+    setResettingUserId(staff.id);
+    setResetError(null);
+
+    try {
+      const res = await onResetAdminPassword(staff.id);
+      const tempPwd = res?.temporary_password;
+      if (tempPwd) {
+        let wasCopied = false;
+        try {
+          if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(tempPwd);
+            wasCopied = true;
+          }
+        } catch {
+          wasCopied = false;
+        }
+
+        setResetPasswordModal({
+          staffName: staff.name,
+          staffEmail: staff.email,
+          temporaryPassword: tempPwd,
+          copied: wasCopied
+        });
+      }
+    } catch (err: unknown) {
+      const isAuthError =
+        (err as { status?: number })?.status === 401 ||
+        (err as { errorType?: string })?.errorType === 'auth_error' ||
+        (err instanceof Error &&
+          (err.message.toLowerCase().includes('unauthenticated') ||
+           err.message.toLowerCase().includes('unauthorized') ||
+           err.message.toLowerCase().includes('invalid credentials') ||
+           err.message.includes('401')));
+
+      const msg = isAuthError
+        ? 'Your administrative session has expired or is unauthorized. Please sign in again to continue.'
+        : err instanceof Error
+        ? err.message
+        : 'Unable to reset staff password. Please verify your connection or sign in again.';
+
+      setResetError({
+        userId: staff.id,
+        userName: staff.name,
+        message: msg,
+        isAuth: isAuthError
+      });
+    } finally {
+      setResettingUserId(null);
+    }
+  };
 
   const adminUsers = users.filter((u) => u.role === 'admin' || u.role === 'super_admin' || u.role === 'volunteer');
 
@@ -291,123 +402,188 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
 
       {/* TAB 1: STAFF ACCOUNTS & PRIVILEGES */}
       {activeTab === 'staff' && (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Staff Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Granted Privileges</th>
-                <th>Department</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Authorization Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {adminUsers.map((admin) => {
-                const privs = admin.privileges || DEFAULT_LIBRARIAN_PRIVILEGES;
-                const isSuper = admin.role === 'super_admin';
+        <div>
+          {/* Inline Error State for Password Reset / Authorization Failures */}
+          {resetError && (
+            <div
+              role="alert"
+              style={{
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                backgroundColor: 'var(--danger-bg, #fef2f2)',
+                border: '1px solid var(--danger-border, #fecaca)',
+                color: 'var(--danger-text, #991b1b)',
+                fontSize: '13px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Unable to reset password for {resetError.userName}:</strong> {resetError.message}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {resetError.isAuth && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      StorageService.clearCurrentUser();
+                      window.location.href = '/login';
+                    }}
+                    className="btn btn-sm btn-outline"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      borderColor: 'var(--danger-border, #fecaca)',
+                      color: 'var(--danger-text, #991b1b)'
+                    }}
+                  >
+                    Sign In Again
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setResetError(null)}
+                  className="btn-icon"
+                  style={{ color: 'inherit', padding: 2 }}
+                  aria-label="Dismiss error"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          )}
 
-                return (
-                  <tr key={admin.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{admin.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        Created: {admin.createdAt}
-                      </div>
-                    </td>
-                    <td>{admin.email}</td>
-                    <td>
-                      {isSuper ? (
-                        <span className="badge badge-danger">Super Admin</span>
-                      ) : admin.role === 'volunteer' ? (
-                        <span
-                          className="badge badge-warning"
-                          style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
-                        >
-                          Volunteer Staff
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Staff Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Granted Privileges</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Authorization Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminUsers.map((admin) => {
+                  const privs = admin.privileges || DEFAULT_LIBRARIAN_PRIVILEGES;
+                  const isSuper = admin.role === 'super_admin';
+
+                  return (
+                    <tr key={admin.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{admin.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Created: {admin.createdAt}
+                        </div>
+                      </td>
+                      <td>{admin.email}</td>
+                      <td>
+                        {isSuper ? (
+                          <span className="badge badge-danger">Super Admin</span>
+                        ) : admin.role === 'volunteer' ? (
+                          <span
+                            className="badge badge-warning"
+                            style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
+                          >
+                            Volunteer Staff
+                          </span>
+                        ) : (
+                          <span className="badge badge-info">Head Librarian (Admin)</span>
+                        )}
+                      </td>
+                      <td>
+                        {isSuper ? (
+                          <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
+                            Full System Authority
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '280px' }}>
+                            {privs.circulationDesk && (
+                              <span className="badge badge-success" style={{ fontSize: '10.5px' }}>
+                                Circulation
+                              </span>
+                            )}
+                            {privs.inventoryManagement && (
+                              <span className="badge badge-info" style={{ fontSize: '10.5px' }}>
+                                Inventory
+                              </span>
+                            )}
+                            {privs.memberManagement && (
+                              <span className="badge badge-neutral" style={{ fontSize: '10.5px' }}>
+                                Members
+                              </span>
+                            )}
+                            {privs.servicesManagement && (
+                              <span className="badge badge-neutral" style={{ fontSize: '10.5px' }}>
+                                Attendance
+                              </span>
+                            )}
+                            {privs.reportsExport && (
+                              <span className="badge badge-warning" style={{ fontSize: '10.5px' }}>
+                                Reports
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontSize: '12.5px' }}>{admin.department || 'Library Operations'}</td>
+                      <td>
+                        <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                          {admin.status}
                         </span>
-                      ) : (
-                        <span className="badge badge-info">Head Librarian (Admin)</span>
-                      )}
-                    </td>
-                    <td>
-                      {isSuper ? (
-                        <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
-                          Full System Authority
-                        </span>
-                      ) : (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '280px' }}>
-                          {privs.circulationDesk && (
-                            <span className="badge badge-success" style={{ fontSize: '10.5px' }}>
-                              Circulation
-                            </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          {!isSuper && (
+                            <button
+                              onClick={() => handleOpenPrivilegesModal(admin)}
+                              className="btn btn-secondary btn-sm"
+                              title="Configure Librarian Privileges"
+                            >
+                              <ShieldCheck size={14} />
+                              <span>Privileges</span>
+                            </button>
                           )}
-                          {privs.inventoryManagement && (
-                            <span className="badge badge-info" style={{ fontSize: '10.5px' }}>
-                              Inventory
-                            </span>
-                          )}
-                          {privs.memberManagement && (
-                            <span className="badge badge-neutral" style={{ fontSize: '10.5px' }}>
-                              Members
-                            </span>
-                          )}
-                          {privs.servicesManagement && (
-                            <span className="badge badge-neutral" style={{ fontSize: '10.5px' }}>
-                              Attendance
-                            </span>
-                          )}
-                          {privs.reportsExport && (
-                            <span className="badge badge-warning" style={{ fontSize: '10.5px' }}>
-                              Reports
-                            </span>
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerResetPassword(admin)}
+                            disabled={resettingUserId === admin.id}
+                            className="btn btn-ghost btn-sm"
+                            title="Reset Password"
+                          >
+                            {resettingUserId === admin.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <KeyRound size={14} />
+                            )}
+                            <span>{resettingUserId === admin.id ? 'Resetting...' : 'Reset'}</span>
+                          </button>
+                          {!isSuper && (
+                            <button
+                              onClick={() => onToggleAdminStatus(admin.id)}
+                              className={`btn btn-sm ${admin.status === 'active' ? 'btn-ghost' : 'btn-secondary'}`}
+                            >
+                              {admin.status === 'active' ? 'Deactivate' : 'Activate'}
+                            </button>
                           )}
                         </div>
-                      )}
-                    </td>
-                    <td style={{ fontSize: '12.5px' }}>{admin.department || 'Library Operations'}</td>
-                    <td>
-                      <span className={`badge ${admin.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
-                        {admin.status}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                        {!isSuper && (
-                          <button
-                            onClick={() => handleOpenPrivilegesModal(admin)}
-                            className="btn btn-secondary btn-sm"
-                            title="Configure Librarian Privileges"
-                          >
-                            <ShieldCheck size={14} />
-                            <span>Privileges</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onResetAdminPassword(admin.id)}
-                          className="btn btn-ghost btn-sm"
-                          title="Reset Password"
-                        >
-                          <KeyRound size={14} />
-                          <span>Reset</span>
-                        </button>
-                        {!isSuper && (
-                          <button
-                            onClick={() => onToggleAdminStatus(admin.id)}
-                            className={`btn btn-sm ${admin.status === 'active' ? 'btn-ghost' : 'btn-secondary'}`}
-                          >
-                            {admin.status === 'active' ? 'Deactivate' : 'Activate'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -907,9 +1083,12 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(createdUserResult.passwordUsed);
                             setCopiedPassword(true);
                             setTimeout(() => setCopiedPassword(false), 2000);
+                            handleCopyPassword(
+                              createdUserResult.passwordUsed,
+                              createdUserResult.user.name
+                            );
                           }}
                           className="btn-icon"
                           style={{ width: '28px', height: '28px', color: copiedPassword ? '#16a34a' : undefined }}
@@ -1218,6 +1397,293 @@ export const AdminManagementView: React.FC<AdminManagementViewProps> = ({
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Modal (Shows temporary credential & auto-copies) */}
+      {resetPasswordModal && (
+        <div
+          className="modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setResetPasswordModal(null);
+            }
+          }}
+        >
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(22, 101, 52, 0.1)',
+                    color: '#166534',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 className="modal-title" style={{ fontSize: '16px', fontWeight: 700 }}>
+                    Password Reset Successfully
+                  </h3>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Credentials for {resetPasswordModal.staffName}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetPasswordModal(null)}
+                className="btn-icon"
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Auto-copy notice */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--success-bg, #f0fdf4)',
+                  border: '1px solid var(--success-border, #bbf7d0)',
+                  color: 'var(--success-text, #166534)',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <CheckCircle2 size={16} color="var(--success, #16a34a)" />
+                <span>
+                  {resetPasswordModal.copied
+                    ? 'New password has been automatically copied to your clipboard!'
+                    : 'New temporary password generated successfully.'}
+                </span>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  Staff Account: <strong style={{ color: 'var(--text-primary)' }}>{resetPasswordModal.staffEmail}</strong>
+                </div>
+                <label className="form-label" style={{ fontWeight: 600, marginBottom: '6px' }}>
+                  New Temporary Password
+                </label>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    backgroundColor: 'var(--bg-subtle, #f8fafc)',
+                    border: '2px solid var(--border-strong, #e2e8f0)',
+                    borderRadius: 'var(--radius-md)',
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: '17px',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    color: 'var(--text-primary, #0f172a)',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => handleCopyPassword(resetPasswordModal.temporaryPassword, resetPasswordModal.staffName)}
+                  title="Click to copy password"
+                >
+                  <span>{resetPasswordModal.temporaryPassword}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyPassword(resetPasswordModal.temporaryPassword, resetPasswordModal.staffName);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{ gap: '6px', fontSize: '12px' }}
+                    title="Copy password to clipboard"
+                    aria-label="Copy password to clipboard"
+                  >
+                    {resetPasswordModal.copied ? (
+                      <>
+                        <Check size={14} color="#16a34a" />
+                        <span style={{ color: '#16a34a', fontWeight: 600 }}>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Please provide this temporary password to <strong>{resetPasswordModal.staffName}</strong>. They will use this password to sign into the system.
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => setResetPasswordModal(null)}
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copied Successful Modal */}
+      {copiedSuccessModal?.isOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="copied-modal-title"
+          aria-describedby="copied-modal-desc"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1200,
+            padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setCopiedSuccessModal(null);
+            }
+          }}
+        >
+          <div
+            className="modal-dialog animate-modal-fade-in"
+            style={{
+              maxWidth: '420px',
+              width: '100%',
+              backgroundColor: 'var(--bg-surface, #ffffff)',
+              color: 'var(--text-primary, #0f172a)',
+              borderRadius: '16px',
+              border: '1px solid var(--border-main, #e2e8f0)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              overflow: 'hidden',
+              padding: '28px 24px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Success Icon */}
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                color: '#16a34a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '14px',
+                boxShadow: '0 0 0 8px rgba(22, 163, 74, 0.05)'
+              }}
+            >
+              <CheckCircle2 size={32} strokeWidth={2.5} />
+            </div>
+
+            <h3
+              id="copied-modal-title"
+              style={{
+                fontSize: '19px',
+                fontWeight: 800,
+                color: 'var(--text-primary, #0f172a)',
+                margin: '0 0 8px',
+                letterSpacing: '-0.02em'
+              }}
+            >
+              Copied Successful
+            </h3>
+
+            <p
+              id="copied-modal-desc"
+              style={{
+                fontSize: '13.5px',
+                color: 'var(--text-secondary, #475569)',
+                lineHeight: 1.55,
+                margin: '0 0 16px',
+                maxWidth: '350px'
+              }}
+            >
+              The new temporary password has been successfully copied to your clipboard. You can now securely provide it to <strong>{copiedSuccessModal.staffName}</strong>.
+            </p>
+
+            {/* Password Preview Pill */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-subtle, #f8fafc)',
+                border: '1px solid var(--border-main, #e2e8f0)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                width: '100%',
+                marginBottom: '20px'
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono, monospace)',
+                  fontWeight: 700,
+                  fontSize: '15px',
+                  color: 'var(--text-primary, #0f172a)'
+                }}
+              >
+                {copiedSuccessModal.password}
+              </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: '#166534',
+                  backgroundColor: '#dcfce7',
+                  padding: '3px 8px',
+                  borderRadius: '6px'
+                }}
+              >
+                <Check size={13} strokeWidth={2.5} />
+                Copied
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCopiedSuccessModal(null)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', height: '42px', fontSize: '14px', fontWeight: 600 }}
+              autoFocus
+            >
+              <Check size={16} />
+              <span>OK</span>
+            </button>
           </div>
         </div>
       )}

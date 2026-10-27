@@ -15,10 +15,12 @@ import {
   QrCode,
   ArrowRight,
   CheckCircle2,
-  Users
+  Users,
+  ShieldCheck
 } from 'lucide-react';
 import { DashboardSkeleton } from '../common/skeleton';
 import { DashboardAnalyticsSection } from './DashboardAnalyticsSection';
+import { AttendanceRecordsSection } from '../attendance/AttendanceRecordsSection';
 
 interface AdminDashboardProps {
   books: Book[];
@@ -33,6 +35,7 @@ interface AdminDashboardProps {
   onOpenAddBook: () => void;
   onOpenCreateMember: () => void;
   onOpenScanner: () => void;
+  onSaveAttendanceEdit?: (record: AttendanceRecord, reason: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -47,7 +50,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigate,
   onOpenAddBook,
   onOpenCreateMember,
-  onOpenScanner
+  onOpenScanner,
+  onSaveAttendanceEdit
 }) => {
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -66,11 +70,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const todayVisits = attendance.filter((a) => a.date === todayStr);
   const currentlyInside = attendance.filter((a) => a.status === 'Inside');
   const activeMembers = members.filter((m) => m.status === 'active');
-  const pendingApprovals = transactions.filter((t) => t.status === 'Pending Approval').length;
 
   const privs = currentUser?.privileges;
   const canAttendance = !privs || privs.servicesManagement !== false;
-  const canCirculation = !privs || privs.circulationDesk !== false;
   const canInventory = !privs || privs.inventoryManagement !== false;
   const canMembers = !privs || privs.memberManagement !== false;
 
@@ -100,23 +102,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
         <div className="page-actions">
-          {canCirculation && pendingApprovals > 0 && (
-            <button
-              onClick={() => onNavigate('circulation')}
-              className="btn btn-sm"
-              style={{
-                backgroundColor: '#fef3c7',
-                color: '#92400e',
-                border: '1px solid #fcd34d',
-                fontWeight: 600,
-                gap: '6px'
-              }}
-              title="Review pending member requests in Circulation"
-            >
-              <Clock size={15} />
-              <span>{pendingApprovals} Approvals Pending</span>
-            </button>
-          )}
           {canAttendance && (
             <button onClick={onOpenScanner} className="btn btn-secondary btn-sm">
               <QrCode size={15} />
@@ -135,6 +120,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span>Add Member</span>
             </button>
           )}
+          <button
+            onClick={() => onNavigate('audit_logs')}
+            className="btn btn-secondary btn-sm"
+            style={{ gap: '6px' }}
+            title="View system activity and audit logs"
+          >
+            <ShieldCheck size={15} />
+            <span>System Log</span>
+          </button>
         </div>
       </div>
 
@@ -262,6 +256,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Interactive Library Traffic & Activity Analytics (Bar and Line Graphs) */}
       <DashboardAnalyticsSection userRole={userRole} />
+
+      {/* Attendance Records & History (Relocated to Dashboard per specification) */}
+      <AttendanceRecordsSection
+        attendance={attendance}
+        userRole={userRole}
+        currentUser={currentUser}
+        onSaveAttendanceEdit={onSaveAttendanceEdit}
+        onNavigateToAttendance={() => onNavigate('attendance')}
+      />
 
       {/* Main Grid: Active Visitors & Category Distribution */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>

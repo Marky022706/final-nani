@@ -132,7 +132,7 @@ Status: ${member.status.toUpperCase()}`;
             {/* Member details table */}
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--bg-surface, #ffffff)',
                 border: '1px solid var(--border-main)',
                 borderRadius: 'var(--radius-md)',
                 padding: '12px 14px',

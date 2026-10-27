@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Book, PhysicalCopy, UserRole } from '../../types';
 import { BarcodeSvg } from '../../utils/barcode';
-import { X, Printer, Plus, Bookmark, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { X, Printer, Plus, BookOpen, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { BookCover } from './BookCover';
 import { ViewBarcodeModal } from './ViewBarcodeModal';
 
@@ -25,7 +25,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
   onClose,
   userRole,
   onAddCopy,
-  onReserveBook,
   onRequestBorrow,
   onEditBook,
   onDeleteBook,
@@ -268,17 +267,6 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
           <div style={{ display: 'flex', gap: '8px' }}>
             {userRole === 'member' && (
               <>
-                <button
-                  onClick={() => {
-                    if (onReserveBook) onReserveBook(book);
-                    onClose();
-                  }}
-                  className="btn btn-secondary"
-                  title="Place a reservation hold on this title"
-                >
-                  <Bookmark size={15} />
-                  <span>Reserve Book</span>
-                </button>
                 <button
                   onClick={() => {
                     if (onRequestBorrow) onRequestBorrow(book);

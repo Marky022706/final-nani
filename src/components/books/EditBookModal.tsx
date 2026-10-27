@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Book } from '../../types';
-import { X, Sparkles, Save, BookOpen } from 'lucide-react';
+import { X, Sparkles, Save, BookOpen, AlertCircle } from 'lucide-react';
 import { BookCoverSelector } from './BookCoverSelector';
 
 interface EditBookModalProps {
@@ -33,6 +33,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   const [description, setDescription] = useState<string>('');
   const [subject, setSubject] = useState<string>('');
   const [coverImage, setCoverImage] = useState<string>('');
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   useEffect(() => {
     if (book && isOpen) {
@@ -52,6 +53,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
       setDescription(book.description || '');
       setSubject(book.subject || '');
       setCoverImage(book.coverImage || '');
+      setInlineError(null);
     }
   }, [book, isOpen]);
 
@@ -60,7 +62,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   const generateAutoDescription = (): string => {
     const cleanTitle = title.trim() || 'This publication';
     const cleanAuthor = author.trim() ? ` by ${author.trim()}` : '';
-    const p = publisher.trim() ? ` published by ${publisher.trim()}` : '';
+    const p = publisher.trim() ? `, published by ${publisher.trim()}` : '';
     const y = publicationYear ? ` (${publicationYear})` : '';
     const c = category || 'General Reference';
     const s = subject.trim() ? ` focusing on ${subject.trim()}` : '';
@@ -70,18 +72,20 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
 
   const handleAutoGenerate = () => {
     if (!title.trim() && !author.trim()) {
-      alert('Please enter a Title or Author to auto-generate a description.');
+      setInlineError('Please enter a Title or Author to auto-generate a description.');
       return;
     }
+    setInlineError(null);
     setDescription(generateAutoDescription());
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !author.trim()) {
-      alert('Please provide at least a Title and Author.');
+      setInlineError('Please provide at least a Title and Author.');
       return;
     }
+    setInlineError(null);
 
     const updatedCopies = book.copies.map((copy, index) => {
       const copyAcc = index === 0 && accessionNumber.trim() ? accessionNumber.trim() : copy.accessionNumber;
@@ -147,6 +151,25 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body">
+            {inlineError && (
+              <div
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  color: '#991B1B',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <AlertCircle size={16} color="#DC2626" />
+                <span>{inlineError}</span>
+              </div>
+            )}
             {/* Book Cover Image Selection & Preview */}
             <BookCoverSelector
               value={coverImage}

@@ -28,9 +28,13 @@ class MemberController extends Controller
 
     public function getByQr($code)
     {
+        $clean = trim($code);
         $member = Member::with(['transactions', 'reservations'])
-            ->where('qr_code_data', $code)
-            ->orWhere('member_id', $code)
+            ->where('qr_code_data', $clean)
+            ->orWhere('member_id', $clean)
+            ->orWhere('id', $clean)
+            ->orWhereRaw('LOWER(qr_code_data) = ?', [strtolower($clean)])
+            ->orWhereRaw('LOWER(member_id) = ?', [strtolower($clean)])
             ->first();
 
         if (!$member) {
@@ -54,6 +58,7 @@ class MemberController extends Controller
         if (isset($input['membershipStatus']) && !isset($input['status'])) $input['status'] = $input['membershipStatus'];
         if (isset($input['dateRegistered']) && !isset($input['join_date'])) $input['join_date'] = $input['dateRegistered'];
         if (isset($input['membershipType']) && !isset($input['membership_type'])) $input['membership_type'] = $input['membershipType'];
+        if (isset($input['school'])) $input['school'] = $input['school'];
         if (isset($input['dateOfBirth']) && !isset($input['date_of_birth'])) $input['date_of_birth'] = $input['dateOfBirth'];
         if (isset($input['qrCodeData']) && !isset($input['qr_code_data'])) $input['qr_code_data'] = $input['qrCodeData'];
         if (isset($input['memberId']) && !isset($input['member_id'])) $input['member_id'] = $input['memberId'];
@@ -73,6 +78,7 @@ class MemberController extends Controller
             'date_of_birth' => 'nullable|date',
             'gender' => 'nullable|string|max:30',
             'membership_type' => 'nullable|string',
+            'school' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive,suspended',
             'photo_url' => 'nullable|string',
             'join_date' => 'nullable|date',
@@ -139,6 +145,7 @@ class MemberController extends Controller
                 'phone' => $validated['phone'] ?? null,
                 'address' => $validated['address'] ?? null,
                 'membership_type' => $validated['membership_type'] ?? 'Student',
+                'school' => $validated['school'] ?? null,
                 'status' => $status,
                 'qr_code_data' => $validated['qr_code_data'] ?? $memberId,
                 'join_date' => $joinDate,
@@ -182,6 +189,7 @@ class MemberController extends Controller
             'date_of_birth' => 'nullable|date',
             'gender' => 'nullable|string|max:30',
             'membership_type' => 'nullable|string',
+            'school' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive,suspended',
             'photo_url' => 'nullable|string',
             'is_archived' => 'nullable|boolean',

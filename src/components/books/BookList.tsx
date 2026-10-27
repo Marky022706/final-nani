@@ -709,16 +709,14 @@ export const BookList: React.FC<BookListProps> = ({
                             e.stopPropagation();
                             if (isAvail && onRequestBorrow) {
                               onRequestBorrow(book);
-                            } else if (onReserveBook) {
-                              onReserveBook(book);
                             }
                           }}
                           className={`btn btn-sm ${isAvail ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ padding: '4px 10px', fontSize: '11.5px', fontWeight: 600 }}
                           disabled={!isAvail}
-                          title={isAvail ? 'Request to borrow this book' : 'Place reservation hold'}
+                          title={isAvail ? 'Request to borrow this book' : 'Book is currently unavailable'}
                         >
-                          {isAvail ? 'Borrow' : 'Reserve'}
+                          {isAvail ? 'Borrow' : 'Unavailable'}
                         </button>
                         <button
                           onClick={(e) => {
@@ -925,15 +923,14 @@ export const BookList: React.FC<BookListProps> = ({
                             onClick={() => {
                               if (isAvail && onRequestBorrow) {
                                 onRequestBorrow(book);
-                              } else if (onReserveBook) {
-                                onReserveBook(book);
                               }
                             }}
                             className={`btn btn-sm ${isAvail ? 'btn-primary' : 'btn-secondary'}`}
                             style={{ padding: '4px 8px', fontSize: '11.5px' }}
                             disabled={!isAvail}
+                            title={isAvail ? 'Request to borrow this book' : 'Book is currently unavailable'}
                           >
-                            {isAvail ? 'Borrow' : 'Reserve'}
+                            {isAvail ? 'Borrow' : 'Unavailable'}
                           </button>
                         )}
                         <button

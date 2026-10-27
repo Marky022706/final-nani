@@ -15,8 +15,26 @@ class CirculationController extends Controller
 {
     public function getTransactions()
     {
+        // Automatically sync overdue status: Any active or renewed loans past due date without return date
+        CirculationTransaction::whereIn('status', ['Active', 'Renewed'])
+            ->whereNull('return_date')
+            ->where('due_date', '<', now()->toDateString())
+            ->update(['status' => 'Overdue']);
+
         $transactions = CirculationTransaction::latest()->get();
         return response()->json($transactions);
+    }
+
+    protected function getMemberMaxLoans(Member $member): int
+    {
+        $type = strtolower($member->membership_type ?? '');
+        return match (true) {
+            str_contains($type, 'faculty') => 10,
+            str_contains($type, 'researcher') => 8,
+            str_contains($type, 'senior') || str_contains($type, 'pwd') => 5,
+            str_contains($type, 'community') => 4,
+            default => 3, // Students & General
+        };
     }
 
     public function borrow(Request $request)
@@ -48,29 +66,44 @@ class CirculationController extends Controller
 
             if ($member->status !== 'active') {
                 \Illuminate\Support\Facades\DB::rollBack();
-                return response()->json(['success' => false, 'message' => "Member account is {$member->status} and cannot borrow books."], 422);
-            }
-
-            $activeLoansCount = CirculationTransaction::where('member_id', $member->member_id)
-                ->whereIn('status', ['Active', 'Overdue'])
-                ->count();
-
-            if ($activeLoansCount + count($barcodes) > 3) {
-                \Illuminate\Support\Facades\DB::rollBack();
-                $remaining = max(0, 3 - $activeLoansCount);
                 return response()->json([
                     'success' => false,
-                    'message' => "Member has {$activeLoansCount} active loans and can only borrow {$remaining} more book(s) (Maximum 3)."
+                    'message' => "Member account is {$member->status} and cannot borrow books. Please resolve account standing first."
                 ], 422);
             }
 
             $overdueLoans = CirculationTransaction::where('member_id', $member->member_id)
-                ->where('status', 'Overdue')
+                ->where(function ($q) {
+                    $q->where('status', 'Overdue')
+                      ->orWhere(function ($sub) {
+                          $sub->whereIn('status', ['Active', 'Renewed'])
+                              ->whereNull('return_date')
+                              ->where('due_date', '<', now()->toDateString());
+                      });
+                })
                 ->count();
 
             if ($overdueLoans > 0) {
                 \Illuminate\Support\Facades\DB::rollBack();
-                return response()->json(['success' => false, 'message' => "Member has {$overdueLoans} overdue loan(s) that must be settled first."], 422);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Borrowing restricted: Member has {$overdueLoans} overdue book(s) that must be settled before new loans can be issued."
+                ], 422);
+            }
+
+            $maxAllowed = $this->getMemberMaxLoans($member);
+            $activeLoansCount = CirculationTransaction::where('member_id', $member->member_id)
+                ->whereIn('status', ['Active', 'Renewed', 'Overdue'])
+                ->whereNull('return_date')
+                ->count();
+
+            if ($activeLoansCount + count($barcodes) > $maxAllowed) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                $remaining = max(0, $maxAllowed - $activeLoansCount);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Loan limit reached: Member currently holds {$activeLoansCount} active loan(s) and can only borrow {$remaining} more (Maximum permitted for {$member->membership_type}: {$maxAllowed})."
+                ], 422);
             }
 
             $borrowDate = now()->toDateString();
@@ -171,92 +204,173 @@ class CirculationController extends Controller
     {
         $request->validate(['barcode' => 'required|string']);
 
-        $transaction = CirculationTransaction::where(function ($query) use ($request) {
-            $query->where('barcode', $request->barcode)
-                  ->orWhere('accession_number', $request->barcode);
-        })
-        ->whereIn('status', ['Active', 'Overdue'])
-        ->latest()
-        ->first();
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            $transaction = CirculationTransaction::where(function ($query) use ($request) {
+                $query->where('barcode', $request->barcode)
+                      ->orWhere('accession_number', $request->barcode);
+            })
+            ->whereIn('status', ['Active', 'Overdue', 'Renewed'])
+            ->whereNull('return_date')
+            ->latest()
+            ->lockForUpdate()
+            ->first();
 
-        if (!$transaction) {
-            return response()->json(['success' => false, 'message' => "No active loan found for barcode '{$request->barcode}'."], 404);
+            if (!$transaction) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => "No active or overdue borrowing record found for book identifier '{$request->barcode}'."
+                ], 404);
+            }
+
+            $now = Carbon::now()->startOfDay();
+            $dueDate = Carbon::parse($transaction->due_date)->startOfDay();
+            $daysLate = 0;
+            $fine = 0;
+
+            if ($now->gt($dueDate)) {
+                $daysLate = (int) $now->diffInDays($dueDate);
+                $fine = $daysLate * 5; // ₱5.00/day municipal policy fine
+            }
+
+            $returnDateStr = now()->toDateString();
+            $transaction->update([
+                'status' => 'Returned',
+                'return_date' => $returnDateStr,
+            ]);
+
+            // Update physical copy status back to Available
+            $copy = PhysicalCopy::where('barcode', $transaction->barcode)
+                ->orWhere('accession_number', $transaction->accession_number)
+                ->first();
+            if ($copy) {
+                $copy->update(['status' => 'Available']);
+            }
+
+            $processedBy = auth()->user()?->name ?? 'Staff Desk';
+
+            AuditLog::create([
+                'action' => 'Book Returned',
+                'category' => 'Circulation',
+                'details' => "Copy {$transaction->barcode} ('{$transaction->book_title}') returned by {$transaction->member_name}" . ($daysLate > 0 ? " ({$daysLate} day(s) overdue, penalty: ₱{$fine}.00)" : ""),
+                'performed_by' => $processedBy,
+                'ip_address' => $request->ip(),
+            ]);
+
+            Notification::create([
+                'title' => 'Book Returned Successfully',
+                'message' => "Return processed for '{$transaction->book_title}'." . ($daysLate > 0 ? " Overdue penalty: ₱{$fine}.00 ({$daysLate} days)." : " Thank you for returning on time!"),
+                'type' => 'info',
+                'target_member_id' => $transaction->member_id,
+            ]);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Book '{$transaction->book_title}' successfully returned and released to shelf." . ($daysLate > 0 ? " (Overdue: {$daysLate} day(s), penalty: ₱{$fine}.00)" : ""),
+                'transaction' => $transaction,
+                'fine' => $fine,
+                'days_late' => $daysLate,
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while processing the book return: ' . $e->getMessage()
+            ], 500);
         }
-
-        $now = now();
-        $dueDate = Carbon::parse($transaction->due_date);
-        $fine = 0;
-        if ($now->gt($dueDate)) {
-            $daysLate = $now->diffInDays($dueDate);
-            $fine = $daysLate * 10; // ₱10/day
-        }
-
-        $transaction->update([
-            'status' => 'Returned',
-            'return_date' => $now->toDateString(),
-        ]);
-
-        // Update physical copy
-        $copy = PhysicalCopy::where('barcode', $transaction->barcode)->first();
-        if ($copy) {
-            $copy->update(['status' => 'Available']);
-        }
-
-        AuditLog::create([
-            'action' => 'Book Returned',
-            'category' => 'Circulation',
-            'details' => "Copy {$transaction->barcode} ('{$transaction->book_title}') returned by {$transaction->member_name}" . ($fine > 0 ? " with fine ₱{$fine}.00" : ""),
-            'performed_by' => 'Staff Desk',
-            'ip_address' => $request->ip(),
-        ]);
-
-        Notification::create([
-            'title' => 'Book Returned',
-            'message' => "Return processed for '{$transaction->book_title}'." . ($fine > 0 ? " Overdue penalty: ₱{$fine}.00." : ""),
-            'type' => 'info',
-            'target_member_id' => $transaction->member_id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => "Book '{$transaction->book_title}' successfully returned." . ($fine > 0 ? " Overdue fine: ₱{$fine}.00 assessed." : ""),
-            'transaction' => $transaction,
-            'fine' => $fine,
-        ]);
     }
 
     public function renew(Request $request)
     {
         $request->validate(['transaction_id' => 'required|string']);
 
-        $tx = CirculationTransaction::where('transaction_id', $request->transaction_id)
-            ->orWhere('id', $request->transaction_id)
-            ->first();
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            $tx = CirculationTransaction::where('transaction_id', $request->transaction_id)
+                ->orWhere('id', $request->transaction_id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$tx) {
-            return response()->json(['success' => false, 'message' => 'Transaction not found.'], 404);
+            if (!$tx) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Transaction record not found.'], 404);
+            }
+
+            if (!in_array($tx->status, ['Active', 'Renewed']) || $tx->return_date) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json(['success' => false, 'message' => "Cannot renew loan in status '{$tx->status}'."], 422);
+            }
+
+            // Check if overdue
+            $due = Carbon::parse($tx->due_date)->startOfDay();
+            if (Carbon::now()->startOfDay()->gt($due)) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Overdue loans cannot be renewed. Please return the book to the circulation desk.'
+                ], 422);
+            }
+
+            if ($tx->renewal_count >= 2) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Maximum renewal limit (2 times) has already been reached for this loan.'], 422);
+            }
+
+            // Check if another member has reserved this book
+            $hasReservation = \App\Models\BookReservation::where('book_id', $tx->book_id)
+                ->whereIn('status', ['Pending Approval', 'Waiting', 'Ready for Pickup'])
+                ->exists();
+
+            if ($hasReservation) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot renew this book because another patron has placed a hold reservation on it.'
+                ], 422);
+            }
+
+            $newDue = Carbon::parse($tx->due_date)->addDays(14)->toDateString();
+            $newCount = $tx->renewal_count + 1;
+            $tx->update([
+                'due_date' => $newDue,
+                'renewal_count' => $newCount,
+                'status' => 'Renewed',
+            ]);
+
+            $processedBy = auth()->user()?->name ?? 'Staff Desk';
+
+            AuditLog::create([
+                'action' => 'Book Loan Renewed',
+                'category' => 'Circulation',
+                'details' => "Loan {$tx->transaction_id} ('{$tx->book_title}') renewed for {$tx->member_name}. New due date: {$newDue} (Renewal #{$newCount})",
+                'performed_by' => $processedBy,
+                'ip_address' => $request->ip(),
+            ]);
+
+            Notification::create([
+                'title' => 'Loan Successfully Renewed',
+                'message' => "Your borrowing period for '{$tx->book_title}' has been extended. New due date: {$newDue}.",
+                'type' => 'success',
+                'target_member_id' => $tx->member_id,
+            ]);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Loan renewed successfully. New due date is {$newDue} (Renewal #{$newCount}).",
+                'transaction' => $tx,
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while processing loan renewal: ' . $e->getMessage()
+            ], 500);
         }
-
-        if ($tx->status !== 'Active') {
-            return response()->json(['success' => false, 'message' => "Cannot renew loan in status {$tx->status}."], 422);
-        }
-
-        if ($tx->renewal_count >= 2) {
-            return response()->json(['success' => false, 'message' => 'Maximum renewals (2) reached for this loan.'], 422);
-        }
-
-        $newDue = Carbon::parse($tx->due_date)->addDays(7)->toDateString();
-        $tx->update([
-            'due_date' => $newDue,
-            'renewal_count' => $tx->renewal_count + 1,
-            'status' => 'Renewed',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => "Loan renewed. New due date is {$newDue}.",
-            'transaction' => $tx,
-        ]);
     }
 
     public function requestBorrow(Request $request)

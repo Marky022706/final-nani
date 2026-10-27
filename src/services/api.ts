@@ -104,9 +104,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     );
   }
 
-  if (response.status === 401) {
-    // Token missing/expired/revoked - clear it so the app returns to the login screen.
+  // Only trigger session expiration for authenticated endpoints
+  // Exclude /login (invalid password) and /logout (session cleanup) to prevent infinite loops
+  if (response.status === 401 && endpoint !== '/login' && endpoint !== '/logout') {
     setToken(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('bpl:session-expired', {
+          detail: { endpoint, status: 401 }
+        })
+      );
+    }
   }
 
   if (!response.ok) {
@@ -501,7 +509,12 @@ export const api = {
 
   async logout(): Promise<void> {
     try {
-      await request('/logout', { method: 'POST' });
+      const token = getToken();
+      if (token) {
+        await request('/logout', { method: 'POST' });
+      }
+    } catch {
+      // Ignore network / auth errors during logout
     } finally {
       setToken(null);
     }
@@ -615,5 +628,119 @@ export const api = {
     if (params.end_date) query.set('end_date', params.end_date);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return request<TrendsAnalyticsResponse>(`/analytics/trends${qs}`);
+  },
+
+  // Statistical & Operational Reports API (FR18 & FR19)
+  async getAttendanceReport(params: { start_date?: string; end_date?: string; member?: string; status?: string } = {}): Promise<{
+    records: AttendanceRecord[];
+    summary: { total_records: number; unique_visitors: number; currently_inside: number; completed_visits: number };
+    daily_summary: Array<{ date: string; total: number; inside: number; completed: number }>;
+    generated_at: string;
+  }> {
+    const q = new URLSearchParams();
+    if (params.start_date) q.set('start_date', params.start_date);
+    if (params.end_date) q.set('end_date', params.end_date);
+    if (params.member) q.set('member', params.member);
+    if (params.status) q.set('status', params.status);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/reports/attendance${qs}`);
+  },
+
+  async getInventoryReport(params: { search?: string; category?: string; status?: string } = {}): Promise<{
+    books: Book[];
+    summary: {
+      total_titles: number;
+      active_titles: number;
+      archived_titles: number;
+      total_copies: number;
+      available_copies: number;
+      borrowed_copies: number;
+      reserved_copies: number;
+      archived_copies: number;
+      damaged_or_lost_copies: number;
+    };
+    categories: Record<string, number>;
+    generated_at: string;
+  }> {
+    const q = new URLSearchParams();
+    if (params.search) q.set('search', params.search);
+    if (params.category) q.set('category', params.category);
+    if (params.status) q.set('status', params.status);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/reports/inventory${qs}`);
+  },
+
+  async getOverdueReport(params: { start_date?: string; end_date?: string; search?: string; bracket?: string } = {}): Promise<{
+    records: Array<{
+      id: string;
+      transaction_id: string;
+      member_id: string;
+      member_name: string;
+      book_title: string;
+      book_author?: string;
+      barcode: string;
+      accession_number: string;
+      borrow_date: string;
+      due_date: string;
+      overdue_days: number;
+      fine_rate: number;
+      estimated_fine: number;
+      processed_by: string;
+      status: string;
+    }>;
+    summary: { total_overdue: number; unique_patrons: number; total_estimated_fines: number; longest_overdue_days: number };
+    generated_at: string;
+  }> {
+    const q = new URLSearchParams();
+    if (params.start_date) q.set('start_date', params.start_date);
+    if (params.end_date) q.set('end_date', params.end_date);
+    if (params.search) q.set('search', params.search);
+    if (params.bracket) q.set('bracket', params.bracket);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/reports/overdue${qs}`);
+  },
+
+  async getExecutiveSummaryReport(params: { period?: string; start_date?: string; end_date?: string } = {}): Promise<{
+    period_label: string;
+    start_date: string;
+    end_date: string;
+    metrics: {
+      total_members: { current: number; active: number; new_in_period: number; previous_new: number; growth: number };
+      book_inventory: { total_titles: number; total_copies: number; available_copies: number; borrowed_copies: number; utilization_rate: number };
+      attendance: { current: number; previous: number; growth: number; unique_visitors: number };
+      circulation: {
+        borrows_current: number;
+        borrows_previous: number;
+        borrows_growth: number;
+        returns_current: number;
+        returns_previous: number;
+        active_loans: number;
+        overdue_loans: number;
+        overdue_rate: number;
+      };
+    };
+    generated_at: string;
+  }> {
+    const q = new URLSearchParams();
+    if (params.period) q.set('period', params.period);
+    if (params.start_date) q.set('start_date', params.start_date);
+    if (params.end_date) q.set('end_date', params.end_date);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/reports/executive-summary${qs}`);
+  },
+
+  async getActivityLogsReport(params: { start_date?: string; end_date?: string; user?: string; category?: string; search?: string } = {}): Promise<{
+    records: AuditLog[];
+    summary: { total_activities: number; unique_users: string[]; module_breakdown: Record<string, number> };
+    generated_at: string;
+  }> {
+    const q = new URLSearchParams();
+    if (params.start_date) q.set('start_date', params.start_date);
+    if (params.end_date) q.set('end_date', params.end_date);
+    if (params.user) q.set('user', params.user);
+    if (params.category) q.set('category', params.category);
+    if (params.search) q.set('search', params.search);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/reports/activity-logs${qs}`);
   }
 };

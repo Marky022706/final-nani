@@ -5,7 +5,7 @@ import { BookOpen, RefreshCw, Clock, XCircle } from 'lucide-react';
 interface MyBooksViewProps {
   transactions: CirculationTransaction[];
   currentMemberId: string;
-  onRenewBook: (transactionId: string) => { success: boolean; message: string };
+  onRenewBook: (transactionId: string) => Promise<{ success: boolean; message: string; transaction?: CirculationTransaction }> | { success: boolean; message: string; transaction?: CirculationTransaction };
   onCancelBorrowRequest?: (transactionId: string) => void;
   onNavigate: (dest: string) => void;
 }

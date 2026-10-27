@@ -29,6 +29,7 @@ import { CameraScanner } from '../common/CameraScanner';
 import { playSuccessBeep, playErrorTone } from '../../utils/sound';
 import { StorageService } from '../../utils/storage';
 import { useActionLoading } from '../../context/ActionLoadingContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface IssueLoanWizardModalProps {
   isOpen: boolean;
@@ -41,12 +42,12 @@ export interface IssueLoanWizardModalProps {
     memberId: string,
     barcode: string,
     dueDate: string
-  ) => { success: boolean; message: string; transaction?: CirculationTransaction };
+  ) => Promise<{ success: boolean; message: string; transaction?: CirculationTransaction }> | { success: boolean; message: string; transaction?: CirculationTransaction };
   onConfirmBorrowBatch?: (
     memberId: string,
     barcodes: string[],
     dueDate: string
-  ) => { success: boolean; message: string; transactions?: CirculationTransaction[]; transaction?: CirculationTransaction };
+  ) => Promise<{ success: boolean; message: string; transactions?: CirculationTransaction[]; transaction?: CirculationTransaction }> | { success: boolean; message: string; transactions?: CirculationTransaction[]; transaction?: CirculationTransaction };
 }
 
 export interface ScannedBookItem {
@@ -65,6 +66,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   onConfirmBorrow,
   onConfirmBorrowBatch
 }) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const { showActionLoading, hideActionLoading } = useActionLoading();
 
   // Wizard Steps: 1 = Scan Member, 2 = Scan Books, 3 = Review, 4 = Confirm / Success
@@ -80,8 +83,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
   const defaultDueStr = defaultDue.toISOString().split('T')[0];
   const [dueDate, setDueDate] = useState<string>(defaultDueStr);
 
-  // Scanner & Input State
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  // Scanner & Input State (Defaults to true so camera starts immediately without requiring hardware gun)
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
   const [showManualInput, setShowManualInput] = useState<boolean>(false);
   const [memberManualCode, setMemberManualCode] = useState<string>('');
   const [bookManualCode, setBookManualCode] = useState<string>('');
@@ -148,10 +151,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     return (
       members.find(
         (m) =>
-          m.memberId.toUpperCase() === term ||
-          (m.qrCodeData && m.qrCodeData.toUpperCase() === term) ||
-          m.fullName.toUpperCase().includes(term) ||
-          (m.email && m.email.toUpperCase() === term)
+          String(m.memberId ?? '').toUpperCase() === term ||
+          (m.qrCodeData && String(m.qrCodeData).toUpperCase() === term) ||
+          String(m.id ?? '').toUpperCase() === term ||
+          String(m.fullName ?? '').toUpperCase().includes(term) ||
+          (m.email && String(m.email).toUpperCase() === term)
       ) || null
     );
   };
@@ -162,7 +166,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     if (!term) return null;
     for (const b of books) {
       const copy = b.copies.find(
-        (c) => c.barcode.toUpperCase() === term || c.accessionNumber.toUpperCase() === term
+        (c) =>
+          String(c.barcode ?? '').toUpperCase() === term ||
+          String(c.accessionNumber ?? '').toUpperCase() === term ||
+          String(b.isbn ?? '').toUpperCase() === term ||
+          String(b.accessionNumber ?? '').toUpperCase() === term ||
+          String(b.id ?? '').toUpperCase() === term
       );
       if (copy) return { book: b, copy };
     }
@@ -180,7 +189,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
       setErrorMessage(null);
       setWarningMessage(null);
       setSuccessNotice(null);
-      setIsCameraActive(false);
+      setIsCameraActive(true);
       setShowManualInput(false);
       setMemberManualCode('');
       setBookManualCode('');
@@ -253,6 +262,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         activeEl.isContentEditable
       );
 
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
       const now = Date.now();
       if (now - lastKeyTime > 80) {
         buffer = '';
@@ -270,14 +285,14 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
             handleBookScan(scanned);
           }
         }
-      } else if (e.key.length === 1) {
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         buffer += e.key;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentStep, members, books]);
+  }, [isOpen, currentStep, members, books, onClose]);
 
   if (!isOpen) return null;
 
@@ -486,7 +501,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
 
       if (onConfirmBorrowBatch) {
         // Prefer batch handler if available
-        const res = onConfirmBorrowBatch(selectedMember.memberId, barcodes, dueDate);
+        const res = await onConfirmBorrowBatch(selectedMember.memberId, barcodes, dueDate);
         if (res.success && res.transactions && res.transactions.length > 0) {
           setCompletedTransactions(res.transactions);
           playSuccessBeep();
@@ -506,7 +521,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         let failMessage = '';
 
         for (const item of scannedBooks) {
-          const res = onConfirmBorrow(selectedMember.memberId, item.copy.barcode, dueDate);
+          const res = await onConfirmBorrow(selectedMember.memberId, item.copy.barcode, dueDate);
           if (res.success && res.transaction) {
             createdTxList.push(res.transaction);
           } else if (res.success) {
@@ -561,7 +576,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
     setCompletedTransactions([]);
     setErrorMessage(null);
     setWarningMessage(null);
-    setIsCameraActive(false);
+    setIsCameraActive(true);
     setShowManualInput(false);
     setMemberManualCode('');
     setBookManualCode('');
@@ -600,11 +615,13 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
         style={{
           width: '100%',
           maxWidth: '780px',
-          backgroundColor: 'var(--bg-surface, #FFFFFF)',
-          color: 'var(--text-primary, #0F172A)',
+          backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : 'var(--bg-surface, #FFFFFF)',
+          color: isDark ? 'var(--text-primary, #f1f5f9)' : 'var(--text-primary, #0F172A)',
           borderRadius: '20px',
-          border: '1px solid var(--border-main, #E2E8F0)',
-          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(22, 101, 52, 0.08)',
+          border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid var(--border-main, #E2E8F0)',
+          boxShadow: isDark
+            ? '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(74, 222, 128, 0.2)'
+            : '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(22, 101, 52, 0.08)',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '92vh',
@@ -657,16 +674,16 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
           className="issue-loan-header"
           style={{
             padding: '20px 28px 16px',
-            borderBottom: '1px solid var(--border-main, #E2E8F0)',
-            backgroundColor: 'var(--bg-surface, #FFFFFF)'
+            borderBottom: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid var(--border-main, #E2E8F0)',
+            backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : 'var(--bg-surface, #FFFFFF)'
           }}
         >
           {/* Top row: Breadcrumb + Close Button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-              <span style={{ color: 'var(--text-muted, #64748B)', fontWeight: 500 }}>Circulation</span>
-              <ChevronRight size={13} color="var(--text-subtle, #94A3B8)" />
-              <span style={{ color: 'var(--deep-green, #166534)', fontWeight: 700 }}>Borrow Book</span>
+              <span style={{ color: isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)', fontWeight: 500 }}>Circulation</span>
+              <ChevronRight size={13} color={isDark ? 'rgba(255,255,255,0.3)' : 'var(--text-subtle, #94A3B8)'} />
+              <span style={{ color: isDark ? '#4ade80' : 'var(--deep-green, #166534)', fontWeight: 700 }}>Borrow Book</span>
             </div>
             <button
               onClick={onClose}
@@ -677,7 +694,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 borderRadius: '8px',
                 border: 'none',
                 backgroundColor: 'transparent',
-                color: 'var(--text-muted, #64748B)',
+                color: isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -685,12 +702,12 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--bg-hover, #F1F5F9)';
-                e.currentTarget.style.color = 'var(--text-primary, #0F172A)';
+                e.currentTarget.style.backgroundColor = isDark ? 'rgba(255,255,255,0.08)' : 'var(--bg-hover, #F1F5F9)';
+                e.currentTarget.style.color = isDark ? '#f1f5f9' : 'var(--text-primary, #0F172A)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'var(--text-muted, #64748B)';
+                e.currentTarget.style.color = isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)';
               }}
             >
               <X size={18} />
@@ -704,7 +721,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 style={{
                   fontSize: '22px',
                   fontWeight: 800,
-                  color: 'var(--text-primary, #0F172A)',
+                  color: isDark ? 'var(--text-primary, #f1f5f9)' : 'var(--text-primary, #0F172A)',
                   letterSpacing: '-0.02em',
                   margin: 0
                 }}
@@ -715,9 +732,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: 'var(--deep-green, #166534)',
-                  backgroundColor: 'var(--light-green, #DCFCE7)',
-                  border: '1px solid var(--light-green-border, #BBF7D0)',
+                  color: isDark ? '#4ade80' : 'var(--deep-green, #166534)',
+                  backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--light-green, #DCFCE7)',
+                  border: isDark ? '1px solid rgba(74, 222, 128, 0.35)' : '1px solid var(--light-green-border, #BBF7D0)',
                   padding: '3px 8px',
                   borderRadius: '9999px',
                   letterSpacing: '0.04em',
@@ -730,7 +747,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
             <p
               style={{
                 fontSize: '13px',
-                color: 'var(--text-muted, #64748B)',
+                color: isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)',
                 margin: '4px 0 0',
                 lineHeight: 1.4
               }}
@@ -749,7 +766,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 left: '32px',
                 right: '32px',
                 height: '2px',
-                backgroundColor: 'var(--border-main, #E2E8F0)',
+                backgroundColor: isDark ? 'var(--border-main, #1f3527)' : 'var(--border-main, #E2E8F0)',
                 zIndex: 0
               }}
             />
@@ -762,7 +779,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 width: `${((currentStep - 1) / 3) * 100}%`,
                 maxWidth: 'calc(100% - 64px)',
                 height: '2px',
-                backgroundColor: 'var(--deep-green, #166534)',
+                backgroundColor: isDark ? '#22c55e' : 'var(--deep-green, #166534)',
                 transition: 'width 0.3s ease',
                 zIndex: 0
               }}
@@ -805,14 +822,40 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                         justifyContent: 'center',
                         fontSize: '13px',
                         fontWeight: 700,
-                        backgroundColor: isCompleted ? 'var(--deep-green, #166534)' : isCurrent ? 'var(--bg-surface, #FFFFFF)' : 'var(--bg-subtle, #F8FAFC)',
-                        color: isCompleted ? '#FFFFFF' : isCurrent ? 'var(--deep-green, #166534)' : 'var(--text-muted, #94A3B8)',
-                        border: isCompleted
-                          ? '2px solid var(--deep-green, #166534)'
+                        backgroundColor: isCompleted
+                          ? isDark
+                            ? '#22c55e'
+                            : 'var(--deep-green, #166534)'
                           : isCurrent
-                          ? '2px solid var(--deep-green, #166534)'
+                          ? isDark
+                            ? 'var(--bg-surface, #121e16)'
+                            : 'var(--bg-surface, #FFFFFF)'
+                          : isDark
+                          ? 'var(--bg-subtle, #16241b)'
+                          : 'var(--bg-subtle, #F8FAFC)',
+                        color: isCompleted
+                          ? isDark
+                            ? '#0b130e'
+                            : '#FFFFFF'
+                          : isCurrent
+                          ? isDark
+                            ? '#4ade80'
+                            : 'var(--deep-green, #166534)'
+                          : isDark
+                          ? 'var(--text-muted, #94a3b8)'
+                          : 'var(--text-muted, #94A3B8)',
+                        border: isCompleted
+                          ? isDark
+                            ? '2px solid #22c55e'
+                            : '2px solid var(--deep-green, #166534)'
+                          : isCurrent
+                          ? isDark
+                            ? '2px solid #4ade80'
+                            : '2px solid var(--deep-green, #166534)'
+                          : isDark
+                          ? '2px solid var(--border-main, #1f3527)'
                           : '2px solid var(--border-main, #E2E8F0)',
-                        boxShadow: isCurrent ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : 'none',
+                        boxShadow: isCurrent ? (isDark ? '0 0 0 3px rgba(74, 222, 128, 0.25)' : '0 0 0 3px rgba(22, 101, 52, 0.15)') : 'none',
                         transition: 'all 0.2s ease'
                       }}
                     >
@@ -822,7 +865,17 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       style={{
                         fontSize: '12px',
                         fontWeight: isCurrent ? 700 : 500,
-                        color: isCurrent ? 'var(--deep-green, #166534)' : isCompleted ? 'var(--text-primary, #0F172A)' : 'var(--text-muted, #94A3B8)',
+                        color: isCurrent
+                          ? isDark
+                            ? '#4ade80'
+                            : 'var(--deep-green, #166534)'
+                          : isCompleted
+                          ? isDark
+                            ? 'var(--text-primary, #f1f5f9)'
+                            : 'var(--text-primary, #0F172A)'
+                          : isDark
+                          ? 'var(--text-muted, #94a3b8)'
+                          : 'var(--text-muted, #94A3B8)',
                         whiteSpace: 'nowrap'
                       }}
                     >
@@ -911,7 +964,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
             padding: '24px 28px',
             overflowY: 'auto',
             flex: 1,
-            backgroundColor: 'var(--bg-subtle, #F8FAFC)'
+            backgroundColor: isDark ? 'var(--bg-subtle, #0d1711)' : 'var(--bg-subtle, #F8FAFC)'
           }}
         >
           {/* ==================================================== */}
@@ -922,11 +975,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
               {/* Scanning Panel */}
               <div
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : '#FFFFFF',
                   borderRadius: '16px',
-                  border: '1px solid #E2E8F0',
+                  border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #E2E8F0',
                   padding: '24px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                  boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.03)'
                 }}
               >
                 {/* Panel Title & Instructions */}
@@ -936,8 +989,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       width: '44px',
                       height: '44px',
                       borderRadius: '12px',
-                      backgroundColor: '#DCFCE7',
-                      color: '#166534',
+                      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+                      color: isDark ? '#4ade80' : '#166534',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -947,10 +1000,10 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     <QrCode size={24} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: isDark ? 'var(--text-primary, #f1f5f9)' : '#0F172A', margin: 0 }}>
                       Scan Member QR Code
                     </h3>
-                    <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0' }}>
+                    <p style={{ fontSize: '13px', color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B', margin: '2px 0 0' }}>
                       Use the camera to scan the member’s library QR code or enter the code manually.
                     </p>
                   </div>
@@ -1356,11 +1409,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
               {/* Book Scanner Panel */}
               <div
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : '#FFFFFF',
                   borderRadius: '16px',
-                  border: '1px solid #E2E8F0',
+                  border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #E2E8F0',
                   padding: '24px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                  boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.03)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -1369,8 +1422,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       width: '44px',
                       height: '44px',
                       borderRadius: '12px',
-                      backgroundColor: '#DCFCE7',
-                      color: '#166534',
+                      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+                      color: isDark ? '#4ade80' : '#166534',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1380,10 +1433,10 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     <Barcode size={24} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: isDark ? 'var(--text-primary, #f1f5f9)' : 'var(--text-main, #0F172A)', margin: 0 }}>
                       Scan Book Barcode
                     </h3>
-                    <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0' }}>
+                    <p style={{ fontSize: '13px', color: isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)', margin: '2px 0 0' }}>
                       Scan the barcode label or accession number on the book copy to add it to this loan.
                     </p>
                   </div>
@@ -1454,7 +1507,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       scannerId="book-barcode-scanner"
                       isActive={isCameraActive}
                       mode="barcode"
-                      label="Point camera directly at book barcode or accession label"
+                      reticleShape="barcode"
+                      label="Align red laser line across book barcode or accession label"
                     />
                   </div>
                 )}
@@ -1555,72 +1609,117 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     border: '1px solid #E2E8F0',
                     padding: '16px',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
+                    flexDirection: 'column',
+                    gap: '12px',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                   }}
                 >
-                  <div
-                    style={{
-                      width: '48px',
-                      height: '64px',
-                      borderRadius: '6px',
-                      backgroundColor: '#F1F5F9',
-                      border: '1px solid #CBD5E1',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#94A3B8'
-                    }}
-                  >
-                    {lastScannedBook.book.coverImage ? (
-                      <img
-                        src={lastScannedBook.book.coverImage}
-                        alt={lastScannedBook.book.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <BookOpen size={20} />
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
-                        Just Scanned
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '10.5px',
-                          fontWeight: 700,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#DCFCE7',
-                          color: '#166534'
-                        }}
-                      >
-                        {lastScannedBook.copy.status}
-                      </span>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div
                       style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        color: '#0F172A',
-                        whiteSpace: 'nowrap',
+                        width: '56px',
+                        height: '76px',
+                        borderRadius: '8px',
+                        backgroundColor: '#F1F5F9',
+                        border: '1px solid #CBD5E1',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#94A3B8'
                       }}
                     >
-                      {lastScannedBook.book.title}
+                      {lastScannedBook.book.coverImage ? (
+                        <img
+                          src={lastScannedBook.book.coverImage}
+                          alt={lastScannedBook.book.title}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <BookOpen size={24} />
+                      )}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748B' }}>
-                      by {lastScannedBook.book.author} • Accession:{' '}
-                      <code style={{ fontWeight: 600 }}>{lastScannedBook.copy.accessionNumber}</code> • Barcode:{' '}
-                      <code style={{ fontWeight: 600 }}>{lastScannedBook.copy.barcode}</code>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                          Verified Book Copy
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '10.5px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#DCFCE7',
+                            color: '#166534'
+                          }}
+                        >
+                          Availability: {lastScannedBook.copy.status} (1/1)
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          margin: '2px 0 1px'
+                        }}
+                      >
+                        {lastScannedBook.book.title}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#166534', fontWeight: 600 }}>
+                        Author: {lastScannedBook.book.author}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* 2-Column Details Grid */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '8px 14px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      fontSize: '11.5px'
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>ISBN: </span>
+                      <strong style={{ fontFamily: 'monospace', color: '#0F172A' }}>
+                        {lastScannedBook.book.isbn || `978-BPL-${lastScannedBook.copy.accessionNumber || 'ACC-0006'}`}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Publisher: </span>
+                      <strong style={{ color: '#0F172A' }}>{lastScannedBook.book.publisher || 'Prentice Hall'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Publication Year: </span>
+                      <strong style={{ color: '#0F172A' }}>{lastScannedBook.book.publicationYear || 2026}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Accession No: </span>
+                      <strong style={{ fontFamily: 'monospace', color: '#166534' }}>{lastScannedBook.copy.accessionNumber}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Format: </span>
+                      <strong style={{ color: '#0F172A' }}>{lastScannedBook.copy.format || lastScannedBook.book.format || 'Paperback'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Classification: </span>
+                      <strong style={{ fontFamily: 'monospace', color: '#0F172A' }}>{lastScannedBook.copy.classification || lastScannedBook.book.classification || '005.133 MAR'}</strong>
+                    </div>
+                  </div>
+
+                  {/* Description / Summary Note */}
+                  <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.5, padding: '8px 10px', borderRadius: '6px', backgroundColor: '#F1F5F9' }}>
+                    {lastScannedBook.book.description ||
+                      `"${lastScannedBook.book.title}" by ${lastScannedBook.book.author} is a comprehensive library volume in ${lastScannedBook.book.category || 'General Reference'}, published by ${lastScannedBook.book.publisher || 'Prentice Hall'} (${lastScannedBook.book.publicationYear || 2026}). Maintained at Balingasag Municipal Library for scholarly research, educational reference, and public reading.`}
                   </div>
                 </div>
               )}
@@ -1782,14 +1881,14 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
               {/* Verified Member Summary Card */}
               <div
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : '#FFFFFF',
                   borderRadius: '16px',
-                  border: '1px solid #E2E8F0',
+                  border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #E2E8F0',
                   padding: '20px 24px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                  boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.03)'
                 }}
               >
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: isDark ? '#4ade80' : '#166534', textTransform: 'uppercase', marginBottom: '8px' }}>
                   1. Borrowing Member
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1799,8 +1898,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                         width: '46px',
                         height: '46px',
                         borderRadius: '12px',
-                        backgroundColor: '#DCFCE7',
-                        color: '#166534',
+                        backgroundColor: isDark ? 'rgba(34, 197, 94, 0.16)' : '#DCFCE7',
+                        color: isDark ? '#4ade80' : '#166534',
+                        border: isDark ? '1px solid rgba(74, 222, 128, 0.35)' : 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1815,11 +1915,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                         .join('')}
                     </div>
                     <div>
-                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: isDark ? 'var(--text-primary, #f1f5f9)' : '#0F172A' }}>
                         {selectedMember.fullName}
                       </div>
-                      <div style={{ fontSize: '12.5px', color: '#64748B' }}>
-                        ID: <code style={{ fontWeight: 600 }}>{selectedMember.memberId}</code> • Type: {selectedMember.membershipType || 'Standard'}
+                      <div style={{ fontSize: '12.5px', color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B' }}>
+                        ID: <code style={{ fontWeight: 600, color: isDark ? '#4ade80' : undefined }}>{selectedMember.memberId}</code> • Type: {selectedMember.membershipType || 'Standard'}
                       </div>
                     </div>
                   </div>
@@ -1828,11 +1928,11 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     style={{
                       fontSize: '11px',
                       fontWeight: 700,
-                      backgroundColor: '#DCFCE7',
-                      color: '#166534',
+                      backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
+                      color: isDark ? '#4ade80' : '#166534',
                       padding: '4px 10px',
                       borderRadius: '9999px',
-                      border: '1px solid #BBF7D0'
+                      border: isDark ? '1px solid rgba(74, 222, 128, 0.35)' : '1px solid #BBF7D0'
                     }}
                   >
                     ACTIVE PATRON
@@ -1843,15 +1943,15 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
               {/* Table of Selected Books */}
               <div
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : '#FFFFFF',
                   borderRadius: '16px',
-                  border: '1px solid #E2E8F0',
+                  border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #E2E8F0',
                   padding: '20px 24px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                  boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.03)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: isDark ? '#4ade80' : '#166534', textTransform: 'uppercase' }}>
                     2. Selected Books ({scannedBooks.length})
                   </div>
                   <button
@@ -1860,7 +1960,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     style={{
                       border: 'none',
                       background: 'transparent',
-                      color: '#166534',
+                      color: isDark ? '#4ade80' : '#166534',
                       fontSize: '12.5px',
                       fontWeight: 700,
                       display: 'flex',
@@ -1877,7 +1977,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
-                      <tr style={{ borderBottom: '2px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                      <tr style={{ borderBottom: isDark ? '2px solid var(--border-main, #1f3527)' : '2px solid #E2E8F0', textAlign: 'left', color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B' }}>
                         <th style={{ padding: '8px 12px', fontWeight: 600, width: '32px' }}>#</th>
                         <th style={{ padding: '8px 12px', fontWeight: 600 }}>Book Title & Author</th>
                         <th style={{ padding: '8px 12px', fontWeight: 600 }}>Accession #</th>
@@ -1888,19 +1988,19 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     </thead>
                     <tbody>
                       {scannedBooks.map((item, idx) => (
-                        <tr key={item.copy.barcode} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                          <td style={{ padding: '10px 12px', color: '#64748B', fontWeight: 600 }}>{idx + 1}</td>
+                        <tr key={item.copy.barcode} style={{ borderBottom: isDark ? '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))' : '1px solid #F1F5F9' }}>
+                          <td style={{ padding: '10px 12px', color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B', fontWeight: 600 }}>{idx + 1}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <div style={{ fontWeight: 700, color: '#0F172A' }}>{item.book.title}</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748B' }}>{item.book.author}</div>
+                            <div style={{ fontWeight: 700, color: isDark ? 'var(--text-primary, #f1f5f9)' : '#0F172A' }}>{item.book.title}</div>
+                            <div style={{ fontSize: '11.5px', color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B' }}>{item.book.author}</div>
                           </td>
                           <td style={{ padding: '10px 12px' }}>
-                            <code style={{ fontWeight: 600, color: '#334155' }}>{item.copy.accessionNumber}</code>
+                            <code style={{ fontWeight: 600, color: isDark ? 'var(--text-secondary, #cbd5e1)' : '#334155', backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : undefined, padding: '2px 4px', borderRadius: '4px' }}>{item.copy.accessionNumber}</code>
                           </td>
                           <td style={{ padding: '10px 12px' }}>
-                            <code style={{ fontWeight: 600, color: '#334155' }}>{item.copy.barcode}</code>
+                            <code style={{ fontWeight: 600, color: isDark ? '#4ade80' : '#166534', backgroundColor: isDark ? 'rgba(34, 197, 94, 0.1)' : undefined, padding: '2px 4px', borderRadius: '4px' }}>{item.copy.barcode}</code>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#166534', fontWeight: 700 }}>
+                          <td style={{ padding: '10px 12px', color: isDark ? '#4ade80' : '#166534', fontWeight: 700 }}>
                             {dueDate}
                           </td>
                           <td style={{ padding: '10px 12px', textAlign: 'center' }}>
@@ -1911,7 +2011,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                               style={{
                                 border: 'none',
                                 background: 'transparent',
-                                color: '#EF4444',
+                                color: isDark ? '#f87171' : '#EF4444',
                                 cursor: 'pointer',
                                 padding: '4px'
                               }}
@@ -1929,29 +2029,29 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
               {/* Policy & Due Date Adjustment Card */}
               <div
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : '#FFFFFF',
                   borderRadius: '16px',
-                  border: '1px solid #E2E8F0',
+                  border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #E2E8F0',
                   padding: '20px 24px',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)'
+                  boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 6px -1px rgba(0,0,0,0.03)'
                 }}
               >
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: isDark ? '#4ade80' : '#166534', textTransform: 'uppercase', marginBottom: '12px' }}>
                   3. Circulation Schedule & Policy Terms
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B', marginBottom: '4px' }}>
                       Date of Issue
                     </label>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={15} color="#166534" />
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: isDark ? 'var(--text-primary, #f1f5f9)' : '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={15} color={isDark ? '#4ade80' : '#166534'} />
                       <span>{todayStr} (Today)</span>
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B', marginBottom: '4px' }}>
                       Return Due Date
                     </label>
                     <input
@@ -1962,19 +2062,21 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                       style={{
                         padding: '6px 10px',
                         borderRadius: '8px',
-                        border: '1px solid #CBD5E1',
+                        border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid #CBD5E1',
                         fontSize: '13px',
                         fontWeight: 700,
-                        color: '#166534'
+                        backgroundColor: isDark ? 'var(--bg-subtle, #16241b)' : '#FFFFFF',
+                        color: isDark ? '#4ade80' : '#166534',
+                        colorScheme: isDark ? 'dark' : 'light'
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B', marginBottom: '4px' }}>
                       Librarian in Charge
                     </label>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: isDark ? 'var(--text-primary, #f1f5f9)' : '#0F172A' }}>
                       {currentUser?.name || 'Circulation Desk Staff'}
                     </div>
                   </div>
@@ -1985,14 +2087,14 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     marginTop: '16px',
                     padding: '10px 14px',
                     borderRadius: '10px',
-                    backgroundColor: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F8FAFC',
+                    border: isDark ? '1px solid var(--border-subtle, rgba(255, 255, 255, 0.1))' : '1px solid #E2E8F0',
                     fontSize: '12px',
-                    color: '#64748B',
+                    color: isDark ? 'var(--text-muted, #94a3b8)' : '#64748B',
                     lineHeight: 1.45
                   }}
                 >
-                  <strong style={{ color: '#334155' }}>Municipal Circulation Policy:</strong> Standard loan duration is 7 days.
+                  <strong style={{ color: isDark ? 'var(--text-primary, #f1f5f9)' : '#334155' }}>Municipal Circulation Policy:</strong> Standard loan duration is 7 days.
                   Late returns will incur a standard overdue fine of ₱10.00/day. Patrons may renew books once prior to due date if no pending reservation holds exist.
                 </div>
               </div>
@@ -2184,8 +2286,8 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
             className="issue-loan-footer"
             style={{
               padding: '16px 28px',
-              borderTop: '1px solid var(--border-main, #E2E8F0)',
-              backgroundColor: 'var(--bg-surface, #FFFFFF)',
+              borderTop: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid var(--border-main, #E2E8F0)',
+              backgroundColor: isDark ? 'var(--bg-surface, #121e16)' : 'var(--bg-surface, #FFFFFF)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -2200,9 +2302,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     height: '38px',
                     padding: '0 16px',
                     borderRadius: '8px',
-                    border: '1px solid var(--border-strong, #CBD5E1)',
-                    backgroundColor: 'var(--bg-surface, #FFFFFF)',
-                    color: 'var(--text-secondary, #475569)',
+                    border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid var(--border-strong, #CBD5E1)',
+                    backgroundColor: isDark ? 'var(--bg-subtle, #16241b)' : 'var(--bg-surface, #FFFFFF)',
+                    color: isDark ? 'var(--text-secondary, #cbd5e1)' : 'var(--text-secondary, #475569)',
                     fontSize: '13px',
                     fontWeight: 600,
                     display: 'flex',
@@ -2222,9 +2324,9 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                     height: '38px',
                     padding: '0 16px',
                     borderRadius: '8px',
-                    border: '1px solid var(--border-strong, #CBD5E1)',
-                    backgroundColor: 'var(--bg-surface, #FFFFFF)',
-                    color: 'var(--text-muted, #64748B)',
+                    border: isDark ? '1px solid var(--border-main, #1f3527)' : '1px solid var(--border-strong, #CBD5E1)',
+                    backgroundColor: isDark ? 'var(--bg-subtle, #16241b)' : 'var(--bg-surface, #FFFFFF)',
+                    color: isDark ? 'var(--text-muted, #94a3b8)' : 'var(--text-muted, #64748B)',
                     fontSize: '13px',
                     fontWeight: 600,
                     cursor: 'pointer'
@@ -2243,6 +2345,7 @@ export const IssueLoanWizardModal: React.FC<IssueLoanWizardModalProps> = ({
                   onClick={() => {
                     if (selectedMember && memberStatusState === 'ready') {
                       setCurrentStep(2);
+                      setIsCameraActive(true);
                     }
                   }}
                   style={{

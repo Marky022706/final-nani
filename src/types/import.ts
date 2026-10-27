@@ -15,6 +15,8 @@ export interface RawImportRow {
   numberOfCopies?: string | number;
   isbn?: string;
   quantity?: string | number;
+  pages?: string | number;
+  numberOfPages?: string | number;
   [key: string]: any;
 }
 
@@ -31,6 +33,8 @@ export interface ValidatedImportRow {
   accessionNumber: string;
   availability: string;
   description?: string;
+  pages?: number | null;
+  rawPages?: string;
   quantity: number | null;
   rawQuantity: string;
   isbn: string;

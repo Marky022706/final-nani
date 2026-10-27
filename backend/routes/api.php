@@ -13,6 +13,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\LibraryServiceController;
 use App\Http\Controllers\SystemController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\ReportController;
 
 // Public
 Route::post('/login', [AuthController::class, 'login']);
@@ -90,4 +91,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Library Analytics (Interactive Bar and Line Graph Metrics)
     Route::get('/analytics/comparison', [AnalyticsController::class, 'getComparison']);
     Route::get('/analytics/trends', [AnalyticsController::class, 'getTrends']);
+
+    // Library Statistical & Operational Reports (FR18 & FR19)
+    Route::get('/reports/attendance', [ReportController::class, 'attendance']);
+    Route::get('/reports/inventory', [ReportController::class, 'inventory']);
+    Route::get('/reports/overdue', [ReportController::class, 'overdue']);
+    Route::get('/reports/executive-summary', [ReportController::class, 'executiveSummary']);
+    Route::get('/reports/activity-logs', [ReportController::class, 'activityLogs']);
 });

@@ -110,6 +110,11 @@ export const LibraryCardModal: React.FC<LibraryCardModalProps> = ({
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: 4 }}>
                     ID: <strong style={{ color: '#ffffff' }}>{member.memberId}</strong>
                   </div>
+                  {member.school && (
+                    <div style={{ fontSize: '11px', color: '#a7f3d0', marginTop: 2, fontWeight: 500 }}>
+                      School: {member.school}
+                    </div>
+                  )}
                   <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: 2 }}>
                     Joined: {member.joinDate}
                   </div>

@@ -12,7 +12,7 @@ use Exception;
 
 class BookImportController extends Controller
 {
-    private const REQUIRED_HEADERS = ['book_title', 'author', 'format', 'accession_number', 'availability', 'quantity'];
+    private const REQUIRED_HEADERS = ['book_title', 'author'];
     private const MAX_FILE_SIZE_BYTES = 5242880; // 5 MB
     private const MAX_ROWS = 1000;
 
@@ -31,12 +31,13 @@ class BookImportController extends Controller
         if (in_array($clean, ['author', 'authors', 'author full name', 'primary author'])) return 'author';
         if (in_array($clean, ['publisher', 'publishing house'])) return 'publisher';
         if (in_array($clean, ['publication year', 'year', 'pub year', 'publication_year', 'published year'])) return 'publication_year';
-        if (in_array($clean, ['classification ddc', 'classification', 'ddc', 'dewey decimal', 'call number'])) return 'classification';
+        if (in_array($clean, ['classification ddc', 'classification', 'ddc', 'dewey decimal', 'call number', 'dewey'])) return 'classification';
         if (in_array($clean, ['format', 'binding', 'book format'])) return 'format';
-        if (in_array($clean, ['accession number', 'accession', 'accession no', 'accession_number'])) return 'accession_number';
+        if (in_array($clean, ['accession number', 'accession', 'accession no', 'accession_number', 'acc no', 'acc number'])) return 'accession_number';
         if (in_array($clean, ['availability', 'status', 'availability status'])) return 'availability';
-        if (in_array($clean, ['description / abstract', 'description', 'abstract', 'summary'])) return 'description';
-        if (in_array($clean, ['number of copies', 'copies', 'quantity', 'qty', 'number_of_copies'])) return 'quantity';
+        if (in_array($clean, ['description / abstract', 'description', 'abstract', 'summary', 'description abstract'])) return 'description';
+        if (in_array($clean, ['number of pages', 'pages', 'number_of_pages', 'page count', 'num pages', 'no of pages', 'pages count'])) return 'pages';
+        if (in_array($clean, ['number of copies', 'copies', 'quantity', 'qty', 'number_of_copies', 'count', 'copy count'])) return 'quantity';
         if (in_array($clean, ['isbn', 'isbn 10', 'isbn 13', 'isbn10', 'isbn13'])) return 'isbn';
 
         return null;
@@ -215,6 +216,7 @@ class BookImportController extends Controller
                 $accession = trim((string) ($cols[$colIndexes['accession_number'] ?? -1] ?? ''));
                 $availability = trim((string) ($cols[$colIndexes['availability'] ?? -1] ?? 'Available'));
                 $description = trim((string) ($cols[$colIndexes['description'] ?? -1] ?? ''));
+                $pages = trim((string) ($cols[$colIndexes['pages'] ?? -1] ?? ''));
                 $quantity = trim((string) ($cols[$colIndexes['quantity'] ?? -1] ?? '1'));
                 $isbn = trim((string) ($cols[$colIndexes['isbn'] ?? -1] ?? ''));
 
@@ -231,7 +233,8 @@ class BookImportController extends Controller
                     'accession_number' => $accession,
                     'availability' => $availability ?: 'Available',
                     'description' => $description,
-                    'quantity' => $quantity,
+                    'pages' => $pages,
+                    'quantity' => $quantity ?: '1',
                     'isbn' => $isbn,
                 ];
             }
@@ -257,6 +260,7 @@ class BookImportController extends Controller
                     'accession_number' => trim((string) ($item['accessionNumber'] ?? $item['accession_number'] ?? '')),
                     'availability' => trim((string) ($item['availability'] ?? 'Available')),
                     'description' => trim((string) ($item['description'] ?? '')),
+                    'pages' => trim((string) ($item['pages'] ?? $item['numberOfPages'] ?? '')),
                     'quantity' => trim((string) ($item['quantity'] ?? $item['numberOfCopies'] ?? '1')),
                     'isbn' => trim((string) ($item['isbn'] ?? '')),
                 ];
@@ -378,6 +382,7 @@ class BookImportController extends Controller
             $rawAccession = (string) ($r['accession_number'] ?? '');
             $rawAvailability = (string) ($r['availability'] ?? 'Available');
             $rawDescription = (string) ($r['description'] ?? '');
+            $rawPages = (string) ($r['pages'] ?? '');
             $rawQuantity = (string) ($r['quantity'] ?? '1');
             $rawIsbn = (string) ($r['isbn'] ?? '');
 
@@ -385,29 +390,34 @@ class BookImportController extends Controller
             $status = 'valid';
             $cleanedIsbn = strtoupper((string) preg_replace('/[-\s]/', '', $rawIsbn));
             $cleanedAcc = strtoupper(trim($rawAccession));
-            $parsedQuantity = null;
+            $parsedQuantity = 1;
+            $parsedPages = null;
 
-            // Missing mandatory fields
+            // Missing mandatory fields (only Book Title and Author are required)
             if ($rawTitle === '') {
                 $errors[] = 'Book Title is required.';
             }
             if ($rawAuthor === '') {
                 $errors[] = 'Author(s) is required.';
             }
-            if ($rawFormat === '') {
-                $errors[] = 'Format is required (e.g. Paperback, Hardcover).';
-            }
-            if ($rawAccession === '') {
-                $errors[] = 'Accession Number is required (e.g. BPL-ACC-0006).';
-            }
-            if ($rawAvailability === '') {
-                $errors[] = 'Availability is required (e.g. Available).';
-            }
-            if ($rawQuantity === '') {
-                $errors[] = 'Number of Copies is required.';
+
+            // Pages constraints & casting
+            if ($rawPages !== '') {
+                if (str_contains($rawPages, '.') || str_contains($rawPages, ',')) {
+                    $errors[] = "Number of Pages must be a positive whole number (decimal values like '{$rawPages}' are not allowed).";
+                } elseif (!ctype_digit($rawPages)) {
+                    $errors[] = "Number of Pages must be a valid numeric integer.";
+                } else {
+                    $pInt = (int) $rawPages;
+                    if ($pInt <= 0) {
+                        $errors[] = "Number of Pages must be greater than zero.";
+                    } else {
+                        $parsedPages = $pInt;
+                    }
+                }
             }
 
-            // Quantity constraints & casting
+            // Quantity constraints & casting (defaults to 1 copy per row)
             if ($rawQuantity !== '') {
                 if (str_contains($rawQuantity, '.') || str_contains($rawQuantity, ',')) {
                     $errors[] = "Number of Copies must be a positive whole number (decimal values like '{$rawQuantity}' are not allowed).";
@@ -423,6 +433,8 @@ class BookImportController extends Controller
                         $parsedQuantity = $qtyInt;
                     }
                 }
+            } else {
+                $parsedQuantity = 1;
             }
 
             // Accession Number duplicate detection within uploaded file
@@ -500,11 +512,13 @@ class BookImportController extends Controller
                 'publication_year' => $rawPubYear ?: date('Y'),
                 'classification' => $rawClassification ?: 'General Stacks',
                 'format' => $rawFormat ?: 'Paperback',
-                'accession_number' => $rawAccession ?: ('ACC-' . str_pad((string) $rowNum, 6, '0', STR_PAD_LEFT)),
+                'accession_number' => $rawAccession ?: ('BPL-ACC-' . str_pad((string) $rowNum, 4, '0', STR_PAD_LEFT)),
                 'availability' => $rawAvailability ?: 'Available',
                 'description' => $rawDescription,
+                'pages' => $parsedPages,
+                'raw_pages' => $rawPages,
                 'quantity' => $parsedQuantity,
-                'raw_quantity' => $rawQuantity,
+                'raw_quantity' => $rawQuantity ?: '1',
                 'isbn' => $rawIsbn ?: ('978-BPL-' . ($rawAccession ?: str_pad((string) $rowNum, 6, '0', STR_PAD_LEFT))),
                 'normalized_isbn' => $cleanedIsbn,
                 'status' => $status,
@@ -672,7 +686,7 @@ class BookImportController extends Controller
                     'publisher' => !empty($row['publisher']) ? $row['publisher'] : 'Balingasag Municipal Library',
                     'publication_year' => !empty($row['publication_year']) ? (int) $row['publication_year'] : (int) date('Y'),
                     'description' => !empty($row['description']) ? $row['description'] : null,
-                    'pages' => 0,
+                    'pages' => !empty($row['pages']) ? (int) $row['pages'] : 0,
                     'is_archived' => false,
                 ]);
 
@@ -744,7 +758,7 @@ class BookImportController extends Controller
             fputs($handle, "# ==========================================================================================================\r\n");
             fputs($handle, "# BALINGASAG PUBLIC LIBRARY — OFFICIAL BOOK CATALOGING TEMPLATE (v2026.2)\r\n");
             fputs($handle, "# Municipality of Balingasag, Misamis Oriental • Public Library Management System\r\n");
-            fputs($handle, "# INSTRUCTIONS: Columns with (*) are REQUIRED. Accession numbers must be unique. Fill entries below.\r\n");
+            fputs($handle, "# INSTRUCTIONS: Columns with (*) are REQUIRED. Fill entries below.\r\n");
             fputs($handle, "# ==========================================================================================================\r\n");
 
             fputcsv($handle, [
@@ -754,12 +768,12 @@ class BookImportController extends Controller
                 'Author(s) *',
                 'Publisher',
                 'Publication Year',
-                'Classification (DDC)',
-                'Format *',
-                'Accession Number *',
-                'Availability *',
+                'Classification',
+                'Format',
+                'Accession Number',
+                'Availability',
                 'Description / Abstract',
-                'Number of Copies'
+                'Number of Pages'
             ]);
             fputcsv($handle, [
                 'Clean Code: A Handbook of Agile Software Craftsmanship',
@@ -773,7 +787,7 @@ class BookImportController extends Controller
                 'BPL-ACC-0006',
                 'Available',
                 'Even bad code can function. But if code is not clean, it can bring a development organization to its knees.',
-                '1'
+                '464'
             ]);
             fputcsv($handle, [
                 'Introduction to Algorithms',
@@ -787,7 +801,7 @@ class BookImportController extends Controller
                 'BPL-ACC-0007',
                 'Available',
                 'Comprehensive textbook covering modern computer algorithms, data structures, and algorithmic complexity analysis.',
-                '2'
+                '1312'
             ]);
             fputcsv($handle, [
                 'The Philippine Islands, 1493–1898',
@@ -801,7 +815,7 @@ class BookImportController extends Controller
                 'BPL-ACC-0008',
                 'Available',
                 'Monumental collection of historical records, exploration accounts, and colonial documents on the Philippines.',
-                '1'
+                '560'
             ]);
             fputcsv($handle, [
                 'To Kill a Mockingbird',
@@ -815,7 +829,7 @@ class BookImportController extends Controller
                 'BPL-ACC-0009',
                 'Available',
                 'The unforgettable novel of childhood in a sleepy Southern town and the crisis of conscience that rocked it.',
-                '1'
+                '336'
             ]);
             fclose($handle);
         };

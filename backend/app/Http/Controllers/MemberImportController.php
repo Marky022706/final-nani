@@ -40,6 +40,7 @@ class MemberImportController extends Controller
         if (in_array($clean, ['status', 'account status', 'account_status', 'membership status'])) return 'status';
         if (in_array($clean, ['member id', 'member_id', 'library id', 'library_id', 'id number', 'patron id', 'patron_id'])) return 'member_id';
         if (in_array($clean, ['temporary password', 'temporary_password', 'password', 'temp password', 'temp_password'])) return 'temporary_password';
+        if (in_array($clean, ['school', 'school name', 'school_name', 'university', 'college', 'institution', 'academy'])) return 'school';
 
         return null;
     }
@@ -279,6 +280,7 @@ class MemberImportController extends Controller
                     'date_of_birth' => trim((string) ($item['date_of_birth'] ?? $item['dateOfBirth'] ?? '')),
                     'gender' => trim((string) ($item['gender'] ?? $item['sex'] ?? '')),
                     'membership_type' => trim((string) ($item['membership_type'] ?? $item['membershipType'] ?? 'Student')),
+                    'school' => trim((string) ($item['school'] ?? '')),
                     'status' => trim((string) ($item['status'] ?? $item['membershipStatus'] ?? 'active')),
                     'member_id' => trim((string) ($item['member_id'] ?? $item['memberId'] ?? '')),
                     'temporary_password' => trim((string) ($item['temporary_password'] ?? $item['temporaryPassword'] ?? '')),
@@ -366,6 +368,7 @@ class MemberImportController extends Controller
             $gender = trim($r['gender'] ?? '');
             $membershipType = trim($r['membership_type'] ?? '');
             $status = strtolower(trim($r['status'] ?? 'active'));
+            $school = trim($r['school'] ?? '');
             $memberId = strtoupper(trim($r['member_id'] ?? ''));
             $tempPass = trim($r['temporary_password'] ?? '');
 
@@ -553,6 +556,7 @@ class MemberImportController extends Controller
                     'date_of_birth' => $normalizedDob ?: '2004-01-01',
                     'gender' => $gender,
                     'membership_type' => $membershipType,
+                    'school' => $school,
                     'status' => $status,
                     'member_id' => $memberId,
                     'temporary_password' => $tempPass ?: 'P@ssword123',
@@ -709,6 +713,7 @@ class MemberImportController extends Controller
                         'phone' => $d['phone'],
                         'address' => $d['address'],
                         'membership_type' => $d['membership_type'],
+                        'school' => !empty($d['school']) ? $d['school'] : null,
                         'status' => $d['status'],
                         'qr_code_data' => $assignedMemberId,
                         'join_date' => now()->toDateString(),

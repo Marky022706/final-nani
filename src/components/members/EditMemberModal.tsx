@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Member, AccountStatus } from '../../types';
-import { X, Save, Edit3, Shield } from 'lucide-react';
+import { X, Save, Edit3, Shield, AlertCircle } from 'lucide-react';
 
 interface EditMemberModalProps {
   isOpen: boolean;
@@ -26,7 +26,9 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
   const [email, setEmail] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [membershipType, setMembershipType] = useState<Member['membershipType']>('Student');
+  const [school, setSchool] = useState('');
   const [status, setStatus] = useState<AccountStatus>('active');
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   useEffect(() => {
     if (member) {
@@ -43,7 +45,9 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
       setEmail(member.email || '');
       setPhotoUrl(member.photoUrl || '');
       setMembershipType(member.membershipType);
+      setSchool(member.school || '');
       setStatus(member.status);
+      setInlineError(null);
     }
   }, [member, isOpen]);
 
@@ -52,9 +56,10 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
-      alert('First Name, Last Name, and Email are required.');
+      setInlineError('First Name, Last Name, and Email are required.');
       return;
     }
+    setInlineError(null);
 
     const nameParts = [firstName.trim(), middleName.trim(), lastName.trim()].filter(Boolean);
     let computedFullName = nameParts.join(' ');
@@ -77,6 +82,7 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
       email: email.trim(),
       photoUrl: photoUrl.trim(),
       membershipType,
+      school: school.trim() || undefined,
       status
     };
 
@@ -110,6 +116,25 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', flex: 1 }}>
+            {inlineError && (
+              <div
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  color: '#991B1B',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <AlertCircle size={16} color="#DC2626" />
+                <span>{inlineError}</span>
+              </div>
+            )}
             {/* System Locked Role Banner */}
             <div
               style={{
@@ -241,6 +266,37 @@ export const EditMemberModal: React.FC<EditMemberModalProps> = ({
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
               />
+            </div>
+
+            {/* School / Institution */}
+            <div className="form-group" style={{ marginBottom: '14px' }}>
+              <label className="form-label">School / Institution</label>
+              <input
+                type="text"
+                list="edit-balingasag-schools-list"
+                className="form-input"
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                placeholder="e.g. St. Rita's College of Balingasag, MOIST..."
+              />
+              <datalist id="edit-balingasag-schools-list">
+                <option value="Misamis Oriental Institute of Science and Technology (MOIST)" />
+                <option value="St. Rita's College of Balingasag (SRCB)" />
+                <option value="Balingasag Central School (BCS)" />
+                <option value="Balingasag Senior High School" />
+                <option value="Balingasag National High School" />
+                <option value="Baliwagan National High School" />
+                <option value="San Isidro National High School" />
+                <option value="Hermano National High School" />
+                <option value="Dumarait Elementary School" />
+                <option value="Talusan National High School" />
+                <option value="Lagonglong National High School" />
+                <option value="University of Science and Technology of Southern Philippines (USTP)" />
+                <option value="Mindanao State University (MSU)" />
+                <option value="Xavier University - Ateneo de Cagayan" />
+                <option value="Capitol University" />
+                <option value="Liceo de Cagayan University" />
+              </datalist>
             </div>
 
             {/* Membership Type & Status */}

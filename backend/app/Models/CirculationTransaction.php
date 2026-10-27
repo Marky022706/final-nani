@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+use Carbon\Carbon;
+
 class CirculationTransaction extends Model
 {
     use HasFactory;
@@ -33,6 +35,9 @@ class CirculationTransaction extends Model
     ];
 
     protected $appends = [
+        'id',
+        'transactionId',
+        'bookId',
         'bookTitle',
         'bookAuthor',
         'accessionNumber',
@@ -43,8 +48,15 @@ class CirculationTransaction extends Model
         'returnDate',
         'renewalCount',
         'processedBy',
+        'requestDate',
+        'rejectionReason',
+        'overdueDays',
+        'isOverdue',
     ];
 
+    public function getIdAttribute() { return $this->attributes['transaction_id'] ?? (string)($this->attributes['id'] ?? ''); }
+    public function getTransactionIdAttribute() { return $this->attributes['transaction_id'] ?? ''; }
+    public function getBookIdAttribute() { return (string)($this->attributes['book_id'] ?? ''); }
     public function getBookTitleAttribute() { return $this->attributes['book_title'] ?? null; }
     public function getBookAuthorAttribute() { return $this->attributes['book_author'] ?? null; }
     public function getAccessionNumberAttribute() { return $this->attributes['accession_number'] ?? null; }
@@ -55,6 +67,25 @@ class CirculationTransaction extends Model
     public function getReturnDateAttribute() { return $this->attributes['return_date'] ?? null; }
     public function getRenewalCountAttribute() { return $this->attributes['renewal_count'] ?? 0; }
     public function getProcessedByAttribute() { return $this->attributes['processed_by'] ?? 'Staff'; }
+    public function getRequestDateAttribute() { return $this->attributes['request_date'] ?? null; }
+    public function getRejectionReasonAttribute() { return $this->attributes['rejection_reason'] ?? null; }
+
+    public function getOverdueDaysAttribute()
+    {
+        if (in_array($this->status, ['Active', 'Renewed', 'Overdue']) && !$this->return_date && $this->due_date) {
+            $due = Carbon::parse($this->due_date)->startOfDay();
+            $now = Carbon::now()->startOfDay();
+            if ($now->gt($due)) {
+                return (int) $now->diffInDays($due);
+            }
+        }
+        return 0;
+    }
+
+    public function getIsOverdueAttribute()
+    {
+        return $this->getOverdueDaysAttribute() > 0 || $this->status === 'Overdue';
+    }
 
     public function book()
     {

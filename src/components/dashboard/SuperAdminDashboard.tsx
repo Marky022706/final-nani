@@ -22,6 +22,7 @@ import {
 import { StorageService } from '../../utils/storage';
 import { DashboardSkeleton } from '../common/skeleton';
 import { DashboardAnalyticsSection } from './DashboardAnalyticsSection';
+import { AttendanceRecordsSection } from '../attendance/AttendanceRecordsSection';
 
 interface SuperAdminDashboardProps {
   books: Book[];
@@ -33,15 +34,18 @@ interface SuperAdminDashboardProps {
   currentUser?: User;
   isLoading?: boolean;
   onNavigate: (dest: string) => void;
+  onSaveAttendanceEdit?: (record: AttendanceRecord, reason: string) => void;
 }
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
+  attendance,
   members,
   users,
   auditLogs,
   currentUser,
   isLoading = false,
-  onNavigate
+  onNavigate,
+  onSaveAttendanceEdit
 }) => {
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -116,7 +120,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             className="btn btn-ghost btn-sm"
           >
             <ShieldAlert size={15} />
-            <span>Audit Trail</span>
+            <span>System Log</span>
           </button>
         </div>
       </div>
@@ -250,6 +254,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* Interactive Library Traffic & Operational Analytics (Bar and Line Graphs) */}
       <DashboardAnalyticsSection userRole="super_admin" />
 
+      {/* Attendance Records & History (Relocated to Dashboard per specification) */}
+      <AttendanceRecordsSection
+        attendance={attendance}
+        userRole="super_admin"
+        currentUser={currentUser}
+        onSaveAttendanceEdit={onSaveAttendanceEdit}
+        onNavigateToAttendance={() => onNavigate('attendance')}
+      />
+
       {/* 2-Column Operational Governance Overview */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '24px' }}>
         {/* Column 1: System Business Logic Summary */}
@@ -316,10 +329,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldAlert size={18} style={{ color: 'var(--info)' }} />
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>System Audit Logs</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>System Log</h3>
             </div>
             <button onClick={() => onNavigate('audit_logs')} className="btn btn-ghost btn-sm">
-              <span>View All Logs</span>
+              <span>Open System Log</span>
               <ArrowUpRight size={14} />
             </button>
           </div>
